@@ -1,0 +1,13 @@
+#
+Name: 天天天堂地狱國
+Path: 5769558074552734
+Song: 5769558074552734.mp3
+Picture: 5769558074552734.jpg
+Chart: 5769558074552734.json
+Level: 0
+Composer: 1
+Charter: 1
+LastEditTime: 2025_8_29_19_31_31_
+Length: 228.466
+EditTime: 56483.305
+Group: Default

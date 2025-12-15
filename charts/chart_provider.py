@@ -38,6 +38,8 @@ from urllib3.util.retry import Retry
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
+from . import chart_provider_core as core
+
 # Try to import QtMultimedia (optional)
 try:
     from PyQt5 import QtMultimedia
@@ -131,20 +133,13 @@ class DownloadWorker(QtCore.QRunnable):
     @QtCore.pyqtSlot()
     def run(self):
         try:
-            with HTTP.get(self.url, stream=True, timeout=30) as r:
-                r.raise_for_status()
-                total = int(r.headers.get("Content-Length", 0)) or None
-                dl = 0
-                os.makedirs(os.path.dirname(self.dest), exist_ok=True)
-                with open(self.dest, "wb") as f:
-                    for chunk in r.iter_content(chunk_size=1024 * 64):
-                        if not chunk:
-                            continue
-                        f.write(chunk)
-                        dl += len(chunk)
-                        if total:
-                            pct = int(dl * 100 / total)
-                            self.signals.progress.emit(pct)
+            def _cb(pct: int) -> None:
+                try:
+                    self.signals.progress.emit(int(pct))
+                except Exception:
+                    pass
+
+            core.download_file(url=self.url, dest_path=self.dest, progress_cb=_cb, session=core.HTTP)
             self.signals.finished.emit(self.dest)
         except Exception as e:
             self.signals.error.emit(str(e))
@@ -250,6 +245,15 @@ class PhigrosClient:
             if ext in allowed_exts:  # ensure top-level under root
                 return p
         return None
+
+
+# Reuse the backend-neutral core session/clients to avoid duplicated logic.
+# These overrides must be placed AFTER local class definitions, otherwise the
+# local definitions will overwrite the aliases.
+HTTP = core.HTTP
+PhiraChart = core.PhiraChart
+PhiraClient = core.PhiraClient
+PhigrosClient = core.PhigrosClient
 
 # ----------------------------- UI: PhiraInterface -----------------------------
 
