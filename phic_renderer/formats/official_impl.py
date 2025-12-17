@@ -190,6 +190,15 @@ def load_official(data: Dict[str, Any], W: int, H: int) -> Tuple[float, List[Run
     for n in notes_out:
         ln = line_map[n.line_id]
         n.scroll_hit = ln.scroll_px.integral(n.t_hit)
-        n.scroll_end = ln.scroll_px.integral(n.t_end)
+        if int(n.kind) == 3 and float(n.t_end) > float(n.t_hit):
+            try:
+                dur = max(0.0, float(n.t_end) - float(n.t_hit))
+                sp = max(0.0, float(n.speed_mul))
+                n.scroll_end = float(n.scroll_hit) + sp * dur * float(Uh)
+                n.speed_mul = 1.0
+            except:
+                n.scroll_end = ln.scroll_px.integral(n.t_end)
+        else:
+            n.scroll_end = ln.scroll_px.integral(n.t_end)
 
     return offset, lines_out, sorted(notes_out, key=lambda x: x.t_hit)

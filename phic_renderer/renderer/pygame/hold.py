@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Tuple
+from typing import Optional, Tuple
 
 import pygame
 
@@ -21,6 +21,7 @@ def draw_hold_3slice(
     size_scale: float,
     mh: bool,
     hold_body_w: int,
+    progress: Optional[float] = None,
     draw_outline: bool = True,
     outline_width: int = 2,
 ):
@@ -35,12 +36,12 @@ def draw_hold_3slice(
 
     tail_h = respack.hold_tail_h_mh if mh else respack.hold_tail_h
     head_h = respack.hold_head_h_mh if mh else respack.hold_head_h
-    mid_h = max(1, ih - tail_h - head_h)
+    mid_h = max(1, ih - head_h - tail_h)
 
-    tail_src = img.subsurface((0, 0, iw, tail_h))
-    mid_src = img.subsurface((0, tail_h, iw, mid_h))
-    head_src = img.subsurface((0, tail_h + mid_h, iw, head_h))
-
+    head_src = img.subsurface((0, 0, iw, head_h))
+    mid_src = img.subsurface((0, head_h, iw, mid_h))
+    tail_src = img.subsurface((0, head_h + mid_h, iw, tail_h))
+    
     vx = tail_xy[0] - head_xy[0]
     vy = tail_xy[1] - head_xy[1]
     length = math.hypot(vx, vy)
@@ -54,47 +55,72 @@ def draw_hold_3slice(
     tail_len = tail_h * scale
     head_len = head_h * scale
 
-    if respack.hold_compact:
-        mid_len = max(1.0, length)
-    else:
-        if (tail_len + head_len) > length:
-            s = length / max(1e-6, (tail_len + head_len))
-            tail_len *= s
-            head_len *= s
-            mid_len = 1.0
-        else:
-            mid_len = max(1.0, length - tail_len - head_len)
-
     out_w = target_w
-    out_h = int(max(2, (tail_len + mid_len + head_len) if not respack.hold_compact else length))
+    out_h = int(max(2, length))
     surf = pygame.Surface((out_w, out_h), pygame.SRCALPHA)
 
-    def blit_scaled(src: pygame.Surface, y0: int, seg_len: float, repeat: bool):
-        seg_h = max(1, int(seg_len))
+    def _blit_mid(y0: int, seg_h: int, repeat: bool):
+        if seg_h <= 0:
+            return
         if not repeat:
-            piece = pygame.transform.smoothscale(src, (out_w, seg_h))
-            surf.blit(piece, (0, y0))
-        else:
-            tile_h = max(1, int(src.get_height() * scale))
-            tile = pygame.transform.smoothscale(src, (out_w, tile_h))
-            yy = y0
-            y_end = y0 + seg_h
-            while yy < y_end:
-                surf.blit(tile, (0, yy))
-                yy += tile_h
+            piece = pygame.transform.smoothscale(mid_src, (out_w, int(seg_h)))
+            surf.blit(piece, (0, int(y0)))
+            return
+        tile_h = max(1, int(mid_src.get_height() * scale))
+        tile = pygame.transform.smoothscale(mid_src, (out_w, tile_h))
+        yy = int(y0)
+        y_end = int(y0 + seg_h)
+        while yy < y_end:
+            surf.blit(tile, (0, yy))
+            yy += tile_h
 
-    y = 0
-    blit_scaled(head_src, y, head_len, repeat=False)
-    y += int(head_len)
+    try:
+        head_piece = pygame.transform.smoothscale(head_src, (out_w, max(1, int(round(head_len)))))
+    except:
+        head_piece = head_src
+    try:
+        tail_piece = pygame.transform.smoothscale(tail_src, (out_w, max(1, int(round(tail_len)))))
+    except:
+        tail_piece = tail_src
 
-    if respack.hold_compact:
-        blit_scaled(mid_src, 0, length, repeat=respack.hold_repeat)
-        blit_scaled(head_src, 0, head_len, repeat=False)
-        blit_scaled(tail_src, max(0, int(length - tail_len)), tail_len, repeat=False)
-    else:
-        blit_scaled(mid_src, y, mid_len, repeat=respack.hold_repeat)
-        y += int(mid_len)
-        blit_scaled(tail_src, y, tail_len, repeat=False)
+    head_draw_h = min(int(out_h), int(head_piece.get_height()))
+    tail_draw_h = min(int(out_h), int(tail_piece.get_height()))
+
+    y0_mid = int(head_draw_h)
+    y1_mid = int(out_h - tail_draw_h)
+    mid_h_draw = int(max(0, y1_mid - y0_mid))
+    _blit_mid(y0_mid, mid_h_draw, repeat=bool(getattr(respack, "hold_repeat", False)))
+
+    if head_draw_h > 0:
+        try:
+            surf.blit(head_piece.subsurface((0, 0, out_w, head_draw_h)), (0, 0))
+        except:
+            surf.blit(head_piece, (0, 0))
+
+    if tail_draw_h > 0:
+        try:
+            y_src = max(0, int(tail_piece.get_height() - tail_draw_h))
+            crop = tail_piece.subsurface((0, int(y_src), out_w, tail_draw_h))
+            surf.blit(crop, (0, int(out_h - tail_draw_h)))
+        except:
+            surf.blit(tail_piece, (0, int(out_h - tail_piece.get_height())))
+
+    # During holding, allow sampling only the "tail side" portion of the texture and stretch it
+    # back to the current geometric length. This makes the texture appear to be "consumed".
+    if progress is not None:
+        try:
+            p = clamp(float(progress), 0.0, 1.0)
+        except:
+            p = None
+        if p is not None and p > 1e-6:
+            keep = clamp(1.0 - float(p), 0.02, 1.0)
+            try:
+                sample_h = max(2, int(round(float(out_h) * float(keep))))
+                y0 = max(0, int(out_h) - int(sample_h))
+                crop = surf.subsurface((0, int(y0), int(out_w), int(sample_h))).copy()
+                surf = pygame.transform.smoothscale(crop, (int(out_w), int(out_h)))
+            except:
+                pass
 
     try:
         tr, tg, tb = note_rgb
@@ -107,8 +133,27 @@ def draw_hold_3slice(
     a = int(255 * clamp(alpha01, 0.0, 1.0))
     surf.set_alpha(a)
 
-    spr = pygame.transform.rotozoom(surf, (ang * 180.0 / math.pi - 90.0), 1.0)
-    overlay.blit(spr, (head_xy[0] - spr.get_width() / 2, head_xy[1] - spr.get_height() / 2))
+    v = pygame.math.Vector2(float(vx), float(vy))
+    v_len = float(v.length())
+    if v_len < 1e-6:
+        return
+    v_m = pygame.math.Vector2(float(v.x), float(-v.y))
+    base_m = pygame.math.Vector2(0.0, 1.0)
+    rot_deg = float(base_m.angle_to(v_m))
+
+    spr = pygame.transform.rotozoom(surf, rot_deg, 1.0)
+    # Anchor: align the head end of the (rotated) sprite to head_xy.
+    try:
+        off = pygame.math.Vector2(0.0, float(out_h) * 0.5)
+        off_m = pygame.math.Vector2(float(off.x), float(-off.y))
+        off_m = off_m.rotate(rot_deg)
+        off = pygame.math.Vector2(float(off_m.x), float(-off_m.y))
+        cx = float(head_xy[0]) - float(off.x)
+        cy = float(head_xy[1]) - float(off.y)
+        rect = spr.get_rect(center=(cx, cy))
+        overlay.blit(spr, rect.topleft)
+    except:
+        overlay.blit(spr, (head_xy[0] - spr.get_width() / 2, head_xy[1] - spr.get_height() / 2))
 
     if draw_outline:
         hw = target_w * 0.5

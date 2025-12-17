@@ -44,6 +44,8 @@ def main():
     g_render.add_argument("--approach", type=float, default=3.0, help="Seconds ahead to draw")
     g_render.add_argument("--chart_speed", type=float, default=1.0)
     g_render.add_argument("--no_cull", action="store_true", help="Draw all notes (can be slow)")
+    g_render.add_argument("--no_cull_screen", action="store_true", help="Disable screen-space visibility culling")
+    g_render.add_argument("--no_cull_enter_time", action="store_true", help="Disable t_enter / time-window culling")
     g_render.add_argument("--note_scale_x", type=float, default=1.0)
     g_render.add_argument("--note_scale_y", type=float, default=1.0)
     g_render.add_argument("--note_flow_speed_multiplier", type=float, default=1.0)

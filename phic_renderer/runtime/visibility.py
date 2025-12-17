@@ -6,6 +6,28 @@ from ..types import RuntimeLine, RuntimeNote
 from .kinematics import eval_line_state, note_world_pos
 from .. import state
 
+
+def _scroll_speed_px_per_sec(scroll_track: object, t: float) -> Optional[float]:
+    try:
+        segs = getattr(scroll_track, "segs", None)
+        if not segs:
+            return None
+        for s in segs:
+            try:
+                if float(t) < float(s.t0):
+                    break
+                if float(t) <= float(s.t1):
+                    return abs(float(s.v0))
+            except:
+                continue
+        try:
+            last = segs[-1]
+            return abs(float(getattr(last, "v1", getattr(last, "v0", 0.0))))
+        except:
+            return None
+    except:
+        return None
+
 def _note_visible_on_screen(lines: List[RuntimeLine], note: RuntimeNote, t: float, W: int, H: int,
                             margin: int = 120, base_w: int = 80, base_h: int = 24) -> bool:
     expand_factor = state.expand_factor  # legacy alias
@@ -27,11 +49,16 @@ def _note_visible_on_screen(lines: List[RuntimeLine], note: RuntimeNote, t: floa
     right = cx + half_w
     top = cy - half_h
     bottom = cy + half_h
+    # Be conservative: when in doubt, treat notes as visible earlier to avoid accidental culling.
+    try:
+        margin = max(int(margin), int(0.18 * max(W, H) * ex))
+    except:
+        margin = int(margin)
     return (x + w/2 >= left - margin and x - w/2 <= right + margin and
             y + h/2 >= top - margin and y - h/2 <= bottom + margin)
 
 def precompute_t_enter(lines: List[RuntimeLine], notes: List[RuntimeNote], W: int, H: int,
-                       lookback_default: float = 8.0, dt: float = 1/30.0):
+                       lookback_default: float = 256.0, dt: float = 1/30.0):
     """
     From t_hit scan backwards: find "invisible -> visible" boundary, then binary search to refine.
     """
@@ -41,22 +68,43 @@ def precompute_t_enter(lines: List[RuntimeLine], notes: List[RuntimeNote], W: in
     for n in notes:
         # RPE has visibleTime concept, but this renderer doesn't necessarily have it; use upper bound lookback
         t_hit = n.t_hit
-        lookback = lookback_default
-        t = t_hit
+        lookback = float(lookback_default)
+        try:
+            if float(getattr(n, "speed_mul", 1.0)) == 0.0:
+                lookback = max(float(lookback), 666.66)
+        except:
+            pass
+        try:
+            ln = lines[n.line_id]
+            v = _scroll_speed_px_per_sec(getattr(ln, "scroll_px", None), float(t_hit))
+            if v is not None and float(v) <= 1e-3:
+                lookback = max(float(lookback), 666.66)
+        except:
+            pass
+
+        dt0 = max(1e-4, float(dt))
+        max_steps = 12000
+        dt_scan = dt0
+        try:
+            if (float(lookback) / dt_scan) > float(max_steps):
+                dt_scan = float(lookback) / float(max_steps)
+        except:
+            dt_scan = dt0
+
+        t = float(t_hit)
         earliest_visible = None
         was_visible = False
 
-        steps = int(lookback / dt)
+        steps = int(float(lookback) / float(dt_scan))
         for _ in range(steps):
             vis = _note_visible_on_screen(lines, n, t, W, H, base_w=base_w, base_h=base_h)
             if vis:
                 earliest_visible = t
                 was_visible = True
             elif was_visible:
-                # just crossed from visible to invisible (backwards scan), earliest_visible is "earliest coarse location"
                 lo = t
                 hi = earliest_visible
-                for _ in range(18):  # binary refine
+                for _ in range(18):
                     mid = (lo + hi) * 0.5
                     if _note_visible_on_screen(lines, n, mid, W, H, base_w=base_w, base_h=base_h):
                         hi = mid
@@ -64,12 +112,13 @@ def precompute_t_enter(lines: List[RuntimeLine], notes: List[RuntimeNote], W: in
                         lo = mid
                 n.t_enter = hi
                 break
-            t -= dt
+            t -= float(dt_scan)
 
         if n.t_enter == -1e9:
             if was_visible:
                 n.t_enter = -1e9
             else:
-                n.t_enter = t_hit - lookback
+                n.t_enter = float(t_hit) - float(lookback)
+
 
 

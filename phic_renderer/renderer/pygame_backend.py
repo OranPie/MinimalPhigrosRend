@@ -65,15 +65,11 @@ def run(
 ):
     pygame.init()
 
-    screen = pygame.display.set_mode((W, H))
-    pygame.display.set_caption("Mini Phigros Renderer (Official + RPE, rot/alpha/color)")
     clock = pygame.time.Clock()
-
-    font, small = load_fonts(getattr(args, "font_path", None), float(getattr(args, "font_size_multiplier", 1.0) or 1.0))
 
     audio = create_audio_backend(getattr(args, "audio_backend", "pygame"))
 
-    # Load respack
+    # Load respack (needed for some runtime flags such as hold_keep_head)
     respack = load_respack(str(args.respack), audio=audio) if getattr(args, "respack", None) else None
     state.respack = respack
 
@@ -112,6 +108,12 @@ def run(
 
     # BGM
     use_bgm_clock = False
+    record_dir = getattr(args, "record_dir", None)
+    record_fps = float(getattr(args, "record_fps", 60.0) or 60.0)
+    record_start_time = float(getattr(args, "record_start_time", 0.0) or 0.0)
+    record_end_time = getattr(args, "record_end_time", None)
+    record_end_time = float(record_end_time) if record_end_time is not None else None
+    record_enabled = bool(record_dir)
     advance_mix_failed = False
     advance_bgm_active = False
     advance_segment_idx = 0
@@ -138,7 +140,7 @@ def run(
         music_start_pos_sec = 0.0
 
     if not advance_active:
-        if bgm_file:
+        if (not record_enabled) and bgm_file:
             audio.play_music_file(
                 str(bgm_file),
                 volume=clamp(getattr(args, "bgm_volume", 0.8), 0.0, 1.0),
@@ -188,11 +190,13 @@ def run(
             try:
                 if advance_segment_bgm:
                     if advance_segment_bgm[0] and os.path.exists(str(advance_segment_bgm[0])):
-                        audio.play_music_file(str(advance_segment_bgm[0]), volume=clamp(getattr(args, "bgm_volume", 0.8), 0.0, 1.0))
+                        if not record_enabled:
+                            audio.play_music_file(str(advance_segment_bgm[0]), volume=clamp(getattr(args, "bgm_volume", 0.8), 0.0, 1.0))
                         advance_bgm_active = True
                         advance_segment_idx = 0
                 elif bgm_file and os.path.exists(str(bgm_file)):
-                    audio.play_music_file(str(bgm_file), volume=clamp(getattr(args, "bgm_volume", 0.8), 0.0, 1.0))
+                    if not record_enabled:
+                        audio.play_music_file(str(bgm_file), volume=clamp(getattr(args, "bgm_volume", 0.8), 0.0, 1.0))
                     advance_bgm_active = True
             except:
                 pass
@@ -207,6 +211,17 @@ def run(
             else:
                 rr, gg, bb = ln.color_rgb
             ln.color_rgb = (int(rr), int(gg), int(bb))
+    else:
+        for ln in lines:
+            ln.color_rgb = (255, 255, 255)
+
+    # Precompute first entry time for each note before creating a window (temporary).
+    precompute_t_enter(lines, notes, W, H)
+
+    screen = pygame.display.set_mode((W, H))
+    pygame.display.set_caption("Mini Phigros Renderer (Official + RPE, rot/alpha/color)")
+
+    font, small = load_fonts(getattr(args, "font_path", None), float(getattr(args, "font_size_multiplier", 1.0) or 1.0))
 
     # chart directory for RPE hitsound relative paths
     chart_dir = os.path.dirname(os.path.abspath(chart_path)) if chart_path else ((advance_base_dir or os.getcwd()) if advance_active else os.getcwd())
@@ -214,9 +229,6 @@ def run(
     line_tex_cache: Dict[str, pygame.Surface] = {}
 
     last_debug_ms = 0
-
-    # Precompute first entry time for each note
-    precompute_t_enter(lines, notes, W, H)
 
     # Apply start_time/end_time filtering for single charts
     if (not advance_active) and (getattr(args, "start_time", None) is not None or getattr(args, "end_time", None) is not None):
@@ -334,7 +346,9 @@ def run(
         t0 = now_sec() - float(music_start_pos_sec)
     paused = False
     pause_t = 0.0
-    pause_frame: Optional[pygame.Surface] = None
+    pause_frame = None
+    record_frame_idx = 0
+    record_frame: Optional[pygame.Surface] = None
 
     # input
     holding_input = False
@@ -355,7 +369,7 @@ def run(
         _ex = 1.0
     note_scale_x = _note_scale_x_raw / _ex
     note_scale_y = _note_scale_y_raw / _ex
-    hold_body_w = int(0.035 * W * note_scale_x)
+    hold_body_w = int(float(base_note_w) * float(note_scale_x))
 
     outline_w = max(1, int(round(2.0 / float(expand))))
     line_w = max(1, int(round(4.0 / float(expand))))
@@ -365,8 +379,12 @@ def run(
 
     running = True
     note_render_count_last = 0
+    note_dbg_cache: Dict[str, pygame.Surface] = {}
     while running:
-        _dt_frame = clock.tick(120) / 1000.0
+        if record_enabled and record_fps > 1e-6:
+            _dt_frame = 1.0 / float(record_fps)
+        else:
+            _dt_frame = clock.tick(120) / 1000.0
 
         # schedule advance mixed sounds
         if advance_active and advance_sound_tracks:
@@ -447,11 +465,17 @@ def run(
             pygame.display.flip()
             continue
 
-        if use_bgm_clock:
+        if record_enabled and record_fps > 1e-6:
+            t = float(record_start_time) + float(record_frame_idx) / float(record_fps)
+        elif use_bgm_clock:
             audio_t = audio.music_pos_sec() or 0.0
             t = (audio_t - offset) * float(chart_speed)
         else:
             t = ((now_sec() - t0) - offset) * float(chart_speed)
+
+        if record_enabled and record_end_time is not None and float(t) > float(record_end_time):
+            running = False
+            break
 
         if (not advance_active) and end_time_sec is not None and float(t) > float(end_time_sec):
             try:
@@ -515,27 +539,20 @@ def run(
                         s = str(ln.text.eval(t_draw) if hasattr(ln.text, "eval") else "")
                     except:
                         s = ""
-                    if s:
-                        try:
-                            if getattr(args, "multicolor_lines", False) and getattr(ln, "color", None) is not None:
-                                rr, gg, bb = ln.color.eval(t_draw)
-                            else:
-                                rr, gg, bb = (255, 255, 255)
-                        except:
-                            rr, gg, bb = (255, 255, 255)
-                        surf_lines = s.split("\n")
-                        y_off = 0
-                        for part in surf_lines:
-                            if not part:
-                                y_off += int(small.get_linesize())
-                                continue
-                            ts = small.render(part, True, (int(rr), int(gg), int(bb)))
-                            try:
-                                ts.set_alpha(int(255 * la01))
-                            except:
-                                pass
-                            overlay.blit(ts, (int(lx * overrender), int((ly + y_off) * overrender)))
+                    rr, gg, bb = (255, 255, 255)
+                    surf_lines = s.split("\n")
+                    y_off = 0
+                    for part in surf_lines:
+                        if not part:
                             y_off += int(small.get_linesize())
+                            continue
+                        txt = small.render(part, True, (int(rr), int(gg), int(bb)))
+                        try:
+                            txt.set_alpha(int(255 * la01))
+                        except:
+                            pass
+                        overlay.blit(txt, (int(lx * overrender), int((ly + y_off) * overrender)))
+                        y_off += int(small.get_linesize())
 
                 if getattr(ln, "texture_path", None):
                     fp = str(getattr(ln, "texture_path"))
@@ -626,16 +643,27 @@ def run(
             # draw notes
             nonlocal note_render_count_last
             note_render_count = 0
+            note_dbg_drawn = 0
             for s in states[max(0, idx_next - 400) : min(len(states), idx_next + 1200)]:
                 n = s.note
                 if n.kind != 3 and s.judged:
                     continue
+                if n.kind == 3 and bool(getattr(s, "hold_finalized", False)):
+                    continue
                 if n.fake:
                     continue
-                if (not getattr(args, "no_cull", False)):
+                no_cull_all = bool(getattr(args, "no_cull", False))
+                no_cull_screen = bool(getattr(args, "no_cull_screen", False))
+                no_cull_enter_time = bool(getattr(args, "no_cull_enter_time", False))
+                if (not no_cull_all) and (not no_cull_enter_time):
                     if t_draw < float(n.t_enter):
                         continue
-                    if t_draw > float(n.t_hit) + max(0.25, float(getattr(args, "approach", 3.0)) + 0.5):
+                    # Holds must remain visible until their end time (t_hit + hold duration).
+                    t_end_for_cull = float(n.t_end) if int(n.kind) == 3 else float(n.t_hit)
+                    extra_after = max(0.25, float(getattr(args, "approach", 3.0)) + 0.5)
+                    if int(n.kind) == 3:
+                        extra_after = 0.35
+                    if t_draw > t_end_for_cull + float(extra_after):
                         continue
 
                 note_render_count += 1
@@ -644,7 +672,7 @@ def run(
                 lx, ly, lr, la01, sc_now, la_raw = eval_line_state(ln, t_draw)
 
                 if getattr(args, "basic_debug", False):
-                    now_ms = pygame.time.get_ticks()
+                    now_ms = int(float(t_draw) * 1000.0)
                     if (now_ms - int(last_debug_ms)) >= 500:
                         try:
                             dy_dbg = float(n.scroll_hit) - float(sc_now)
@@ -672,7 +700,7 @@ def run(
 
                 if n.kind == 3:
                     hit_for_draw = bool(s.hit) and (not bool(getattr(n, "fake", False)))
-                    if hit_for_draw:
+                    if hit_for_draw and respack and bool(getattr(respack, "hold_keep_head", False)):
                         head = note_world_pos(lx, ly, lr, sc_now, n, sc_now, for_tail=False)
                     else:
                         head_target_scroll = n.scroll_hit if sc_now <= n.scroll_hit else sc_now
@@ -680,6 +708,16 @@ def run(
                     tail = note_world_pos(lx, ly, lr, sc_now, n, n.scroll_end, for_tail=True)
                     head_s = apply_expand_xy(head[0] * overrender, head[1] * overrender, RW, RH, expand)
                     tail_s = apply_expand_xy(tail[0] * overrender, tail[1] * overrender, RW, RH, expand)
+
+                    if (not no_cull_all) and (not no_cull_screen):
+                        m = int(120 * overrender)
+                        minx = min(float(head_s[0]), float(tail_s[0]))
+                        maxx = max(float(head_s[0]), float(tail_s[0]))
+                        miny = min(float(head_s[1]), float(tail_s[1]))
+                        maxy = max(float(head_s[1]), float(tail_s[1]))
+                        if maxx < -m or minx > float(RW + m) or maxy < -m or miny > float(RH + m):
+                            continue
+
                     hold_alpha = note_alpha
                     if s.hold_failed:
                         hold_alpha *= 0.35
@@ -687,6 +725,14 @@ def run(
                     size_scale = float(getattr(n, "size_px", 1.0) or 1.0)
                     note_rgb = getattr(n, "tint_rgb", (255, 255, 255))
                     line_rgb = ln.color_rgb
+                    prog = None
+                    try:
+                        if bool(getattr(s, "hit", False)) or bool(getattr(s, "holding", False)):
+                            if float(sc_now) > float(n.scroll_hit) + 1e-6 and (float(n.scroll_end) > float(n.scroll_hit) + 1e-6):
+                                den = float(n.scroll_end) - float(n.scroll_hit)
+                                prog = clamp((float(sc_now) - float(n.scroll_hit)) / max(1e-6, den), 0.0, 1.0)
+                    except:
+                        prog = None
                     draw_hold_3slice(
                         overlay=overlay,
                         head_xy=head_s,
@@ -698,12 +744,48 @@ def run(
                         size_scale=size_scale,
                         mh=mh,
                         hold_body_w=max(1, int(hold_body_w * overrender)),
+                        progress=prog,
                         draw_outline=(not getattr(args, "no_note_outline", False)),
                         outline_width=max(1, int(outline_w * overrender)),
                     )
+
+                    if getattr(args, "debug_note_info", False):
+                        if int(note_dbg_drawn) >= 80:
+                            pass
+                        else:
+                            try:
+                                dy_dbg = float(n.scroll_hit) - float(sc_now)
+                                dt_ms = (float(t_draw) - float(n.t_hit)) * 1000.0
+                                side_ch = "A" if bool(getattr(n, "above", True)) else "B"
+                                label_key = f"{int(n.nid)}:{int(n.kind)} L{int(n.line_id)}{side_ch}"
+                                surf = note_dbg_cache.get(label_key)
+                                if surf is None:
+                                    surf = small.render(label_key, True, (240, 240, 240))
+                                    note_dbg_cache[label_key] = surf
+                                extra = f"dt={dt_ms:+.0f}ms dy={float(dy_dbg):.1f}"
+                                if prog is not None:
+                                    extra += f" p={float(prog)*100.0:4.1f}%"
+                                surf2 = small.render(extra, True, (200, 200, 200))
+                                nx = -math.sin(float(lr))
+                                ny = math.cos(float(lr))
+                                side = 1.0 if bool(getattr(n, "above", True)) else -1.0
+                                off = (float(hs) * float(overrender) * 0.8 + 14.0 * float(overrender))
+                                tx = float(head_s[0]) + nx * off * side
+                                ty = float(head_s[1]) + ny * off * side
+                                overlay.blit(surf, (int(tx - surf.get_width() / 2), int(ty - surf.get_height() / 2)))
+                                overlay.blit(surf2, (int(tx - surf2.get_width() / 2), int(ty - surf2.get_height() / 2 + surf.get_height())))
+                                note_dbg_drawn += 1
+                            except:
+                                pass
                 else:
                     p = note_world_pos(lx, ly, lr, sc_now, n, n.scroll_hit, for_tail=False)
                     ps = apply_expand_xy(p[0] * overrender, p[1] * overrender, RW, RH, expand)
+
+                    if (not no_cull_all) and (not no_cull_screen):
+                        m = int(120 * overrender)
+                        if (float(ps[0]) < -m) or (float(ps[0]) > float(RW + m)) or (float(ps[1]) < -m) or (float(ps[1]) > float(RH + m)):
+                            continue
+
                     img = pick_note_image(n)
                     if img is None:
                         pts = rect_corners(ps[0], ps[1], ws * overrender, hs * overrender, lr)
@@ -730,6 +812,33 @@ def run(
                         if not getattr(args, "no_note_outline", False):
                             draw_poly_outline_rgba(overlay, pts, rgba_outline, width=outline_w)
 
+                    if getattr(args, "debug_note_info", False):
+                        if int(note_dbg_drawn) >= 80:
+                            pass
+                        else:
+                            try:
+                                dy_dbg = float(n.scroll_hit) - float(sc_now)
+                                dt_ms = (float(t_draw) - float(n.t_hit)) * 1000.0
+                                side_ch = "A" if bool(getattr(n, "above", True)) else "B"
+                                label_key = f"{int(n.nid)}:{int(n.kind)} L{int(n.line_id)}{side_ch}"
+                                surf = note_dbg_cache.get(label_key)
+                                if surf is None:
+                                    surf = small.render(label_key, True, (240, 240, 240))
+                                    note_dbg_cache[label_key] = surf
+                                extra = f"dt={dt_ms:+.0f}ms dy={float(dy_dbg):.1f}"
+                                surf2 = small.render(extra, True, (200, 200, 200))
+                                nx = -math.sin(float(lr))
+                                ny = math.cos(float(lr))
+                                side = 1.0 if bool(getattr(n, "above", True)) else -1.0
+                                off = (float(hs) * float(overrender) * 0.8 + 14.0 * float(overrender))
+                                tx = float(ps[0]) + nx * off * side
+                                ty = float(ps[1]) + ny * off * side
+                                overlay.blit(surf, (int(tx - surf.get_width() / 2), int(ty - surf.get_height() / 2)))
+                                overlay.blit(surf2, (int(tx - surf2.get_width() / 2), int(ty - surf2.get_height() / 2 + surf.get_height())))
+                                note_dbg_drawn += 1
+                            except:
+                                pass
+
             # hitfx
             hitfx_draw = prune_hitfx(list(hitfx), t_draw, (respack.hitfx_duration if respack else 0.18))
             for fx in hitfx_draw:
@@ -738,10 +847,11 @@ def run(
                     fx,
                     t_draw,
                     respack=respack,
-                    W=W,
-                    H=H,
+                    W=RW,
+                    H=RH,
                     expand=expand,
                     hitfx_scale_mul=float(getattr(args, "hitfx_scale_mul", 1.0)),
+                    overrender=float(overrender),
                 )
 
             base.blit(overlay, (0, 0))
@@ -752,8 +862,8 @@ def run(
         if "line_last_hit_ms" not in locals():
             line_last_hit_ms: Dict[int, int] = {}
 
-        def _mark_line_hit(lid: int):
-            line_last_hit_ms[lid] = pygame.time.get_ticks()
+        def _mark_line_hit(lid: int, now_ms: int):
+            line_last_hit_ms[lid] = int(now_ms)
 
         # Autoplay
         if getattr(args, "autoplay", False):
@@ -777,14 +887,14 @@ def run(
                             c = respack.judge_colors.get("PERFECT", c)
                         hitfx.append(HitFX(x, y, t, c, lr))
                         if respack and (not respack.hide_particles):
-                            particles.append(ParticleBurst(x, y, pygame.time.get_ticks(), int(respack.hitfx_duration * 1000), c))
-                        _mark_line_hit(n.line_id)
-                        hitsound.play(n, pygame.time.get_ticks(), respack=respack)
+                            particles.append(ParticleBurst(x, y, int(t * 1000.0), int(respack.hitfx_duration * 1000), c))
+                        _mark_line_hit(n.line_id, int(t * 1000.0))
+                        hitsound.play(n, int(t * 1000.0), respack=respack)
                 else:
                     if (not s.holding) and abs(t - n.t_hit) <= Judge.PERFECT:
                         s.hit = True
                         s.holding = True
-                        s.next_hold_fx_ms = pygame.time.get_ticks() + hold_fx_interval_ms
+                        s.next_hold_fx_ms = int(t * 1000.0) + hold_fx_interval_ms
                         s.hold_grade = "PERFECT"
                         ln = lines[n.line_id]
                         lx, ly, lr, la, sc, _la_raw = eval_line_state(ln, t)
@@ -797,8 +907,8 @@ def run(
                             c = respack.judge_colors.get("PERFECT", c)
                         hitfx.append(HitFX(x, y, t, c, lr))
                         if respack and (not respack.hide_particles):
-                            particles.append(ParticleBurst(x, y, pygame.time.get_ticks(), int(respack.hitfx_duration * 1000), c))
-                        hitsound.play(n, pygame.time.get_ticks(), respack=respack)
+                            particles.append(ParticleBurst(x, y, int(t * 1000.0), int(respack.hitfx_duration * 1000), c))
+                        hitsound.play(n, int(t * 1000.0), respack=respack)
                     if s.holding and t >= n.t_end:
                         s.holding = False
 
@@ -828,7 +938,7 @@ def run(
                         best.hit = True
                         best.holding = True
                         best.hold_grade = grade
-                        best.next_hold_fx_ms = pygame.time.get_ticks() + hold_fx_interval_ms
+                        best.next_hold_fx_ms = int(t * 1000.0) + hold_fx_interval_ms
                         ln = lines[n.line_id]
                         lx, ly, lr, la01, sc_now, la_raw = eval_line_state(ln, t)
                         x, y = note_world_pos(lx, ly, lr, sc_now, n, n.scroll_hit, for_tail=False)
@@ -845,9 +955,9 @@ def run(
                             )
                         hitfx.append(HitFX(x, y, t, c, lr))
                         if respack and (not respack.hide_particles):
-                            particles.append(ParticleBurst(x, y, pygame.time.get_ticks(), int(respack.hitfx_duration * 1000), c))
-                        _mark_line_hit(n.line_id)
-                        hitsound.play(n, pygame.time.get_ticks(), respack=respack)
+                            particles.append(ParticleBurst(x, y, int(t * 1000.0), int(respack.hitfx_duration * 1000), c))
+                        _mark_line_hit(n.line_id, int(t * 1000.0))
+                        hitsound.play(n, int(t * 1000.0), respack=respack)
                 else:
                     grade = judge.try_hit(best, t)
                     if grade is not None:
@@ -867,8 +977,8 @@ def run(
                             )
                         hitfx.append(HitFX(x, y, t, c, lr))
                         if respack and (not respack.hide_particles):
-                            particles.append(ParticleBurst(x, y, pygame.time.get_ticks(), int(respack.hitfx_duration * 1000), c))
-                        hitsound.play(n, pygame.time.get_ticks(), respack=respack)
+                            particles.append(ParticleBurst(x, y, int(t * 1000.0), int(respack.hitfx_duration * 1000), c))
+                        hitsound.play(n, int(t * 1000.0), respack=respack)
 
         # hold maintenance
         if not getattr(args, "autoplay", False):
@@ -919,7 +1029,7 @@ def run(
 
         # hold tick fx
         if respack:
-            now_tick = pygame.time.get_ticks()
+            now_tick = int(t * 1000.0)
             for s in states[max(0, idx_next - 200) : min(len(states), idx_next + 800)]:
                 n = s.note
                 if n.fake or n.kind != 3 or (not s.holding) or s.judged:
@@ -942,8 +1052,8 @@ def run(
                             pass
                     hitfx.append(HitFX(x, y, t, c, lr))
                     if not respack.hide_particles:
-                        particles.append(ParticleBurst(x, y, pygame.time.get_ticks(), int(respack.hitfx_duration * 1000), c))
-                    _mark_line_hit(n.line_id)
+                        particles.append(ParticleBurst(x, y, int(t * 1000.0), int(respack.hitfx_duration * 1000), c))
+                    _mark_line_hit(n.line_id, int(t * 1000.0))
                     s.next_hold_fx_ms += hold_fx_interval_ms
 
         # miss detection
@@ -1074,6 +1184,15 @@ def run(
 
         screen.blit(display_frame, (0, 0))
 
+        if record_enabled:
+            try:
+                os.makedirs(str(record_dir), exist_ok=True)
+                out_p = os.path.join(str(record_dir), f"frame_{record_frame_idx:06d}.png")
+                pygame.image.save(display_frame, out_p)
+            except:
+                pass
+            record_frame_idx += 1
+
         if expand > 1.0:
             bw = W / expand
             bh = H / expand
@@ -1081,7 +1200,7 @@ def run(
             y0 = (H - bh) * 0.5
             pygame.draw.rect(screen, (240, 240, 240), pygame.Rect(int(x0), int(y0), int(bw), int(bh)), 2)
 
-        now_ms = pygame.time.get_ticks()
+        now_ms = int(t * 1000.0)
         particles[:] = prune_particles(particles, now_ms)
         draw_particles(screen, particles, now_ms, W, H, expand)
 

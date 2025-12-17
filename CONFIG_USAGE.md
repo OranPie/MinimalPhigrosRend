@@ -88,12 +88,20 @@ python3 -m phic_renderer --input <谱面文件或谱面包> --config_old config.
   - 预绘制时间（秒），越大越提前绘制
 - `--chart_speed <float>`
   - 谱面速度倍率（影响判定/播放进度）
+- `--no_cull`
+  - 不做可见性裁剪（会更慢，但用于调试最直观）
 - `--expand <float>`
   - 画面收缩/扩展因子（用于适配不同谱面）
 - `--note_scale_x <float>`, `--note_scale_y <float>`
   - note 尺寸缩放
 - `--note_flow_speed_multiplier <float>`
   - note 流速倍率（影响滚动）
+- `--overrender <float>`
+  - 内部高分辨率渲染再缩放的倍率（仅 pygame 后端使用较多）
+- `--trail_alpha <float>`, `--trail_blur <int>`, `--trail_dim <int>`
+  - 轨迹/残影相关参数（主要用于 pygame 后端）
+- `--hitfx_scale_mul <float>`
+  - hitfx 缩放乘子
 - `--multicolor_lines`
   - 允许判定线使用彩色（RPE/官方相关）
 - `--no_note_outline`
@@ -118,6 +126,8 @@ python3 -m phic_renderer --input <谱面文件或谱面包> --config_old config.
   - 音频后端
 - `--bgm <path>`
   - BGM 文件
+- `--force`
+  - 即使谱面包自带音乐，也强制使用 `--bgm` / `audio.bgm`
 - `--bgm_volume <float>`
   - BGM 音量（0..1）
 - `--hitsound_min_interval_ms <int>`
@@ -142,6 +152,65 @@ python3 -m phic_renderer --input <谱面文件或谱面包> --config_old config.
   - 字体倍率
 - `--no_title_overlay`
   - 关闭标题 overlay
+
+#### 4.9 调试（Debug）
+
+- `--basic_debug`
+  - 显示基础调试信息（例如 FPS/渲染 note 数）
+- `--debug_line_label`
+  - 显示每条判定线的 label（line id 或名称）
+- `--debug_line_stats`
+  - 显示判定线统计（如果有实现）
+- `--debug_judge_windows`
+  - 显示判定窗口可视化（PERFECT/GOOD/BAD）
+- `--debug_note_info`
+  - 显示 note 调试信息（nid/kind/dt 等）
+- `--debug_particles`
+  - 显示粒子数量等调试信息（不一定影响是否渲染粒子）
+
+#### 4.10 Mods（配置 v2：`mods`）
+
+`mods` 是一个对象，会被原样传入 mods 系统。常用的内置 mod：
+
+- `mods.hold_to_tap_drag`
+  - **作用**：将 hold 拆解为 tap + 多个 drag（或你指定的 kind）
+  - 字段：
+    - `enable` (bool)
+    - `interval` / `drag_interval` (float，秒)
+    - `tap_head` (bool)
+    - `remove_hold` (bool)
+    - `include_end` (bool)
+    - `drag_kind` (int 或 string)
+      - 支持用名字：`"tap"|"drag"|"hold"|"flick"`
+
+- `mods.note_rules`（列表）
+  - **作用**：按过滤条件批量修改 note 属性
+  - 常用字段：
+    - `filter.kind` / `filter.kinds`：支持 `1/2/3/4` 或 `"tap"/"drag"/"hold"/"flick"`
+    - `set.kind`：同上
+    - `set.alpha`：0..1 或 0..255
+    - `set.size`：float
+    - `set.side` / `set.above`：`above/below/flip`
+
+示例：
+
+```jsonc
+{
+  "mods": {
+    "hold_to_tap_drag": {
+      "enable": true,
+      "interval": 0.12,
+      "drag_kind": "flick"
+    },
+    "note_rules": [
+      {
+        "filter": { "kind": ["tap", "flick"] },
+        "set": { "alpha": 0.8 }
+      }
+    ]
+  }
+}
+```
 
 #### 4.8 CUI / 语言
 
@@ -230,6 +299,7 @@ python3 -m phic_renderer --input <谱面文件或谱面包> --config_old config.
   },
 
   "debug": {
+    "basic_debug": false,
     "debug_line_label": false,
     "debug_line_stats": false,
     "debug_judge_windows": false,
@@ -333,9 +403,13 @@ From highest to lowest:
 - `--backend pygame|moderngl|gl|opengl`
 - `--approach <float>`
 - `--chart_speed <float>`
+- `--no_cull`
 - `--expand <float>`
 - `--note_scale_x <float>` / `--note_scale_y <float>`
 - `--note_flow_speed_multiplier <float>`
+- `--overrender <float>`
+- `--trail_alpha <float>` / `--trail_blur <int>` / `--trail_dim <int>`
+- `--hitfx_scale_mul <float>`
 - `--multicolor_lines`
 - `--no_note_outline`
 - `--line_alpha_affects_notes never|negative_only|always`
@@ -351,8 +425,30 @@ From highest to lowest:
 
 - `--audio_backend pygame|openal|al`
 - `--bgm <path>`
+- `--force`
 - `--bgm_volume <float>`
 - `--hitsound_min_interval_ms <int>`
+
+#### 4.9 Debug
+
+- `--basic_debug`
+- `--debug_line_label`
+- `--debug_line_stats`
+- `--debug_judge_windows`
+- `--debug_note_info`
+- `--debug_particles`
+
+#### 4.10 Mods (`mods` in config v2)
+
+`mods` is an object passed through to the mods system.
+
+- `mods.hold_to_tap_drag`
+  - Converts holds into a tap head + periodic drags.
+  - `drag_kind` supports either numeric ids or names: `"tap"|"drag"|"hold"|"flick"`.
+
+- `mods.note_rules` (list)
+  - Batch modify notes by filters.
+  - `filter.kind`/`set.kind` supports either numeric ids or names: `"tap"|"drag"|"hold"|"flick"`.
 
 #### 4.6 Gameplay
 

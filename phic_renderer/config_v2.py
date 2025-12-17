@@ -117,6 +117,8 @@ def flatten_config_v2(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[Dic
     pull("approach", render, "approach")
     pull("chart_speed", render, "chart_speed")
     pull("no_cull", render, "no_cull")
+    pull("no_cull_screen", render, "no_cull_screen")
+    pull("no_cull_enter_time", render, "no_cull_enter_time")
     pull("expand", render, "expand")
 
     pull("note_scale_x", render, "note_scale_x")
@@ -127,6 +129,10 @@ def flatten_config_v2(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[Dic
     pull("trail_alpha", render, "trail_alpha")
     pull("trail_blur", render, "trail_blur")
     pull("trail_dim", render, "trail_dim")
+    pull("trail_frames", render, "trail_frames")
+    pull("trail_decay", render, "trail_decay")
+    pull("trail_blend", render, "trail_blend")
+    pull("trail_blur_ramp", render, "trail_blur_ramp")
 
     pull("hitfx_scale_mul", render, "hitfx_scale_mul")
     pull("multicolor_lines", render, "multicolor_lines")
@@ -180,6 +186,8 @@ def dump_config_v2(args: Any, *, mods: Optional[Dict[str, Any]] = None, lang: Op
             "approach": float(getattr(args, "approach", 3.0)),
             "chart_speed": float(getattr(args, "chart_speed", 1.0)),
             "no_cull": bool(getattr(args, "no_cull", False)),
+            "no_cull_screen": bool(getattr(args, "no_cull_screen", False)),
+            "no_cull_enter_time": bool(getattr(args, "no_cull_enter_time", False)),
             "expand": float(getattr(args, "expand", 1.0)),
             "note_scale_x": float(getattr(args, "note_scale_x", 1.0)),
             "note_scale_y": float(getattr(args, "note_scale_y", 1.0)),
@@ -188,6 +196,10 @@ def dump_config_v2(args: Any, *, mods: Optional[Dict[str, Any]] = None, lang: Op
             "trail_alpha": float(getattr(args, "trail_alpha", 0.0)),
             "trail_blur": int(getattr(args, "trail_blur", 0)),
             "trail_dim": int(getattr(args, "trail_dim", 0)),
+            "trail_frames": int(getattr(args, "trail_frames", 1)),
+            "trail_decay": float(getattr(args, "trail_decay", 0.85)),
+            "trail_blend": str(getattr(args, "trail_blend", "normal")),
+            "trail_blur_ramp": bool(getattr(args, "trail_blur_ramp", False)),
             "hitfx_scale_mul": float(getattr(args, "hitfx_scale_mul", 1.0)),
             "multicolor_lines": bool(getattr(args, "multicolor_lines", False)),
             "no_note_outline": bool(getattr(args, "no_note_outline", False)),

@@ -10,7 +10,18 @@ from ...math.util import apply_expand_xy, clamp
 from .draw import draw_ring
 
 
-def draw_hitfx(overlay: pygame.Surface, fx: HitFX, t: float, *, respack: Any, W: int, H: int, expand: float, hitfx_scale_mul: float):
+def draw_hitfx(
+    overlay: pygame.Surface,
+    fx: HitFX,
+    t: float,
+    *,
+    respack: Any,
+    W: int,
+    H: int,
+    expand: float,
+    hitfx_scale_mul: float,
+    overrender: float = 1.0,
+):
     if not respack:
         age = t - fx.t0
         if age < 0 or age > 0.18:
@@ -18,7 +29,7 @@ def draw_hitfx(overlay: pygame.Surface, fx: HitFX, t: float, *, respack: Any, W:
         r = int(10 + 140 * age)
         a = int(255 * (1.0 - age / 0.18))
         rr, gg, bb, _ = fx.rgba
-        x0, y0 = apply_expand_xy(fx.x, fx.y, W, H, expand)
+        x0, y0 = apply_expand_xy(fx.x * float(overrender), fx.y * float(overrender), W, H, expand)
         draw_ring(overlay, x0, y0, max(1, int(r / expand)), (rr, gg, bb, a), thickness=3)
         return
 
@@ -54,5 +65,5 @@ def draw_hitfx(overlay: pygame.Surface, fx: HitFX, t: float, *, respack: Any, W:
         frame.blit(tint_s, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
     frame.set_alpha(a)
 
-    x0, y0 = apply_expand_xy(fx.x, fx.y, W, H, expand)
+    x0, y0 = apply_expand_xy(fx.x * float(overrender), fx.y * float(overrender), W, H, expand)
     overlay.blit(frame, (x0 - frame.get_width() / 2, y0 - frame.get_height() / 2))

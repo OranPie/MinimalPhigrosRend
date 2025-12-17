@@ -18,14 +18,20 @@
     "approach": 3.0,
     "chart_speed": 1.0,
     "no_cull": false,
-    "expand": 1.5,
+    "no_cull_screen": false,
+    "no_cull_enter_time": true,
+    "expand": 1.0,
     "note_scale_x": 2.0,
     "note_scale_y": 1.0,
     "note_flow_speed_multiplier": 1.0,
     "overrender": 1.0,
-    "trail_alpha": 0.0,
-    "trail_blur": 0,
-    "trail_dim": 0,
+    "trail_alpha": 0.3,
+    "trail_blur": 1,
+    "trail_dim": 60,
+    "trail_frames": 1,
+    "trail_decay": 0.85,
+    "trail_blend": "normal",
+    "trail_blur_ramp": false,
     "hitfx_scale_mul": 0.75,
     "multicolor_lines": false,
     "no_note_outline": true,
@@ -33,14 +39,14 @@
   },
   "audio": {
     "audio_backend": "pygame",
-    "bgm": "charts/AbsoluTedisoRdeR.AcuteDisarray/AbsoluTedisoRdeR.AcuteDisarray.ogg",
+    "bgm": "charts/ATHAZA.LeaF/ATHAZA.LeaF.ogg",
     "force": false,
     "bgm_volume": 0.8,
     "hitsound_min_interval_ms": 30
   },
   "assets": {
     "respack": "./respack.zip",
-    "bg": "charts/AbsoluTedisoRdeR.AcuteDisarray/AbsoluTedisoRdeR.AcuteDisarray.png",
+    "bg": "charts/ATHAZA.LeaF/ATHAZA.LeaF.png",
     "bg_blur": 10,
     "bg_dim": 120
   },
@@ -55,13 +61,13 @@
     "lang": "en",
     "no_title_overlay": false,
     "font_path": null,
-    "font_size_multiplier": 1.0
+    "font_size_multiplier": 1.5
   },
   "rpe": {
     "rpe_easing_shift": 0
   },
   "debug": {
-    "basic_debug": false,
+    "basic_debug": true,
     "debug_line_label": false,
     "debug_line_stats": false,
     "debug_judge_windows": false,
@@ -70,12 +76,12 @@
   },
   "mods": {
     "hold_to_tap_drag": {
-      "enable": true,
-      "interval": 0.06,
+      "enable": false,
+      "interval": 0.1,
       "tap_head": true,
       "remove_hold": true,
       "include_end": true,
-      "drag_kind": "flick"
+      "drag_kind": "tap"
     }
   }
 }

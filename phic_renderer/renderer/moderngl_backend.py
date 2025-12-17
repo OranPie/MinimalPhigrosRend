@@ -35,6 +35,8 @@ def run(args: Any, **ctx: Any):
     from .moderngl.app import create_app
     from .moderngl.loop import run_loop
     from .moderngl.respack_loader import load_respack
+    from .moderngl.texture import load_texture_rgba
+    from ..runtime.visibility import precompute_t_enter
 
     audio = create_audio_backend(getattr(args, "audio_backend", "pygame"))
 
@@ -81,6 +83,25 @@ def run(args: Any, **ctx: Any):
     import os
     chart_dir = os.path.dirname(os.path.abspath(chart_path)) if chart_path else ((advance_base_dir or os.getcwd()) if advance_active else os.getcwd())
     rc["chart_dir"] = chart_dir
+
+    # Precompute first entry time for each note (used by no_cull / culling in renderer).
+    try:
+        precompute_t_enter(rc.get("lines") or [], rc.get("notes") or [], W, H)
+    except:
+        pass
+
+    # Background image (no blur for ModernGL backend, but keep dim behavior consistent).
+    rc["bg_dim_alpha"] = ctx.get("bg_dim_alpha", None)
+    bg_file = getattr(args, "bg", None) if getattr(args, "bg", None) else ctx.get("bg_path", None)
+    if bg_file and (not os.path.isabs(str(bg_file))):
+        cand = os.path.join(chart_dir, str(bg_file))
+        if os.path.exists(cand):
+            bg_file = cand
+    if bg_file and os.path.exists(str(bg_file)):
+        try:
+            rc["bg_tex"] = load_texture_rgba(glctx, str(bg_file), flip_y=True)
+        except:
+            rc["bg_tex"] = None
 
     hitsound_min_interval_ms = max(0, int(getattr(args, "hitsound_min_interval_ms", 30)))
     rc["hitsound"] = HitsoundPlayer(audio=audio, chart_dir=chart_dir, min_interval_ms=hitsound_min_interval_ms)
