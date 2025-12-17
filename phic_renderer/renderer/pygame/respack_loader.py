@@ -7,6 +7,15 @@ from typing import Any
 
 from ...respack import Respack, load_respack_info
 
+
+def _maybe_convert_alpha(surf: pygame.Surface) -> pygame.Surface:
+    try:
+        if pygame.display.get_surface() is not None:
+            return surf.convert_alpha()
+    except:
+        pass
+    return surf
+
 def _parse_hex_rgba(v: Any, default: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
     if v is None:
         return default
@@ -44,7 +53,7 @@ def load_respack(zip_path: str, *, audio: Any) -> Respack:
     ]
     img = {}
     for fn in required_imgs:
-        img[fn] = pygame.image.load(p(fn)).convert_alpha()
+        img[fn] = _maybe_convert_alpha(pygame.image.load(p(fn)))
 
     sfx = {}
     for fn, key in [("click.ogg", "click"), ("drag.ogg", "drag"), ("flick.ogg", "flick")]:

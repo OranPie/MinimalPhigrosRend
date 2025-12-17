@@ -5,11 +5,20 @@ from typing import Optional, Tuple
 import pygame
 
 
+def _maybe_convert(surf: pygame.Surface) -> pygame.Surface:
+    try:
+        if pygame.display.get_surface() is not None:
+            return surf.convert()
+    except:
+        pass
+    return surf
+
+
 def load_background(bg_file: Optional[str], W: int, H: int, blur_factor: int) -> Tuple[Optional[pygame.Surface], Optional[pygame.Surface]]:
     if not bg_file:
         return None, None
 
-    bg_base = pygame.image.load(str(bg_file)).convert()
+    bg_base = _maybe_convert(pygame.image.load(str(bg_file)))
     bg_base = pygame.transform.smoothscale(bg_base, (W, H))
 
     factor = max(1, int(blur_factor))

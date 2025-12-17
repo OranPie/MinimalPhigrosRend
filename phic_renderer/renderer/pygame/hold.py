@@ -86,12 +86,15 @@ def draw_hold_3slice(
     head_draw_h = min(int(out_h), int(head_piece.get_height()))
     tail_draw_h = min(int(out_h), int(tail_piece.get_height()))
 
-    y0_mid = int(head_draw_h)
+    keep_head = bool(getattr(respack, "hold_keep_head", False))
+    hide_head_now = (progress is not None) and (not keep_head)
+
+    y0_mid = 0 if hide_head_now else int(head_draw_h)
     y1_mid = int(out_h - tail_draw_h)
     mid_h_draw = int(max(0, y1_mid - y0_mid))
     _blit_mid(y0_mid, mid_h_draw, repeat=bool(getattr(respack, "hold_repeat", False)))
 
-    if head_draw_h > 0:
+    if (not hide_head_now) and head_draw_h > 0:
         try:
             surf.blit(head_piece.subsurface((0, 0, out_w, head_draw_h)), (0, 0))
         except:
@@ -107,7 +110,7 @@ def draw_hold_3slice(
 
     # During holding, allow sampling only the "tail side" portion of the texture and stretch it
     # back to the current geometric length. This makes the texture appear to be "consumed".
-    if progress is not None:
+    if (progress is not None) and (not keep_head):
         try:
             p = clamp(float(progress), 0.0, 1.0)
         except:

@@ -67,9 +67,18 @@ def run(
 
     clock = pygame.time.Clock()
 
+    record_dir = getattr(args, "record_dir", None)
+    record_fps = float(getattr(args, "record_fps", 60.0) or 60.0)
+    record_start_time = float(getattr(args, "record_start_time", 0.0) or 0.0)
+    record_end_time = getattr(args, "record_end_time", None)
+    record_end_time = float(record_end_time) if record_end_time is not None else None
+    record_enabled = bool(record_dir)
+    record_headless = bool(getattr(args, "record_headless", False)) and record_enabled
+    record_log_interval = float(getattr(args, "record_log_interval", 1.0) or 0.0) if record_enabled else 0.0
+    record_log_notes = bool(getattr(args, "record_log_notes", False)) if record_enabled else False
+
     audio = create_audio_backend(getattr(args, "audio_backend", "pygame"))
 
-    # Load respack (needed for some runtime flags such as hold_keep_head)
     respack = load_respack(str(args.respack), audio=audio) if getattr(args, "respack", None) else None
     state.respack = respack
 
@@ -108,12 +117,6 @@ def run(
 
     # BGM
     use_bgm_clock = False
-    record_dir = getattr(args, "record_dir", None)
-    record_fps = float(getattr(args, "record_fps", 60.0) or 60.0)
-    record_start_time = float(getattr(args, "record_start_time", 0.0) or 0.0)
-    record_end_time = getattr(args, "record_end_time", None)
-    record_end_time = float(record_end_time) if record_end_time is not None else None
-    record_enabled = bool(record_dir)
     advance_mix_failed = False
     advance_bgm_active = False
     advance_segment_idx = 0
@@ -218,8 +221,24 @@ def run(
     # Precompute first entry time for each note before creating a window (temporary).
     precompute_t_enter(lines, notes, W, H)
 
-    screen = pygame.display.set_mode((W, H))
-    pygame.display.set_caption("Mini Phigros Renderer (Official + RPE, rot/alpha/color)")
+    if record_headless:
+        screen = pygame.Surface((W, H), pygame.SRCALPHA)
+    else:
+        screen = pygame.display.set_mode((W, H))
+        pygame.display.set_caption("Mini Phigros Renderer (Official + RPE, rot/alpha/color)")
+        if respack and getattr(respack, "img", None):
+            try:
+                for k, surf in list(respack.img.items()):
+                    try:
+                        respack.img[k] = surf.convert_alpha()
+                    except:
+                        respack.img[k] = surf
+                try:
+                    respack.hitfx_sheet = respack.img.get("hit_fx.png", respack.hitfx_sheet)
+                except:
+                    pass
+            except:
+                pass
 
     font, small = load_fonts(getattr(args, "font_path", None), float(getattr(args, "font_size_multiplier", 1.0) or 1.0))
 
@@ -350,6 +369,8 @@ def run(
     record_frame_idx = 0
     record_frame: Optional[pygame.Surface] = None
 
+    last_record_log_t = -1e9
+
     # input
     holding_input = False
     key_down = False
@@ -405,7 +426,12 @@ def run(
                     audio.stop_channel(tr.get("channel"))
                     tr["stopped"] = True
 
-        for ev in pygame.event.get():
+        if record_headless:
+            pygame.event.pump()
+            evs = []
+        else:
+            evs = pygame.event.get()
+        for ev in evs:
             if ev.type == pygame.QUIT:
                 running = False
             elif ev.type == pygame.KEYDOWN:
@@ -463,7 +489,11 @@ def run(
             txt = font.render("PAUSED (P to resume)", True, (220, 220, 220))
             screen.blit(txt, (W // 2 - txt.get_width() // 2, H // 2))
             pygame.display.flip()
-            continue
+
+            if record_headless:
+                paused = False
+            else:
+                continue
 
         if record_enabled and record_fps > 1e-6:
             t = float(record_start_time) + float(record_frame_idx) / float(record_fps)
@@ -728,9 +758,11 @@ def run(
                     prog = None
                     try:
                         if bool(getattr(s, "hit", False)) or bool(getattr(s, "holding", False)):
-                            if float(sc_now) > float(n.scroll_hit) + 1e-6 and (float(n.scroll_end) > float(n.scroll_hit) + 1e-6):
-                                den = float(n.scroll_end) - float(n.scroll_hit)
-                                prog = clamp((float(sc_now) - float(n.scroll_hit)) / max(1e-6, den), 0.0, 1.0)
+                            den = float(n.scroll_end) - float(n.scroll_hit)
+                            num = float(sc_now) - float(n.scroll_hit)
+                            if abs(den) > 1e-6:
+                                if (num * den) > 1e-6:
+                                    prog = clamp(num / den, 0.0, 1.0)
                     except:
                         prog = None
                     draw_hold_3slice(
@@ -1182,7 +1214,8 @@ def run(
                 except:
                     pass
 
-        screen.blit(display_frame, (0, 0))
+        if not record_headless:
+            screen.blit(display_frame, (0, 0))
 
         if record_enabled:
             try:
@@ -1193,21 +1226,55 @@ def run(
                 pass
             record_frame_idx += 1
 
-        if expand > 1.0:
+            if record_headless:
+                try:
+                    end_for_prog = float(record_end_time) if record_end_time is not None else float(chart_end)
+                    denom = max(1e-6, float(end_for_prog) - float(record_start_time))
+                    ratio = clamp((float(t) - float(record_start_time)) / denom, 0.0, 1.0)
+                    msg = f"[record] {ratio*100:6.2f}%  frame={record_frame_idx:7d}  t={float(t):.3f}s"
+                    print("\r" + msg + " " * 8, end="", flush=True)
+                except:
+                    pass
+
+                if record_log_notes and record_log_interval > 1e-6 and (float(t) - float(last_record_log_t)) >= float(record_log_interval):
+                    try:
+                        total_past = 0
+                        total_incoming = 0
+                        for lid in note_times_by_line:
+                            past, incoming = _line_note_counts(int(lid), float(t))
+                            total_past += int(past)
+                            total_incoming += int(incoming)
+                        seg_hint = ""
+                        if lines:
+                            try:
+                                ln0 = lines[0]
+                                seg_hint = f" seg(rot)={_track_seg_state(ln0.rot)} seg(alpha)={_track_seg_state(ln0.alpha)} seg(scroll)={_track_seg_state(ln0.scroll_px)}"
+                            except:
+                                seg_hint = ""
+                        print(f"\n[record] past={int(total_past)} incoming={int(total_incoming)}{seg_hint}", flush=True)
+                        last_record_log_t = float(t)
+                    except:
+                        last_record_log_t = float(t)
+
+        if (not record_headless) and expand > 1.0:
             bw = W / expand
             bh = H / expand
             x0 = (W - bw) * 0.5
             y0 = (H - bh) * 0.5
             pygame.draw.rect(screen, (240, 240, 240), pygame.Rect(int(x0), int(y0), int(bw), int(bh)), 2)
 
-        now_ms = int(t * 1000.0)
-        particles[:] = prune_particles(particles, now_ms)
-        draw_particles(screen, particles, now_ms, W, H, expand)
+        if not record_headless:
+            now_ms = int(t * 1000.0)
+            particles[:] = prune_particles(particles, now_ms)
+            draw_particles(screen, particles, now_ms, W, H, expand)
 
-        if line_text_draw_calls:
+        if (not record_headless) and line_text_draw_calls:
             line_text_draw_calls.sort(key=lambda x: x[0])
             for _pr, surf, x0, y0 in line_text_draw_calls:
                 screen.blit(surf, (x0, y0))
+
+        if record_headless:
+            continue
 
         ui_pad = max(4, int(small.get_linesize() * 0.25))
         ui_x = 16
@@ -1261,6 +1328,12 @@ def run(
             screen.blit(dbg, (ui_x, ui_particles_y + small.get_linesize() + ui_pad))
 
         pygame.display.flip()
+
+    if record_headless and record_enabled:
+        try:
+            print("\n[record] done", flush=True)
+        except:
+            pass
 
     audio.close()
     pygame.quit()
