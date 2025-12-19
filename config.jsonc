@@ -39,14 +39,14 @@
   },
   "audio": {
     "audio_backend": "pygame",
-    "bgm": "charts/ATHAZA.LeaF/ATHAZA.LeaF.ogg",
+    "bgm": "charts/AbsoluTedisoRdeR.AcuteDisarray/AbsoluTedisoRdeR.AcuteDisarray.ogg",
     "force": false,
     "bgm_volume": 0.8,
     "hitsound_min_interval_ms": 30
   },
   "assets": {
     "respack": "./respack.zip",
-    "bg": "charts/ATHAZA.LeaF/ATHAZA.LeaF.png",
+    "bg": "charts/AbsoluTedisoRdeR.AcuteDisarray/AbsoluTedisoRdeR.AcuteDisarray.png",
     "bg_blur": 10,
     "bg_dim": 120
   },

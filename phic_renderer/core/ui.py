@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional, Tuple
 def compute_score(acc_sum: float, judged_cnt: int, combo: int, max_combo: int, total_notes: int) -> Tuple[int, float, float]:
     acc_ratio = (acc_sum / total_notes) if total_notes > 0 else 0.0
     combo_ratio = (max_combo / total_notes) if total_notes > 0 else 0.0
-    score = int(((acc_ratio * 0.9) + (combo_ratio * 0.1)) * 1000000)
+    score = int((acc_ratio * 900000.0) + (combo_ratio * 100000.0))
     return score, acc_ratio, combo_ratio
 
 

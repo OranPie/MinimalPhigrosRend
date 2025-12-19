@@ -49,6 +49,8 @@ def main():
     g_rec.add_argument("--curses_fps", type=float, default=10.0, help="Headless curses refresh rate")
     g_rec.add_argument("--no_particles", action="store_true", help="Do not render particles into recorded frames")
     g_rec.add_argument("--no_text", action="store_true", help="Do not render text overlays into recorded frames")
+    g_rec.add_argument("--hit_debug", action="store_true", help="Show recent hit debug info overlay")
+    g_rec.add_argument("--judge_script", type=str, default=None, help="Optional judge script JSON to simulate non-perfect autoplay")
 
     args = ap.parse_args()
 
@@ -109,6 +111,12 @@ def main():
     # Do not provide CLI overrides for them.
     for k, v in (flat_cfg or {}).items():
         setattr(args, k, v)
+
+    if getattr(args, "judge_script", None):
+        try:
+            setattr(args, "judge_script", str(getattr(args, "judge_script")))
+        except:
+            pass
 
     # Remove line that forces pygame backend - allow moderngl recording in future
     # setattr(args, "backend", "pygame")
@@ -335,6 +343,9 @@ def main():
     setattr(args, "record_curses_fps", float(getattr(args, "curses_fps", 10.0) or 10.0))
     setattr(args, "record_render_particles", (not bool(getattr(args, "no_particles", False))))
     setattr(args, "record_render_text", (not bool(getattr(args, "no_text", False))))
+
+    if bool(getattr(args, "hit_debug", False)):
+        setattr(args, "hit_debug", True)
 
     interrupted = False
     try:

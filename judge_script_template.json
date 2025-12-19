@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "meta": {
+    "name": "",
+    "level": "",
+    "difficulty": null,
+    "index_mode": "playable",
+    "require_total_notes": null,
+    "require_playable_notes": null
+  },
+  "entries": [
+    {
+      "startNoteIndex": 0,
+      "endNoteIndex": 99,
+      "kind": "any",
+      "grade": "PERFECT",
+      "dt_ms": 0,
+      "holdPercent": null
+    },
+    {
+      "startNoteIndex": 100,
+      "endNoteIndex": 120,
+      "kind": "tap",
+      "grade": "BAD",
+      "dt_ms": { "min": -30, "max": 30 },
+      "holdPercent": null
+    },
+    {
+      "startNoteIndex": 121,
+      "endNoteIndex": 130,
+      "kind": "hold",
+      "grade": "GOOD",
+      "dt_ms": { "values": [ -10, 0, 10, 20 ], "weights": [ 1, 6, 2, 1 ] },
+      "holdPercent": 0.6
+    }
+  ]
+}

@@ -88,6 +88,7 @@ def main():
 
     g_game = ap.add_argument_group("Gameplay")
     g_game.add_argument("--autoplay", action="store_true")
+    g_game.add_argument("--judge_script", type=str, default=None, help="Optional judge script JSON to simulate non-perfect autoplay")
     g_game.add_argument("--hold_fx_interval_ms", type=int, default=200)
     g_game.add_argument("--hold_tail_tol", type=float, default=0.8)
     g_game.add_argument("--start_time", type=float, default=None, help="Start time in seconds (cuts chart before this time)")
@@ -108,6 +109,7 @@ def main():
     g_dbg.add_argument("--debug_judge_windows", action="store_true")
     g_dbg.add_argument("--debug_note_info", action="store_true")
     g_dbg.add_argument("--debug_particles", action="store_true")
+    g_dbg.add_argument("--hit_debug", action="store_true")
 
     args = ap.parse_args()
 

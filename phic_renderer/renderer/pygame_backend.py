@@ -18,6 +18,7 @@ from ..runtime.effects import HitFX, ParticleBurst
 from ..core.fx import prune_hitfx, prune_particles
 from ..runtime.judge import Judge, JUDGE_WEIGHT
 from ..runtime.kinematics import eval_line_state, note_world_pos
+from ..runtime.judge_script import build_judge_plan, load_judge_script, parse_judge_script
 from ..core.constants import NOTE_TYPE_COLORS
 from ..core.ui import compute_score, format_title, progress_ratio
 from ..math.util import (
@@ -437,6 +438,70 @@ def run(
     judge = Judge()
     hitfx: List[HitFX] = []
     particles: List[ParticleBurst] = []
+
+    MISS_WINDOW = 0.160
+    MISS_FADE_SEC = 0.35
+    BAD_GHOST_SEC = 0.22
+    bad_ghosts: List[Dict[str, Any]] = []
+
+    judge_plan = None
+    judge_plan_err = None
+    judge_script_path = getattr(args, "judge_script", None)
+    if judge_script_path:
+        try:
+            js_raw = load_judge_script(str(judge_script_path))
+            js = parse_judge_script(js_raw)
+            judge_plan = build_judge_plan(js, notes)
+        except Exception as e:
+            judge_plan = None
+            judge_plan_err = str(e)
+
+    def _sanitize_grade(note_kind: int, grade: Optional[str]) -> Optional[str]:
+        if grade is None:
+            return None
+        g = str(grade).upper()
+        k = int(note_kind)
+        if k in (2, 4):
+            return "PERFECT" if g == "PERFECT" else None
+        if k == 3:
+            if g == "PERFECT":
+                return "PERFECT"
+            if g in ("GOOD", "BAD"):
+                return "GOOD"
+            return None
+        if k == 1:
+            if g in ("PERFECT", "GOOD", "BAD"):
+                return g
+            return None
+        return None
+
+    def _apply_grade(s: NoteState, grade: str):
+        g = str(grade).upper()
+        if g == "PERFECT":
+            judge.bump()
+            s.judged = True
+            s.hit = True
+            judge.acc_sum += JUDGE_WEIGHT.get("PERFECT", 1.0)
+            judge.judged_cnt += 1
+            return
+        if g == "GOOD":
+            judge.bump()
+            s.judged = True
+            s.hit = True
+            judge.acc_sum += JUDGE_WEIGHT.get("GOOD", 0.6)
+            judge.judged_cnt += 1
+            return
+        if g == "BAD":
+            judge.break_combo()
+            s.judged = True
+            s.hit = True
+            judge.acc_sum += JUDGE_WEIGHT.get("BAD", 0.0)
+            judge.judged_cnt += 1
+            return
+
+    hit_debug = bool(getattr(args, "hit_debug", False))
+    hit_debug_lines: deque = deque(maxlen=64)
+    hit_debug_seq = 0
 
     # timebase
     t0 = now_sec()
@@ -909,7 +974,16 @@ def run(
                 s = states[_si]
                 n = s.note
                 if n.kind != 3 and s.judged:
-                    continue
+                    if bool(getattr(s, "miss", False)):
+                        mt = getattr(s, "miss_t", None)
+                        if mt is None:
+                            continue
+                        if float(t_draw) <= float(mt) + float(MISS_FADE_SEC):
+                            pass
+                        else:
+                            continue
+                    else:
+                        continue
                 if n.kind == 3 and bool(getattr(s, "hold_finalized", False)):
                     continue
                 if n.fake:
@@ -953,6 +1027,15 @@ def run(
                     note_alpha *= clamp(la01, 0.0, 1.0)
                 if note_alpha <= 1e-6:
                     continue
+
+                miss_dim = 0.0
+                if bool(getattr(s, "miss", False)):
+                    mt = getattr(s, "miss_t", None)
+                    if mt is not None:
+                        dtm = float(t_draw) - float(mt)
+                        if dtm >= 0.0:
+                            miss_dim = clamp(dtm / float(MISS_FADE_SEC), 0.0, 1.0)
+                            note_alpha *= (1.0 - miss_dim) * 0.65
 
                 ws = float(base_note_w) * float(note_scale_x) * float(getattr(n, "size_px", 1.0))
                 hs = float(base_note_h) * float(note_scale_y) * float(getattr(n, "size_px", 1.0))
@@ -1079,6 +1162,10 @@ def run(
 
                     img = pick_note_image(n)
                     if img is None:
+                        if miss_dim > 1e-6:
+                            g = int(255 * (1.0 - 0.6 * float(miss_dim)))
+                            rgba_fill = (g, g, g, int(255 * note_alpha))
+                            rgba_outline = (0, 0, 0, int(220 * note_alpha))
                         pts = rect_corners(ps[0], ps[1], ws * overrender, hs * overrender, lr)
                         draw_poly_rgba(overlay, pts, rgba_fill)
                         if not getattr(args, "no_note_outline", False):
@@ -1106,6 +1193,11 @@ def run(
 
                         try:
                             tr, tg, tb = getattr(n, "tint_rgb", (255, 255, 255))
+                            if miss_dim > 1e-6:
+                                g = int(220 * (1.0 - 0.7 * float(miss_dim)))
+                                tr = int(tr * (1.0 - 0.8 * float(miss_dim)) + g * (0.8 * float(miss_dim)))
+                                tg = int(tg * (1.0 - 0.8 * float(miss_dim)) + g * (0.8 * float(miss_dim)))
+                                tb = int(tb * (1.0 - 0.8 * float(miss_dim)) + g * (0.8 * float(miss_dim)))
                             rotated.fill((int(tr), int(tg), int(tb), 255), special_flags=pygame.BLEND_RGBA_MULT)
                         except:
                             pass
@@ -1157,6 +1249,57 @@ def run(
                     overrender=float(overrender),
                 )
 
+            # BAD ghost indicators
+            if bad_ghosts:
+                kept: List[Dict[str, Any]] = []
+                for g in bad_ghosts:
+                    try:
+                        dtg = float(t_draw) - float(g.get("t0", 0.0))
+                        if dtg < 0.0 or dtg > float(BAD_GHOST_SEC):
+                            continue
+                        a01 = clamp(1.0 - dtg / float(BAD_GHOST_SEC), 0.0, 1.0)
+                        nx = float(g.get("x", 0.0))
+                        ny = float(g.get("y", 0.0))
+                        nr = float(g.get("rot", 0.0))
+                        nn = g.get("note", None)
+                        if nn is None:
+                            continue
+                        ps = apply_expand_xy(nx * overrender, ny * overrender, RW, RH, expand)
+                        img = pick_note_image(nn)
+                        ws = float(base_note_w) * float(note_scale_x) * float(getattr(nn, "size_px", 1.0))
+                        hs = float(base_note_h) * float(note_scale_y) * float(getattr(nn, "size_px", 1.0))
+                        if img is None:
+                            pts = rect_corners(ps[0], ps[1], ws * overrender, hs * overrender, nr)
+                            draw_poly_rgba(overlay, pts, (255, 80, 80, int(180 * a01)))
+                            if not getattr(args, "no_note_outline", False):
+                                draw_poly_outline_rgba(overlay, pts, (0, 0, 0, int(160 * a01)), width=outline_w)
+                        else:
+                            iw, ih = img.get_width(), img.get_height()
+                            target_w = max(1, int(ws * overrender))
+                            target_h = max(1, int(target_w * ih / max(1, iw) * note_scale_y))
+                            img_id = id(img)
+                            scaled = transform_cache.get_scaled(img, target_w, target_h, img_id)
+                            if scaled is None:
+                                scaled = pygame.transform.smoothscale(img, (target_w, target_h))
+                                transform_cache.put_scaled(img, target_w, target_h, img_id, scaled)
+                            angle_deg = -nr * 180.0 / math.pi
+                            scaled_key_id = hash((int(img_id), int(target_w), int(target_h)))
+                            rotated = transform_cache.get_rotated(scaled, angle_deg, scaled_key_id)
+                            if rotated is None:
+                                rotated = pygame.transform.rotate(scaled, angle_deg)
+                                transform_cache.put_rotated(scaled, angle_deg, scaled_key_id, rotated)
+                            try:
+                                rg = rotated.copy()
+                                rg.fill((255, 80, 80, 255), special_flags=pygame.BLEND_RGBA_MULT)
+                                rg.set_alpha(int(200 * a01))
+                                overlay.blit(rg, (ps[0] - rg.get_width() / 2, ps[1] - rg.get_height() / 2))
+                            except:
+                                pass
+                        kept.append(g)
+                    except:
+                        continue
+                bad_ghosts[:] = kept
+
             base.blit(overlay, (0, 0))
             surface_pool.release(overlay)
             note_render_count_last = int(note_render_count)
@@ -1169,8 +1312,30 @@ def run(
         def _mark_line_hit(lid: int, now_ms: int):
             line_last_hit_ms[lid] = int(now_ms)
 
+        def _push_hit_debug(*, t_now: float, t_hit: float, note_id: int, judgement: str, hold_percent: Optional[float] = None):
+            nonlocal hit_debug_seq
+            if not hit_debug:
+                return
+            hit_debug_seq += 1
+            dt_ms = (float(t_now) - float(t_hit)) * 1000.0
+            hp = None
+            if hold_percent is not None:
+                try:
+                    hp = clamp(float(hold_percent), 0.0, 1.0)
+                except:
+                    hp = None
+            hit_debug_lines.appendleft({
+                "seq": int(hit_debug_seq),
+                "dt_ms": float(dt_ms),
+                "nid": int(note_id),
+                "judgement": str(judgement),
+                "hold_percent": hp,
+            })
+
         # Autoplay
         if getattr(args, "autoplay", False):
+            if "prev_autoplay_t" not in locals():
+                prev_autoplay_t = float(t) - 1e-6
             _st0 = max(0, idx_next - 20)
             _st1 = min(len(states), idx_next + 300)
             for _si in range(int(_st0), int(_st1)):
@@ -1179,12 +1344,36 @@ def run(
                     continue
                 n = s.note
                 if n.kind != 3:
-                    if abs(t - n.t_hit) <= Judge.PERFECT:
-                        judge.bump()
+                    act = None
+                    if judge_plan is not None:
+                        try:
+                            act = judge_plan.action_for(n)
+                        except:
+                            act = None
+                    dt_ms = float(getattr(act, "dt_ms", 0.0) if act is not None else 0.0)
+                    grade0 = getattr(act, "grade", None) if act is not None else "PERFECT"
+                    if (grade0 is not None) and str(grade0).upper() == "MISS":
+                        grade = "MISS"
+                    else:
+                        grade = _sanitize_grade(int(n.kind), grade0)
+                    t_hit = float(n.t_hit) + dt_ms / 1000.0
+
+                    if (grade is not None) and float(prev_autoplay_t) < float(t_hit) <= float(t):
+                        if str(grade).upper() == "MISS":
+                            try:
+                                setattr(s, "miss_t", float(t_hit))
+                            except:
+                                pass
+                            s.miss = True
+                            s.judged = True
+                            judge.mark_miss(s)
+                        else:
+                            _apply_grade(s, str(grade))
                         s.judged = True
                         s.hit = True
                         ln = lines[n.line_id]
-                        lx, ly, lr, la, sc, _la_raw = eval_line_state(ln, t)
+                        t_fx = float(t_hit)
+                        lx, ly, lr, la, sc, _la_raw = eval_line_state(ln, t_fx)
                         x, y = note_world_pos(lx, ly, lr, sc, n, n.scroll_hit, for_tail=False)
                         c = (255, 255, 255, 255)
                         if getattr(n, "tint_hitfx_rgb", None) is not None:
@@ -1192,34 +1381,95 @@ def run(
                             c = (int(rr), int(gg), int(bb), 255)
                         elif respack:
                             c = respack.judge_colors.get("PERFECT", c)
-                        hitfx.append(HitFX(x, y, t, c, lr))
+                        hitfx.append(HitFX(x, y, t_fx, c, lr))
                         if respack and (not respack.hide_particles):
-                            particles.append(ParticleBurst(x, y, int(t * 1000.0), int(respack.hitfx_duration * 1000), c))
-                        _mark_line_hit(n.line_id, int(t * 1000.0))
+                            particles.append(ParticleBurst(x, y, int(t_fx * 1000.0), int(respack.hitfx_duration * 1000), c))
+                        _mark_line_hit(n.line_id, int(t_fx * 1000.0))
+                        _push_hit_debug(t_now=float(t_fx), t_hit=float(n.t_hit), note_id=int(getattr(n, "nid", -1)), judgement=str(grade))
                         if not record_enabled:
-                            hitsound.play(n, int(t * 1000.0), respack=respack)
+                            hitsound.play(n, int(t_fx * 1000.0), respack=respack)
                 else:
-                    if (not s.holding) and abs(t - n.t_hit) <= Judge.PERFECT:
+                    act = None
+                    if judge_plan is not None:
+                        try:
+                            act = judge_plan.action_for(n)
+                        except:
+                            act = None
+                    dt_ms = float(getattr(act, "dt_ms", 0.0) if act is not None else 0.0)
+                    grade0 = getattr(act, "grade", None) if act is not None else "PERFECT"
+                    if (grade0 is not None) and str(grade0).upper() == "MISS":
+                        grade = "MISS"
+                    else:
+                        grade = _sanitize_grade(int(n.kind), grade0)
+                    hp = getattr(act, "hold_percent", None) if act is not None else None
+                    t_hit = float(n.t_hit) + dt_ms / 1000.0
+                    if hp is None:
+                        hp = 1.0
+
+                    if (not s.holding) and str(grade).upper() == "MISS" and float(prev_autoplay_t) < float(t_hit) <= float(t):
+                        try:
+                            setattr(s, "miss_t", float(t_hit))
+                        except:
+                            pass
+                        s.miss = True
+                        s.judged = True
+                        s.hold_failed = True
+                        s.hold_finalized = True
+                        s.holding = False
+                        judge.mark_miss(s)
+                        _push_hit_debug(t_now=float(t_hit), t_hit=float(n.t_hit), note_id=int(getattr(n, "nid", -1)), judgement="MISS", hold_percent=None)
+                        continue
+
+                    if (not s.holding) and (grade is not None) and float(prev_autoplay_t) < float(t_hit) <= float(t):
                         s.hit = True
                         s.holding = True
-                        s.next_hold_fx_ms = int(t * 1000.0) + hold_fx_interval_ms
-                        s.hold_grade = "PERFECT"
+                        s.hold_grade = str(grade)
+                        t_fx = float(t_hit)
+                        s.next_hold_fx_ms = int(t_fx * 1000.0) + hold_fx_interval_ms
                         ln = lines[n.line_id]
-                        lx, ly, lr, la, sc, _la_raw = eval_line_state(ln, t)
+                        lx, ly, lr, la, sc, _la_raw = eval_line_state(ln, t_fx)
                         x, y = note_world_pos(lx, ly, lr, sc, n, sc, for_tail=False)
                         c = (255, 255, 255, 255)
                         if getattr(n, "tint_hitfx_rgb", None) is not None:
                             rr, gg, bb = n.tint_hitfx_rgb
                             c = (int(rr), int(gg), int(bb), 255)
                         elif respack:
+                            c = respack.judge_colors.get(grade, c)
                             c = respack.judge_colors.get("PERFECT", c)
-                        hitfx.append(HitFX(x, y, t, c, lr))
+                        hitfx.append(HitFX(x, y, t_fx, c, lr))
                         if respack and (not respack.hide_particles):
-                            particles.append(ParticleBurst(x, y, int(t * 1000.0), int(respack.hitfx_duration * 1000), c))
+                            particles.append(ParticleBurst(x, y, int(t_fx * 1000.0), int(respack.hitfx_duration * 1000), c))
+                        _push_hit_debug(t_now=float(t_fx), t_hit=float(n.t_hit), note_id=int(getattr(n, "nid", -1)), judgement=str(grade), hold_percent=0.0)
                         if not record_enabled:
-                            hitsound.play(n, int(t * 1000.0), respack=respack)
+                            hitsound.play(n, int(t_fx * 1000.0), respack=respack)
+
+                    if s.holding:
+                        dur = max(1e-6, float(n.t_end) - float(n.t_hit))
+                        t_rel = float(n.t_hit) + float(hp) * dur
+                        if float(t) >= float(t_rel) and float(t_rel) >= float(n.t_hit) and float(t) < float(n.t_end) - 1e-6:
+                            try:
+                                s.released_early = True
+                                setattr(s, "release_t", float(t_rel))
+                                setattr(s, "release_percent", float(hp))
+                            except:
+                                pass
+                            if float(hp) < float(hold_tail_tol):
+                                try:
+                                    setattr(s, "miss_t", float(t_rel))
+                                except:
+                                    pass
+                                s.miss = True
+                                s.judged = True
+                                s.hold_failed = True
+                                s.hold_finalized = True
+                                s.holding = False
+                                judge.mark_miss(s)
+                            else:
+                                s.holding = False
                     if s.holding and t >= n.t_end:
                         s.holding = False
+
+            prev_autoplay_t = float(t)
 
         # Manual hit
         down = input_down()
@@ -1245,7 +1495,14 @@ def run(
                     best = None
                     n = None  # type: ignore
                 if n.kind == 3:
-                    grade = judge.grade_window(n.t_hit, t)
+                    # Hold: PERFECT / GOOD (includes BAD window) / MISS
+                    dt = abs(float(t) - float(n.t_hit))
+                    if dt <= float(Judge.PERFECT):
+                        grade = "PERFECT"
+                    elif dt <= float(Judge.BAD):
+                        grade = "GOOD"
+                    else:
+                        grade = None
                     if grade is not None:
                         best.hit = True
                         best.holding = True
@@ -1269,10 +1526,22 @@ def run(
                         if respack and (not respack.hide_particles):
                             particles.append(ParticleBurst(x, y, int(t * 1000.0), int(respack.hitfx_duration * 1000), c))
                         _mark_line_hit(n.line_id, int(t * 1000.0))
+                        _push_hit_debug(t_now=float(t), t_hit=float(n.t_hit), note_id=int(getattr(n, "nid", -1)), judgement=str(grade), hold_percent=0.0)
                         if not record_enabled:
                             hitsound.play(n, int(t * 1000.0), respack=respack)
                 else:
-                    grade = judge.try_hit(best, t)
+                    # Flick/Drag: PERFECT/MISS only. Tap: PERFECT/GOOD/BAD/MISS.
+                    if int(getattr(n, "kind", 1)) in (2, 4):
+                        dt = abs(float(t) - float(n.t_hit))
+                        grade = "PERFECT" if dt <= float(Judge.PERFECT) else None
+                        if grade is not None:
+                            judge.bump()
+                            best.judged = True
+                            best.hit = True
+                            judge.acc_sum += JUDGE_WEIGHT.get("PERFECT", 1.0)
+                            judge.judged_cnt += 1
+                    else:
+                        grade = judge.try_hit(best, t)
                     if grade is not None:
                         ln = lines[n.line_id]
                         lx, ly, lr, la01, sc_now, la_raw = eval_line_state(ln, t)
@@ -1305,8 +1574,30 @@ def run(
                 n = s.note
                 if n.kind == 3 and s.holding:
                     if (not input_down()) and t < n.t_end - 1e-6:
+                        try:
+                            dur = max(1e-6, float(n.t_end) - float(n.t_hit))
+                            prog_r = clamp((float(t) - float(n.t_hit)) / dur, 0.0, 1.0)
+                        except:
+                            prog_r = 0.0
                         s.released_early = True
-                        s.holding = False
+                        try:
+                            setattr(s, "release_t", float(t))
+                            setattr(s, "release_percent", float(prog_r))
+                        except:
+                            pass
+                        if float(prog_r) < float(hold_tail_tol):
+                            try:
+                                setattr(s, "miss_t", float(t))
+                            except:
+                                pass
+                            s.miss = True
+                            s.judged = True
+                            s.hold_failed = True
+                            s.hold_finalized = True
+                            s.holding = False
+                            judge.mark_miss(s)
+                        else:
+                            s.holding = False
                     if t >= n.t_end:
                         s.holding = False
 
@@ -1319,7 +1610,7 @@ def run(
             if n.fake or n.kind != 3 or s.hold_finalized:
                 continue
 
-            if (not s.hit) and (not s.hold_failed) and (t > n.t_hit + Judge.BAD):
+            if (not s.hit) and (not s.hold_failed) and (t > n.t_hit + float(MISS_WINDOW)):
                 s.hold_failed = True
                 judge.break_combo()
 
@@ -1335,6 +1626,7 @@ def run(
                     judge.judged_cnt += 1
                     judge.bump()
                     s.hold_finalized = True
+                    _push_hit_debug(t_now=float(t), t_hit=float(n.t_hit), note_id=int(getattr(n, "nid", -1)), judgement=str(g), hold_percent=float(prog))
 
             if t >= n.t_end and (not s.hold_finalized):
                 if s.hit and (not s.hold_failed):
@@ -1342,6 +1634,9 @@ def run(
                     judge.acc_sum += JUDGE_WEIGHT.get(g, 0.0)
                     judge.judged_cnt += 1
                     judge.bump()
+                    dur = max(1e-6, (n.t_end - n.t_hit))
+                    prog = clamp((t - n.t_hit) / dur, 0.0, 1.0)
+                    _push_hit_debug(t_now=float(t), t_hit=float(n.t_hit), note_id=int(getattr(n, "nid", -1)), judgement=str(g), hold_percent=float(prog))
                 else:
                     judge.mark_miss(s)
                 s.hold_finalized = True
@@ -1380,7 +1675,7 @@ def run(
                     s.next_hold_fx_ms += hold_fx_interval_ms
 
         # miss detection
-        miss_window = Judge.BAD
+        miss_window = float(MISS_WINDOW)
         _st0 = max(0, idx_next - 200)
         _st1 = min(len(states), idx_next + 800)
         for _si in range(int(_st0), int(_st1)):
@@ -1390,6 +1685,10 @@ def run(
             if s.note.kind == 3:
                 continue
             if t > s.note.t_hit + miss_window:
+                try:
+                    setattr(s, "miss_t", float(t))
+                except:
+                    pass
                 judge.mark_miss(s)
 
         while idx_next < len(states) and states[idx_next].judged:
@@ -1423,6 +1722,7 @@ def run(
                     ui_score_y = ui_combo_y + font.get_linesize() + ui_pad
                     ui_fmt_y = ui_score_y + small.get_linesize() + max(2, ui_pad // 2)
                     ui_particles_y = ui_fmt_y + small.get_linesize() + max(2, ui_pad // 2)
+                    ui_hitdbg_y = ui_fmt_y + small.get_linesize() + ui_pad
 
                     if getattr(args, "debug_particles", False):
                         txt = small.render(f"particles={len(particles)}", True, (220, 220, 220))
@@ -1447,13 +1747,22 @@ def run(
                     fmt_txt = small.render(f"fmt={fmt}  t={t:7.3f}s  next={idx_next}/{len(states)}  lines={len(lines)}", True, (180, 180, 180))
                     display_frame.blit(fmt_txt, (ui_x, ui_fmt_y))
 
-                    if chart_info and (not getattr(args, "no_title_overlay", False)):
-                        title, sub = format_title(chart_info)
-                        t1 = small.render(title, True, (230, 230, 230))
-                        t2 = small.render(sub, True, (180, 180, 180))
-                        display_frame.blit(t1, (W - 16 - t1.get_width(), 14))
-                        if sub:
-                            display_frame.blit(t2, (W - 16 - t2.get_width(), 14 + small.get_linesize()))
+                    if hit_debug and hit_debug_lines:
+                        cols = max(1, int(getattr(args, "hit_debug_cols", 5) or 5))
+                        shown = 0
+                        for rec in list(hit_debug_lines)[:cols]:
+                            try:
+                                dt_ms = float(rec.get("dt_ms", 0.0))
+                                nid = int(rec.get("nid", -1))
+                                jd = str(rec.get("judgement", ""))
+                                hp = rec.get("hold_percent", None)
+                                hp_s = "-" if hp is None else f"{float(hp)*100:5.1f}%"
+                                s = f"{dt_ms:+7.1f}ms  id={nid:6d}  {jd:7s}  hold={hp_s}"
+                                txt = small.render(s, True, (200, 200, 200))
+                                display_frame.blit(txt, (ui_x, ui_hitdbg_y + shown * small.get_linesize()))
+                                shown += 1
+                            except:
+                                pass
                 except:
                     pass
         display_frame_cur = pygame.transform.smoothscale(display_frame, (W, H))
@@ -1749,6 +2058,61 @@ def run(
                             except:
                                 pass
 
+                            try:
+                                rec = getattr(args, "recorder", None)
+                                st = rec.get_stats() if (rec is not None and hasattr(rec, "get_stats")) else None
+                                if isinstance(st, dict) and st:
+                                    out_size = st.get("out_size_bytes", None)
+                                    out_mbps = st.get("out_mbps", None)
+                                    avg_ms = float(st.get("avg_write_ms", 0.0) or 0.0)
+                                    max_ms = float(st.get("max_write_ms", 0.0) or 0.0)
+                                    slow = int(st.get("slow_write_calls", 0) or 0)
+                                    in_mbps = float(st.get("mbps_in", 0.0) or 0.0)
+                                    fps_w = float(st.get("fps_wall", 0.0) or 0.0)
+                                    has_audio = bool(st.get("has_audio", False))
+                                    codec_s = str(st.get("codec", ""))
+                                    preset_s = str(st.get("preset", ""))
+
+                                    def _fmt_size(b: Optional[int]) -> str:
+                                        if b is None:
+                                            return "?"
+                                        if b < 1024:
+                                            return f"{int(b)}B"
+                                        if b < 1024 * 1024:
+                                            return f"{float(b)/1024.0:.1f}KiB"
+                                        if b < 1024 * 1024 * 1024:
+                                            return f"{float(b)/(1024.0*1024.0):.2f}MiB"
+                                        return f"{float(b)/(1024.0*1024.0*1024.0):.2f}GiB"
+
+                                    warn_attr = attr_ok
+                                    if float(speed) < 1.0 or float(avg_ms) >= 20.0 or float(max_ms) >= 80.0:
+                                        warn_attr = attr_warn
+                                    if float(speed) < 0.7 or float(avg_ms) >= 40.0 or float(max_ms) >= 150.0:
+                                        warn_attr = attr_bad
+
+                                    row_stats = 3
+                                    if int(cui_view) != 0:
+                                        row_stats = 3
+                                    s_rec = f"enc: fps={fps_w:6.1f}  in={in_mbps:6.2f}MiB/s  write={avg_ms:5.1f}ms avg  {max_ms:5.1f}ms max  slow={slow:4d}  audio={'on' if has_audio else 'off'}"
+                                    try:
+                                        cui.addnstr(row_stats, 0, s_rec, max(0, w - 1), warn_attr)
+                                    except:
+                                        pass
+
+                                    if out_size is not None:
+                                        if out_mbps is None:
+                                            s_out = f"out: size={_fmt_size(out_size)}  rate=?MiB/s  codec={codec_s} preset={preset_s}"
+                                        else:
+                                            s_out = f"out: size={_fmt_size(out_size)}  rate={float(out_mbps):5.2f}MiB/s  codec={codec_s} preset={preset_s}"
+                                    else:
+                                        s_out = f"out: size=?  rate=?  codec={codec_s} preset={preset_s}"
+                                    try:
+                                        cui.addnstr(row_stats + 1, 0, s_out, max(0, w - 1), attr_dim)
+                                    except:
+                                        pass
+                            except:
+                                pass
+
                             if int(cui_view) != 0:
                                 row = 3
                                 help_lines = [
@@ -1870,6 +2234,7 @@ def run(
         ui_score_y = ui_combo_y + font.get_linesize() + ui_pad
         ui_fmt_y = ui_score_y + small.get_linesize() + max(2, ui_pad // 2)
         ui_particles_y = ui_fmt_y + small.get_linesize() + max(2, ui_pad // 2)
+        ui_hitdbg_y = ui_fmt_y + small.get_linesize() + ui_pad
 
         if getattr(args, "debug_particles", False):
             txt = small.render(f"particles={len(particles)}", True, (220, 220, 220))
@@ -1893,6 +2258,23 @@ def run(
 
         fmt_txt = small.render(f"fmt={fmt}  t={t:7.3f}s  next={idx_next}/{len(states)}  lines={len(lines)}", True, (180, 180, 180))
         screen.blit(fmt_txt, (ui_x, ui_fmt_y))
+
+        if hit_debug and hit_debug_lines:
+            cols = max(1, int(getattr(args, "hit_debug_cols", 5) or 5))
+            shown = 0
+            for rec in list(hit_debug_lines)[:cols]:
+                try:
+                    dt_ms = float(rec.get("dt_ms", 0.0))
+                    nid = int(rec.get("nid", -1))
+                    jd = str(rec.get("judgement", ""))
+                    hp = rec.get("hold_percent", None)
+                    hp_s = "-" if hp is None else f"{float(hp)*100:5.1f}%"
+                    s = f"{dt_ms:+7.1f}ms  id={nid:6d}  {jd:7s}  hold={hp_s}"
+                    txt = small.render(s, True, (200, 200, 200))
+                    screen.blit(txt, (ui_x, ui_hitdbg_y + shown * small.get_linesize()))
+                    shown += 1
+                except:
+                    pass
 
         if chart_info and (not getattr(args, "no_title_overlay", False)):
             title, sub = format_title(chart_info)

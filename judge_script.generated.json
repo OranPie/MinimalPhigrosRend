@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "meta": {
+    "index_mode": "playable",
+    "require_total_notes": 1600,
+    "require_playable_notes": 1600
+  },
+  "entries": [
+    {
+      "startNoteIndex": 0,
+      "endNoteIndex": 1599,
+      "kind": "any",
+      "grade": "MISS",
+      "dt_ms": 0,
+      "holdPercent": null
+    },
+    {
+      "startNoteIndex": 0,
+      "endNoteIndex": 1439,
+      "kind": "any",
+      "grade": "PERFECT",
+      "dt_ms": 0,
+      "holdPercent": 1.0
+    }
+  ]
+}

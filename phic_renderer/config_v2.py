@@ -151,6 +151,7 @@ def flatten_config_v2(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[Dic
     pull("bg_dim", assets, "bg_dim")
 
     pull("autoplay", gameplay, "autoplay")
+    pull("judge_script", gameplay, "judge_script")
     pull("hold_fx_interval_ms", gameplay, "hold_fx_interval_ms")
     pull("hold_tail_tol", gameplay, "hold_tail_tol")
     pull("start_time", gameplay, "start_time")
@@ -166,6 +167,7 @@ def flatten_config_v2(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[Dic
     pull("debug_judge_windows", debug, "debug_judge_windows")
     pull("debug_note_info", debug, "debug_note_info")
     pull("debug_particles", debug, "debug_particles")
+    pull("hit_debug", debug, "hit_debug")
     pull("basic_debug", debug, "basic_debug")
 
     pull("rpe_easing_shift", rpe, "rpe_easing_shift")
