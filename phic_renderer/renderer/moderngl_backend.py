@@ -114,7 +114,10 @@ def run(args: Any, **ctx: Any):
             state.respack = None
 
     app = create_app(glctx, window_size=(W, H), args=args, render_ctx=rc)
-    run_loop(pygame=pygame, clock=clock, screen=pygame.display.get_surface(), app=app)
+    try:
+        run_loop(pygame=pygame, clock=clock, screen=pygame.display.get_surface(), app=app)
+    except KeyboardInterrupt:
+        pass
 
     try:
         audio.close()

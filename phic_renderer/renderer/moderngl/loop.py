@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ... import state
+
 
 def run_loop(*, pygame: Any, clock: Any, screen: Any, app: Any) -> None:
     running = True
@@ -9,6 +11,9 @@ def run_loop(*, pygame: Any, clock: Any, screen: Any, app: Any) -> None:
     key_down = False
     prev_down = False
     while running:
+        if bool(getattr(state, "_sigint", False)):
+            running = False
+            break
         dt = clock.tick(120) / 1000.0
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
@@ -33,5 +38,9 @@ def run_loop(*, pygame: Any, clock: Any, screen: Any, app: Any) -> None:
         except:
             pass
 
-        app.render(dt)
-        pygame.display.flip()
+        try:
+            app.render(dt)
+            pygame.display.flip()
+        except KeyboardInterrupt:
+            running = False
+            break

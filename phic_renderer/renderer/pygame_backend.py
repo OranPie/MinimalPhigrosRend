@@ -9,6 +9,7 @@ from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
 
 import pygame
+import numpy as np
 
 from .. import state
 from ..io.chart_loader import load_chart
@@ -37,7 +38,10 @@ from .pygame.background import load_background
 from .pygame.particles import draw_particles
 from .pygame.hitsound import HitsoundPlayer
 from .pygame.hitfx import draw_hitfx
-
+from .pygame.transform_cache import get_global_transform_cache
+from .pygame.texture_atlas import get_global_atlas, get_global_texture_map, set_global_texture_map
+from .pygame.batch_renderer import get_global_batch_renderer
+from .pygame.surface_pool import get_global_pool
 
 def run(
     args: Any,
@@ -65,6 +69,30 @@ def run(
 ):
     pygame.init()
 
+    _signal = None
+    _old_sigint = None
+    try:
+        import signal as _sig
+        _signal = _sig
+        try:
+            _old_sigint = _signal.getsignal(_signal.SIGINT)
+        except:
+            _old_sigint = None
+
+        def _on_sigint(_signum, _frame):
+            try:
+                setattr(state, "_sigint", True)
+            except:
+                pass
+
+        try:
+            _signal.signal(_signal.SIGINT, _on_sigint)
+        except:
+            pass
+    except:
+        _signal = None
+        _old_sigint = None
+
     clock = pygame.time.Clock()
 
     record_dir = getattr(args, "record_dir", None)
@@ -72,10 +100,18 @@ def run(
     record_start_time = float(getattr(args, "record_start_time", 0.0) or 0.0)
     record_end_time = getattr(args, "record_end_time", None)
     record_end_time = float(record_end_time) if record_end_time is not None else None
-    record_enabled = bool(record_dir)
+    recorder = getattr(args, "recorder", None)
+    record_enabled = bool(getattr(args, "record_enabled", False)) or bool(record_dir) or bool(recorder)
     record_headless = bool(getattr(args, "record_headless", False)) and record_enabled
     record_log_interval = float(getattr(args, "record_log_interval", 1.0) or 0.0) if record_enabled else 0.0
     record_log_notes = bool(getattr(args, "record_log_notes", False)) if record_enabled else False
+    record_use_curses = bool(getattr(args, "record_use_curses", False)) and record_headless
+    record_curses_fps = float(getattr(args, "record_curses_fps", 10.0) or 10.0)
+    if record_curses_fps <= 1e-6:
+        record_curses_fps = 10.0
+    record_render_particles = bool(getattr(args, "record_render_particles", True))
+    record_render_text = bool(getattr(args, "record_render_text", True))
+    record_preview_audio = bool(getattr(args, "record_preview_audio", False))
 
     audio = create_audio_backend(getattr(args, "audio_backend", "pygame"))
 
@@ -237,6 +273,19 @@ def run(
                     respack.hitfx_sheet = respack.img.get("hit_fx.png", respack.hitfx_sheet)
                 except:
                     pass
+
+                # Build texture atlas for performance optimization
+                if not getattr(args, "disable_atlas", False):
+                    try:
+                        atlas = get_global_atlas()
+                        texture_map = atlas.build_from_respack(respack)
+                        set_global_texture_map(texture_map)
+                        atlas_stats = atlas.get_stats()
+                        if getattr(args, "basic_debug", False):
+                            print(f"[Atlas] Built with {atlas_stats['texture_count']} textures, {atlas_stats['utilization']:.1f}% utilization")
+                    except Exception as e:
+                        if getattr(args, "basic_debug", False):
+                            print(f"[Atlas] Failed to build: {e}")
             except:
                 pass
 
@@ -313,11 +362,41 @@ def run(
     for k in note_times_by_line:
         note_times_by_line[k].sort()
 
+    note_times_by_line_kind: Dict[int, Dict[int, List[float]]] = {}
+    note_times_by_kind: Dict[int, List[float]] = {}
+    for n in notes:
+        if n.fake:
+            continue
+        lid = int(n.line_id)
+        kd = int(n.kind)
+        note_times_by_line_kind.setdefault(lid, {}).setdefault(kd, []).append(float(n.t_hit))
+        note_times_by_kind.setdefault(kd, []).append(float(n.t_hit))
+    for lid in note_times_by_line_kind:
+        for kd in note_times_by_line_kind[lid]:
+            note_times_by_line_kind[lid][kd].sort()
+    for kd in note_times_by_kind:
+        note_times_by_kind[kd].sort()
+
     def _line_note_counts(lid: int, t: float) -> Tuple[int, int]:
         arr = note_times_by_line.get(lid, [])
         past = bisect.bisect_left(arr, t)
         incoming = bisect.bisect_right(arr, t + float(getattr(args, "approach", 3.0))) - past
         return past, incoming
+
+    def _line_note_counts_kind(lid: int, t: float) -> Tuple[List[int], List[int]]:
+        byk = note_times_by_line_kind.get(lid, {})
+        past4 = [0, 0, 0, 0]
+        inc4 = [0, 0, 0, 0]
+        t1 = float(t) + float(getattr(args, "approach", 3.0))
+        for kd, arr in byk.items():
+            idx = int(kd) - 1
+            if idx < 0 or idx >= 4:
+                continue
+            p = bisect.bisect_left(arr, t)
+            q = bisect.bisect_right(arr, t1) - p
+            past4[idx] = int(p)
+            inc4[idx] = int(q)
+        return past4, inc4
 
     def _track_seg_state(tr: Any) -> str:
         if hasattr(tr, "segs") and isinstance(getattr(tr, "segs"), list):
@@ -368,8 +447,19 @@ def run(
     pause_frame = None
     record_frame_idx = 0
     record_frame: Optional[pygame.Surface] = None
+    record_wall_t0 = now_sec()
+
+    trail_dim_cache_key: Optional[Tuple[int, int, int]] = None
+    trail_dim_cache: Optional[pygame.Surface] = None
 
     last_record_log_t = -1e9
+    last_cui_update_t = -1e9
+    cui_ok = False
+    cui = None
+    curses_mod = None
+    cui_scroll = 0
+    cui_view = 0
+    cui_has_color = False
 
     # input
     holding_input = False
@@ -398,17 +488,73 @@ def run(
 
     line_len = int(6.75 * W)
 
+    # Initialize transform cache for performance optimization
+    transform_cache = get_global_transform_cache()
+
+    surface_pool = get_global_pool()
+    bg_scaled_cache_key: Optional[Tuple[int, int, int]] = None
+    bg_scaled_cache: Optional[pygame.Surface] = None
+    dim_surf_cache_key: Optional[Tuple[int, int, int]] = None
+    dim_surf_cache: Optional[pygame.Surface] = None
+
     running = True
     note_render_count_last = 0
     note_dbg_cache: Dict[str, pygame.Surface] = {}
+    if record_use_curses:
+        try:
+            import curses
+            curses_mod = curses
+            cui = curses.initscr()
+            try:
+                if curses.has_colors():
+                    curses.start_color()
+                    try:
+                        curses.use_default_colors()
+                    except:
+                        pass
+                    curses.init_pair(1, curses.COLOR_CYAN, -1)
+                    curses.init_pair(2, curses.COLOR_GREEN, -1)
+                    curses.init_pair(3, curses.COLOR_YELLOW, -1)
+                    curses.init_pair(4, curses.COLOR_RED, -1)
+                    curses.init_pair(5, curses.COLOR_MAGENTA, -1)
+                    curses.init_pair(6, curses.COLOR_WHITE, -1)
+                    cui_has_color = True
+            except:
+                cui_has_color = False
+            curses.noecho()
+            curses.cbreak()
+            try:
+                curses.curs_set(0)
+            except:
+                pass
+            try:
+                cui.nodelay(True)
+            except:
+                pass
+            try:
+                cui.keypad(True)
+            except:
+                pass
+            cui_ok = True
+        except:
+            record_use_curses = False
+            cui_ok = False
+            cui = None
     while running:
+        # Clear per-frame transform cache
+        transform_cache.next_frame()
+
+        if bool(getattr(state, "_sigint", False)):
+            running = False
+            break
+
         if record_enabled and record_fps > 1e-6:
             _dt_frame = 1.0 / float(record_fps)
         else:
             _dt_frame = clock.tick(120) / 1000.0
 
         # schedule advance mixed sounds
-        if advance_active and advance_sound_tracks:
+        if (not record_enabled or record_preview_audio) and advance_active and advance_sound_tracks:
             now_t = (now_sec() - t0) * float(getattr(args, "chart_speed", 1.0))
             for tr in advance_sound_tracks:
                 if tr.get("stopped"):
@@ -431,6 +577,45 @@ def run(
             evs = []
         else:
             evs = pygame.event.get()
+
+        if record_use_curses and cui_ok and cui is not None:
+            try:
+                ch = cui.getch()
+                if ch == ord('q') or ch == ord('Q'):
+                    running = False
+                elif ch == ord('h') or ch == ord('H'):
+                    cui_view = 0 if int(cui_view) != 0 else 1
+                    cui_scroll = 0
+                elif ch == ord('j'):
+                    cui_scroll += 1
+                elif ch == ord('k'):
+                    cui_scroll -= 1
+                elif ch == ord('g'):
+                    cui_scroll = 0
+                elif ch == ord('G'):
+                    cui_scroll = 10**9
+                elif ch == ord('+') or ch == ord('='):
+                    record_curses_fps = min(60.0, float(record_curses_fps) + 1.0)
+                elif ch == ord('-') or ch == ord('_'):
+                    record_curses_fps = max(1.0, float(record_curses_fps) - 1.0)
+                elif curses_mod is not None:
+                    try:
+                        if ch == int(curses_mod.KEY_UP):
+                            cui_scroll -= 1
+                        elif ch == int(curses_mod.KEY_DOWN):
+                            cui_scroll += 1
+                        elif ch == int(curses_mod.KEY_PPAGE):
+                            cui_scroll -= 10
+                        elif ch == int(curses_mod.KEY_NPAGE):
+                            cui_scroll += 10
+                        elif ch == int(curses_mod.KEY_HOME):
+                            cui_scroll = 0
+                        elif ch == int(curses_mod.KEY_END):
+                            cui_scroll = 10**9
+                    except:
+                        pass
+            except:
+                pass
         for ev in evs:
             if ev.type == pygame.QUIT:
                 running = False
@@ -503,9 +688,13 @@ def run(
         else:
             t = ((now_sec() - t0) - offset) * float(chart_speed)
 
-        if record_enabled and record_end_time is not None and float(t) > float(record_end_time):
-            running = False
-            break
+        if record_enabled:
+            if record_end_time is not None and float(t) > float(record_end_time):
+                running = False
+                break
+            if record_end_time is None and float(t) > float(chart_end):
+                running = False
+                break
 
         if (not advance_active) and end_time_sec is not None and float(t) > float(end_time_sec):
             try:
@@ -541,26 +730,50 @@ def run(
 
         def _render_frame(t_draw: float) -> Tuple[pygame.Surface, List[Tuple[int, pygame.Surface, float, float]]]:
             nonlocal last_debug_ms
-            base = pygame.Surface((RW, RH), pygame.SRCALPHA)
+            nonlocal bg_scaled_cache_key
+            nonlocal bg_scaled_cache
+            nonlocal dim_surf_cache_key
+            nonlocal dim_surf_cache
+
+            base = surface_pool.get(RW, RH, pygame.SRCALPHA)
             if bg_blurred:
-                bg_scaled = pygame.transform.smoothscale(bg_blurred, (RW, RH))
-                base.blit(bg_scaled, (0, 0))
+                key = (id(bg_blurred), int(RW), int(RH))
+                if bg_scaled_cache is None or bg_scaled_cache_key != key:
+                    bg_scaled_cache = pygame.transform.smoothscale(bg_blurred, (RW, RH))
+                    bg_scaled_cache_key = key
+                base.blit(bg_scaled_cache, (0, 0))
             else:
                 base.fill((10, 10, 14))
 
             dim = bg_dim_alpha if (bg_dim_alpha is not None) else clamp(getattr(args, "bg_dim", 120), 0, 255)
             if dim > 0:
-                dim_surf = pygame.Surface((RW, RH), pygame.SRCALPHA)
-                dim_surf.fill((0, 0, 0, int(dim)))
-                base.blit(dim_surf, (0, 0))
+                dkey = (int(RW), int(RH), int(dim))
+                if dim_surf_cache is None or dim_surf_cache_key != dkey:
+                    dim_surf_cache = pygame.Surface((RW, RH), pygame.SRCALPHA)
+                    dim_surf_cache.fill((0, 0, 0, int(dim)))
+                    dim_surf_cache_key = dkey
+                base.blit(dim_surf_cache, (0, 0))
 
-            overlay = pygame.Surface((RW, RH), pygame.SRCALPHA)
+            overlay = surface_pool.get(RW, RH, pygame.SRCALPHA)
 
             line_text_draw_calls: List[Tuple[int, pygame.Surface, float, float]] = []
 
-            # Draw judge lines
+            line_states: List[Tuple[float, float, float, float, float, float]] = []
+            line_trig: List[Tuple[float, float]] = []
             for ln in lines:
-                lx, ly, lr, la01, _sc, _la_raw = eval_line_state(ln, t_draw)
+                lx, ly, lr, la01, sc, la_raw = eval_line_state(ln, t_draw)
+                line_states.append((lx, ly, lr, la01, sc, la_raw))
+                line_trig.append((math.cos(lr), math.sin(lr)))
+
+            try:
+                flow_mul = float(getattr(state, "note_flow_speed_multiplier", 1.0) or 1.0)
+            except:
+                flow_mul = 1.0
+            hold_keep_head = bool(state.respack and getattr(state.respack, "hold_keep_head", False))
+            speed_mul_affects_travel = bool(getattr(state, "note_speed_mul_affects_travel", False))
+
+            # Draw judge lines
+            for ln, (lx, ly, lr, la01, _sc, _la_raw) in zip(lines, line_states):
                 if la01 <= 1e-6:
                     continue
 
@@ -619,9 +832,22 @@ def run(
                         iw, ih = img.get_width(), img.get_height()
                         target_w = max(1, int((line_len * sx_tex) * overrender / float(expand)))
                         target_h = max(1, int((target_w * ih / max(1, iw)) * sy_tex))
-                        scaled = pygame.transform.smoothscale(img, (target_w, target_h))
-                        rotated = pygame.transform.rotate(scaled, -lr * 180.0 / math.pi)
-                        rotated = rotated.copy()
+
+                        # Cache smoothscale operation
+                        img_id = id(img)
+                        scaled = transform_cache.get_scaled(img, target_w, target_h, img_id)
+                        if scaled is None:
+                            scaled = pygame.transform.smoothscale(img, (target_w, target_h))
+                            transform_cache.put_scaled(img, target_w, target_h, img_id, scaled)
+
+                        # Cache rotation operation
+                        angle_deg = -lr * 180.0 / math.pi
+                        scaled_id = id(scaled)
+                        rotated = transform_cache.get_rotated(scaled, angle_deg, scaled_id)
+                        if rotated is None:
+                            rotated = pygame.transform.rotate(scaled, angle_deg)
+                            transform_cache.put_rotated(scaled, angle_deg, scaled_id, rotated)
+
                         rotated.set_alpha(int(255 * la01))
                         axc = (ax - 0.5) * float(target_w)
                         ayc = (ay - 0.5) * float(target_h)
@@ -674,7 +900,13 @@ def run(
             nonlocal note_render_count_last
             note_render_count = 0
             note_dbg_drawn = 0
-            for s in states[max(0, idx_next - 400) : min(len(states), idx_next + 1200)]:
+            no_cull_all = bool(getattr(args, "no_cull", False))
+            no_cull_screen = bool(getattr(args, "no_cull_screen", False))
+            no_cull_enter_time = bool(getattr(args, "no_cull_enter_time", False))
+            _st0 = max(0, idx_next - 400)
+            _st1 = min(len(states), idx_next + 1200)
+            for _si in range(int(_st0), int(_st1)):
+                s = states[_si]
                 n = s.note
                 if n.kind != 3 and s.judged:
                     continue
@@ -682,9 +914,6 @@ def run(
                     continue
                 if n.fake:
                     continue
-                no_cull_all = bool(getattr(args, "no_cull", False))
-                no_cull_screen = bool(getattr(args, "no_cull_screen", False))
-                no_cull_enter_time = bool(getattr(args, "no_cull_enter_time", False))
                 if (not no_cull_all) and (not no_cull_enter_time):
                     if t_draw < float(n.t_enter):
                         continue
@@ -699,7 +928,9 @@ def run(
                 note_render_count += 1
 
                 ln = lines[n.line_id]
-                lx, ly, lr, la01, sc_now, la_raw = eval_line_state(ln, t_draw)
+                lx, ly, lr, la01, sc_now, la_raw = line_states[n.line_id]
+                tx, ty = line_trig[n.line_id]
+                nx, ny = -ty, tx
 
                 if getattr(args, "basic_debug", False):
                     now_ms = int(float(t_draw) * 1000.0)
@@ -731,11 +962,26 @@ def run(
                 if n.kind == 3:
                     hit_for_draw = bool(s.hit) and (not bool(getattr(n, "fake", False)))
                     if hit_for_draw and respack and bool(getattr(respack, "hold_keep_head", False)):
-                        head = note_world_pos(lx, ly, lr, sc_now, n, sc_now, for_tail=False)
+                        dy = (float(sc_now) - float(sc_now)) * float(flow_mul)
+                        if hold_keep_head and dy < 0.0:
+                            dy = 0.0
+                        y_local = (1.0 if bool(getattr(n, "above", True)) else -1.0) * dy + float(getattr(n, "y_offset_px", 0.0))
+                        x_local = float(getattr(n, "x_local_px", 0.0))
+                        head = (float(lx) + float(tx) * x_local + float(nx) * y_local, float(ly) + float(ty) * x_local + float(ny) * y_local)
                     else:
                         head_target_scroll = n.scroll_hit if sc_now <= n.scroll_hit else sc_now
-                        head = note_world_pos(lx, ly, lr, sc_now, n, head_target_scroll, for_tail=False)
-                    tail = note_world_pos(lx, ly, lr, sc_now, n, n.scroll_end, for_tail=True)
+                        dy = (float(head_target_scroll) - float(sc_now)) * float(flow_mul)
+                        if hold_keep_head and dy < 0.0:
+                            dy = 0.0
+                        y_local = (1.0 if bool(getattr(n, "above", True)) else -1.0) * dy + float(getattr(n, "y_offset_px", 0.0))
+                        x_local = float(getattr(n, "x_local_px", 0.0))
+                        head = (float(lx) + float(tx) * x_local + float(nx) * y_local, float(ly) + float(ty) * x_local + float(ny) * y_local)
+
+                    dy = (float(getattr(n, "scroll_end", 0.0)) - float(sc_now)) * float(flow_mul)
+                    mult = max(0.0, float(getattr(n, "speed_mul", 1.0)))
+                    y_local = (1.0 if bool(getattr(n, "above", True)) else -1.0) * dy * mult + float(getattr(n, "y_offset_px", 0.0))
+                    x_local = float(getattr(n, "x_local_px", 0.0))
+                    tail = (float(lx) + float(tx) * x_local + float(nx) * y_local, float(ly) + float(ty) * x_local + float(ny) * y_local)
                     head_s = apply_expand_xy(head[0] * overrender, head[1] * overrender, RW, RH, expand)
                     tail_s = apply_expand_xy(tail[0] * overrender, tail[1] * overrender, RW, RH, expand)
 
@@ -757,12 +1003,19 @@ def run(
                     line_rgb = ln.color_rgb
                     prog = None
                     try:
-                        if bool(getattr(s, "hit", False)) or bool(getattr(s, "holding", False)):
+                        if (
+                            bool(getattr(s, "hit", False))
+                            or bool(getattr(s, "holding", False))
+                            or (float(t_draw) >= float(n.t_hit))
+                        ):
                             den = float(n.scroll_end) - float(n.scroll_hit)
                             num = float(sc_now) - float(n.scroll_hit)
                             if abs(den) > 1e-6:
-                                if (num * den) > 1e-6:
-                                    prog = clamp(num / den, 0.0, 1.0)
+                                prog = clamp(num / den, 0.0, 1.0)
+                            else:
+                                dur_t = float(n.t_end) - float(n.t_hit)
+                                if dur_t > 1e-6:
+                                    prog = clamp((t_draw - n.t_hit) / dur_t, 0.0, 1.0)
                     except:
                         prog = None
                     draw_hold_3slice(
@@ -810,7 +1063,13 @@ def run(
                             except:
                                 pass
                 else:
-                    p = note_world_pos(lx, ly, lr, sc_now, n, n.scroll_hit, for_tail=False)
+                    dy = (float(getattr(n, "scroll_hit", 0.0)) - float(sc_now)) * float(flow_mul)
+                    mult = 1.0
+                    if speed_mul_affects_travel:
+                        mult = max(0.0, float(getattr(n, "speed_mul", 1.0)))
+                    y_local = (1.0 if bool(getattr(n, "above", True)) else -1.0) * dy * float(mult) + float(getattr(n, "y_offset_px", 0.0))
+                    x_local = float(getattr(n, "x_local_px", 0.0))
+                    p = (float(lx) + float(tx) * x_local + float(nx) * y_local, float(ly) + float(ty) * x_local + float(ny) * y_local)
                     ps = apply_expand_xy(p[0] * overrender, p[1] * overrender, RW, RH, expand)
 
                     if (not no_cull_all) and (not no_cull_screen):
@@ -828,14 +1087,26 @@ def run(
                         iw, ih = img.get_width(), img.get_height()
                         target_w = max(1, int(ws * overrender))
                         target_h = max(1, int(target_w * ih / max(1, iw) * note_scale_y))
-                        scaled = pygame.transform.smoothscale(img, (target_w, target_h))
-                        rotated = pygame.transform.rotate(scaled, -lr * 180.0 / math.pi)
-                        rotated = rotated.copy()
+
+                        # Cache note texture transforms
+                        img_id = id(img)
+                        scaled = transform_cache.get_scaled(img, target_w, target_h, img_id)
+                        if scaled is None:
+                            scaled = pygame.transform.smoothscale(img, (target_w, target_h))
+                            transform_cache.put_scaled(img, target_w, target_h, img_id, scaled)
+
+                        angle_deg = -lr * 180.0 / math.pi
+                        # IMPORTANT: use a stable id for the scaled variant to avoid cache key collisions
+                        # (id(scaled) is not stable across frames and may be reused by Python)
+                        scaled_key_id = hash((int(img_id), int(target_w), int(target_h)))
+                        rotated = transform_cache.get_rotated(scaled, angle_deg, scaled_key_id)
+                        if rotated is None:
+                            rotated = pygame.transform.rotate(scaled, angle_deg)
+                            transform_cache.put_rotated(scaled, angle_deg, scaled_key_id, rotated)
+
                         try:
                             tr, tg, tb = getattr(n, "tint_rgb", (255, 255, 255))
-                            tint_s = pygame.Surface(rotated.get_size(), pygame.SRCALPHA)
-                            tint_s.fill((int(tr), int(tg), int(tb), 255))
-                            rotated.blit(tint_s, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+                            rotated.fill((int(tr), int(tg), int(tb), 255), special_flags=pygame.BLEND_RGBA_MULT)
                         except:
                             pass
                         rotated.set_alpha(int(255 * note_alpha))
@@ -872,8 +1143,8 @@ def run(
                                 pass
 
             # hitfx
-            hitfx_draw = prune_hitfx(list(hitfx), t_draw, (respack.hitfx_duration if respack else 0.18))
-            for fx in hitfx_draw:
+            hitfx[:] = prune_hitfx(hitfx, t_draw, (respack.hitfx_duration if respack else 0.18))
+            for fx in hitfx:
                 draw_hitfx(
                     overlay,
                     fx,
@@ -887,6 +1158,7 @@ def run(
                 )
 
             base.blit(overlay, (0, 0))
+            surface_pool.release(overlay)
             note_render_count_last = int(note_render_count)
 
             return base, line_text_draw_calls
@@ -899,7 +1171,10 @@ def run(
 
         # Autoplay
         if getattr(args, "autoplay", False):
-            for s in states[max(0, idx_next - 20) : min(len(states), idx_next + 300)]:
+            _st0 = max(0, idx_next - 20)
+            _st1 = min(len(states), idx_next + 300)
+            for _si in range(int(_st0), int(_st1)):
+                s = states[_si]
                 if s.judged or s.note.fake:
                     continue
                 n = s.note
@@ -921,7 +1196,8 @@ def run(
                         if respack and (not respack.hide_particles):
                             particles.append(ParticleBurst(x, y, int(t * 1000.0), int(respack.hitfx_duration * 1000), c))
                         _mark_line_hit(n.line_id, int(t * 1000.0))
-                        hitsound.play(n, int(t * 1000.0), respack=respack)
+                        if not record_enabled:
+                            hitsound.play(n, int(t * 1000.0), respack=respack)
                 else:
                     if (not s.holding) and abs(t - n.t_hit) <= Judge.PERFECT:
                         s.hit = True
@@ -940,7 +1216,8 @@ def run(
                         hitfx.append(HitFX(x, y, t, c, lr))
                         if respack and (not respack.hide_particles):
                             particles.append(ParticleBurst(x, y, int(t * 1000.0), int(respack.hitfx_duration * 1000), c))
-                        hitsound.play(n, int(t * 1000.0), respack=respack)
+                        if not record_enabled:
+                            hitsound.play(n, int(t * 1000.0), respack=respack)
                     if s.holding and t >= n.t_end:
                         s.holding = False
 
@@ -952,7 +1229,10 @@ def run(
         if press_edge and (not getattr(args, "autoplay", False)):
             best = None
             best_dt = 1e9
-            for s in states[max(0, idx_next - 50) : min(len(states), idx_next + 500)]:
+            _st0 = max(0, idx_next - 50)
+            _st1 = min(len(states), idx_next + 500)
+            for _si in range(int(_st0), int(_st1)):
+                s = states[_si]
                 if s.judged or s.note.fake:
                     continue
                 dt = abs(t - s.note.t_hit)
@@ -989,7 +1269,8 @@ def run(
                         if respack and (not respack.hide_particles):
                             particles.append(ParticleBurst(x, y, int(t * 1000.0), int(respack.hitfx_duration * 1000), c))
                         _mark_line_hit(n.line_id, int(t * 1000.0))
-                        hitsound.play(n, int(t * 1000.0), respack=respack)
+                        if not record_enabled:
+                            hitsound.play(n, int(t * 1000.0), respack=respack)
                 else:
                     grade = judge.try_hit(best, t)
                     if grade is not None:
@@ -1010,11 +1291,15 @@ def run(
                         hitfx.append(HitFX(x, y, t, c, lr))
                         if respack and (not respack.hide_particles):
                             particles.append(ParticleBurst(x, y, int(t * 1000.0), int(respack.hitfx_duration * 1000), c))
-                        hitsound.play(n, int(t * 1000.0), respack=respack)
+                        if not record_enabled:
+                            hitsound.play(n, int(t * 1000.0), respack=respack)
 
         # hold maintenance
         if not getattr(args, "autoplay", False):
-            for s in states[max(0, idx_next - 50) : min(len(states), idx_next + 500)]:
+            _st0 = max(0, idx_next - 50)
+            _st1 = min(len(states), idx_next + 500)
+            for _si in range(int(_st0), int(_st1)):
+                s = states[_si]
                 if s.judged or s.note.fake:
                     continue
                 n = s.note
@@ -1026,7 +1311,10 @@ def run(
                         s.holding = False
 
         # hold finalize
-        for s in states[max(0, idx_next - 200) : min(len(states), idx_next + 800)]:
+        _st0 = max(0, idx_next - 200)
+        _st1 = min(len(states), idx_next + 800)
+        for _si in range(int(_st0), int(_st1)):
+            s = states[_si]
             n = s.note
             if n.fake or n.kind != 3 or s.hold_finalized:
                 continue
@@ -1062,7 +1350,10 @@ def run(
         # hold tick fx
         if respack:
             now_tick = int(t * 1000.0)
-            for s in states[max(0, idx_next - 200) : min(len(states), idx_next + 800)]:
+            _st0 = max(0, idx_next - 200)
+            _st1 = min(len(states), idx_next + 800)
+            for _si in range(int(_st0), int(_st1)):
+                s = states[_si]
                 n = s.note
                 if n.fake or n.kind != 3 or (not s.holding) or s.judged:
                     continue
@@ -1090,7 +1381,10 @@ def run(
 
         # miss detection
         miss_window = Judge.BAD
-        for s in states[max(0, idx_next - 200) : min(len(states), idx_next + 800)]:
+        _st0 = max(0, idx_next - 200)
+        _st1 = min(len(states), idx_next + 800)
+        for _si in range(int(_st0), int(_st1)):
+            s = states[_si]
             if s.judged or s.note.fake:
                 continue
             if s.note.kind == 3:
@@ -1101,8 +1395,69 @@ def run(
         while idx_next < len(states) and states[idx_next].judged:
             idx_next += 1
 
-        base, line_text_draw_calls = _render_frame(t)
-        display_frame_cur = pygame.transform.smoothscale(base, (W, H))
+        display_frame, line_text_draw_calls = _render_frame(t)
+
+        if record_headless and record_enabled:
+            if getattr(args, "record_render_particles", False):
+                try:
+                    now_ms = int(t * 1000.0)
+                    particles[:] = prune_particles(particles, now_ms)
+                    draw_particles(display_frame, particles, now_ms, W, H, expand)
+                except:
+                    pass
+
+            if getattr(args, "record_render_text", False):
+                try:
+                    if line_text_draw_calls:
+                        line_text_draw_calls.sort(key=lambda x: x[0])
+                        for _pr, surf, x0, y0 in line_text_draw_calls:
+                            display_frame.blit(surf, (x0, y0))
+                except:
+                    pass
+
+                try:
+                    ui_pad = max(4, int(small.get_linesize() * 0.25))
+                    ui_x = 16
+                    ui_y0 = 14
+                    ui_combo_y = ui_y0
+                    ui_score_y = ui_combo_y + font.get_linesize() + ui_pad
+                    ui_fmt_y = ui_score_y + small.get_linesize() + max(2, ui_pad // 2)
+                    ui_particles_y = ui_fmt_y + small.get_linesize() + max(2, ui_pad // 2)
+
+                    if getattr(args, "debug_particles", False):
+                        txt = small.render(f"particles={len(particles)}", True, (220, 220, 220))
+                        display_frame.blit(txt, (ui_x, ui_particles_y))
+
+                    if chart_end > 1e-6:
+                        pbar = progress_ratio(t, chart_end, advance_active=advance_active, start_time=getattr(args, "start_time", None))
+                        pygame.draw.rect(display_frame, (40, 40, 40), pygame.Rect(0, 0, W, 6))
+                        pygame.draw.rect(display_frame, (230, 230, 230), pygame.Rect(0, 0, int(W * pbar), 6))
+
+                    combo_txt = font.render(f"COMBO {judge.combo}", True, (240, 240, 240))
+                    display_frame.blit(combo_txt, (ui_x, ui_combo_y))
+
+                    score, acc_ratio, _combo_ratio = compute_score(judge.acc_sum, judge.judged_cnt, judge.combo, judge.max_combo, total_notes)
+                    score_txt = small.render(
+                        f"SCORE {score:07d}   HIT {acc_ratio*100:6.2f}%   MAX {judge.max_combo}/{total_notes}",
+                        True,
+                        (200, 200, 200),
+                    )
+                    display_frame.blit(score_txt, (ui_x, ui_score_y))
+
+                    fmt_txt = small.render(f"fmt={fmt}  t={t:7.3f}s  next={idx_next}/{len(states)}  lines={len(lines)}", True, (180, 180, 180))
+                    display_frame.blit(fmt_txt, (ui_x, ui_fmt_y))
+
+                    if chart_info and (not getattr(args, "no_title_overlay", False)):
+                        title, sub = format_title(chart_info)
+                        t1 = small.render(title, True, (230, 230, 230))
+                        t2 = small.render(sub, True, (180, 180, 180))
+                        display_frame.blit(t1, (W - 16 - t1.get_width(), 14))
+                        if sub:
+                            display_frame.blit(t2, (W - 16 - t2.get_width(), 14 + small.get_linesize()))
+                except:
+                    pass
+        display_frame_cur = pygame.transform.smoothscale(display_frame, (W, H))
+        surface_pool.release(display_frame)
         if mb_samples > 1 and mb_shutter > 1e-6:
             acc = pygame.Surface((W, H), pygame.SRCALPHA)
             acc.fill((0, 0, 0, 0))
@@ -1112,7 +1467,7 @@ def run(
                 t_s = t - mb_shutter * dt_chart * (1.0 - frac)
                 b_i, _ = _render_frame(t_s)
                 f_i = pygame.transform.smoothscale(b_i, (W, H))
-                f_i = f_i.copy()
+                surface_pool.release(b_i)
                 f_i.set_alpha(int(255 / float(mb_samples)))
                 acc.blit(f_i, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
             display_frame_cur = acc
@@ -1175,7 +1530,7 @@ def run(
                 trail_hist = deque(list(trail_hist)[-int(trail_frames):], maxlen=int(trail_frames))
                 trail_hist_cap = int(trail_frames)
 
-            out = pygame.Surface((W, H), pygame.SRCALPHA)
+            out = surface_pool.get(W, H, pygame.SRCALPHA)
             hist_list = list(trail_hist)
             for idx, frm in enumerate(hist_list):
                 age = (len(hist_list) - 1) - idx
@@ -1192,11 +1547,15 @@ def run(
                     src = pygame.transform.smoothscale(src, (bw, bh))
                     src = pygame.transform.smoothscale(src, (W, H))
                 if trail_dim > 0:
-                    dd = pygame.Surface((W, H), pygame.SRCALPHA)
-                    dd.fill((0, 0, 0, trail_dim))
+                    dkey = (int(W), int(H), int(trail_dim))
+                    if (trail_dim_cache is None) or (trail_dim_cache_key != dkey):
+                        trail_dim_cache = pygame.Surface((W, H), pygame.SRCALPHA)
+                        trail_dim_cache.fill((0, 0, 0, int(trail_dim)))
+                        trail_dim_cache_key = dkey
                     src = src.copy()
-                    src.blit(dd, (0, 0))
-                src = src.copy()
+                    src.blit(trail_dim_cache, (0, 0))
+                else:
+                    src = src.copy()
                 src.set_alpha(int(255 * clamp(w, 0.0, 1.0)))
                 if trail_blend == "add":
                     out.blit(src, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
@@ -1214,47 +1573,275 @@ def run(
                 except:
                     pass
 
+            if "trail_dim_cache" in locals():
+                trail_dim_cache = None
+                trail_dim_cache_key = None
+
         if not record_headless:
             screen.blit(display_frame, (0, 0))
 
         if record_enabled:
-            try:
-                os.makedirs(str(record_dir), exist_ok=True)
-                out_p = os.path.join(str(record_dir), f"frame_{record_frame_idx:06d}.png")
-                pygame.image.save(display_frame, out_p)
-            except:
-                pass
+            # Use new recorder backend if available
+            if recorder:
+                try:
+                    # Fast path: avoid numpy conversion+transpose (very expensive)
+                    if hasattr(recorder, "write_frame_bytes"):
+                        frame_bytes = pygame.image.tostring(display_frame, "RGB")
+                        recorder.write_frame_bytes(frame_bytes)
+                    else:
+                        # Fallback: Convert pygame surface to numpy array for recorder
+                        frame_array = pygame.surfarray.array3d(display_frame)
+                        # Transpose from (W, H, 3) to (H, W, 3)
+                        frame_array = np.transpose(frame_array, (1, 0, 2))
+                        # Write frame to recorder
+                        recorder.write_frame(frame_array)
+                except Exception as e:
+                    if (not record_use_curses) or (not cui_ok) or (cui is None):
+                        print(f"\r[Recording] Error writing frame: {e}", flush=True)
+            else:
+                # Fallback to old PNG saving (backward compatibility)
+                try:
+                    record_dir = getattr(args, "record_dir", None)
+                    if record_dir:
+                        os.makedirs(str(record_dir), exist_ok=True)
+                        out_p = os.path.join(str(record_dir), f"frame_{record_frame_idx:06d}.png")
+                        pygame.image.save(display_frame, out_p)
+                except Exception as e:
+                    if (not record_use_curses) or (not cui_ok) or (cui is None):
+                        print(f"\r[Recording] Error saving PNG: {e}", flush=True)
+
             record_frame_idx += 1
 
             if record_headless:
-                try:
-                    end_for_prog = float(record_end_time) if record_end_time is not None else float(chart_end)
-                    denom = max(1e-6, float(end_for_prog) - float(record_start_time))
-                    ratio = clamp((float(t) - float(record_start_time)) / denom, 0.0, 1.0)
-                    msg = f"[record] {ratio*100:6.2f}%  frame={record_frame_idx:7d}  t={float(t):.3f}s"
-                    print("\r" + msg + " " * 8, end="", flush=True)
-                except:
-                    pass
-
-                if record_log_notes and record_log_interval > 1e-6 and (float(t) - float(last_record_log_t)) >= float(record_log_interval):
+                if record_use_curses and cui_ok and cui is not None:
                     try:
-                        total_past = 0
-                        total_incoming = 0
-                        for lid in note_times_by_line:
-                            past, incoming = _line_note_counts(int(lid), float(t))
-                            total_past += int(past)
-                            total_incoming += int(incoming)
-                        seg_hint = ""
-                        if lines:
+                        if (float(t) - float(last_cui_update_t)) >= (1.0 / float(record_curses_fps)):
+                            end_for_prog = float(record_end_time) if record_end_time is not None else float(chart_end)
+                            denom = max(1e-6, float(end_for_prog) - float(record_start_time))
+                            ratio = clamp((float(t) - float(record_start_time)) / denom, 0.0, 1.0)
+
+                            wall_elapsed = max(1e-6, float(now_sec() - float(record_wall_t0)))
+                            fps_wall = float(record_frame_idx) / float(wall_elapsed)
+                            speed = float(fps_wall) / max(1e-6, float(record_fps))
+                            frames_total = max(0.0, float(denom) * float(record_fps))
+                            frames_left = max(0.0, float(frames_total) - float(record_frame_idx))
+                            eta_sec = float(frames_left) / max(1e-6, float(fps_wall))
+
+                            approach = float(getattr(args, "approach", 3.0) or 3.0)
+                            past_k = [0, 0, 0, 0]
+                            inc_k = [0, 0, 0, 0]
+                            t1 = float(t) + float(approach)
+                            for kd, arr in note_times_by_kind.items():
+                                idx = int(kd) - 1
+                                if idx < 0 or idx >= 4:
+                                    continue
+                                p = bisect.bisect_left(arr, float(t))
+                                q = bisect.bisect_right(arr, float(t1)) - p
+                                past_k[idx] = int(p)
+                                inc_k[idx] = int(q)
+
+                            h, w = cui.getmaxyx()
+                            attr_head = 0
+                            attr_ok = 0
+                            attr_warn = 0
+                            attr_bad = 0
+                            attr_dim = 0
+                            attr_tap = 0
+                            attr_drag = 0
+                            attr_hold = 0
+                            attr_flick = 0
+                            if curses_mod is not None and bool(cui_has_color):
+                                try:
+                                    attr_head = int(curses_mod.color_pair(1)) | int(getattr(curses_mod, "A_BOLD", 0))
+                                    attr_ok = int(curses_mod.color_pair(2))
+                                    attr_warn = int(curses_mod.color_pair(3))
+                                    attr_bad = int(curses_mod.color_pair(4))
+                                    attr_tap = int(curses_mod.color_pair(1))
+                                    attr_drag = int(curses_mod.color_pair(2))
+                                    attr_hold = int(curses_mod.color_pair(3))
+                                    attr_flick = int(curses_mod.color_pair(5))
+                                    attr_dim = int(curses_mod.color_pair(6))
+                                except:
+                                    attr_head = attr_ok = attr_warn = attr_bad = attr_dim = 0
+                                    attr_tap = attr_drag = attr_hold = attr_flick = 0
                             try:
-                                ln0 = lines[0]
-                                seg_hint = f" seg(rot)={_track_seg_state(ln0.rot)} seg(alpha)={_track_seg_state(ln0.alpha)} seg(scroll)={_track_seg_state(ln0.scroll_px)}"
+                                cui.erase()
                             except:
-                                seg_hint = ""
-                        print(f"\n[record] past={int(total_past)} incoming={int(total_incoming)}{seg_hint}", flush=True)
-                        last_record_log_t = float(t)
+                                pass
+                            head = f"[record] {ratio*100:6.2f}%  t={float(t):.3f}/{float(end_for_prog):.3f}s  frame={record_frame_idx:7d}  {fps_wall:6.1f}fps  x{speed:4.2f}  ETA {eta_sec:6.1f}s"
+                            try:
+                                cui.addnstr(0, 0, head, max(0, w - 1), attr_head)
+                            except:
+                                pass
+
+                            try:
+                                bar_w = max(1, int(w) - 2)
+                                fill = int(round(float(ratio) * float(bar_w)))
+                                fill = max(0, min(int(bar_w), int(fill)))
+                                try:
+                                    cui.addnstr(1, 0, "[", 1, attr_dim)
+                                except:
+                                    pass
+                                if fill > 0:
+                                    try:
+                                        cui.addnstr(1, 1, "#" * int(fill), max(0, int(fill)), attr_ok)
+                                    except:
+                                        pass
+                                if (bar_w - fill) > 0:
+                                    try:
+                                        cui.addnstr(1, 1 + int(fill), "-" * int(bar_w - fill), max(0, int(bar_w - fill)), attr_dim)
+                                    except:
+                                        pass
+                                try:
+                                    if int(w) >= int(bar_w) + 2:
+                                        cui.addnstr(1, 1 + int(bar_w), "]", 1, attr_dim)
+                                except:
+                                    pass
+                            except:
+                                pass
+
+                            try:
+                                tot_p = sum(int(x) for x in past_k)
+                                tot_i = sum(int(x) for x in inc_k)
+                                score, acc_ratio, _combo_ratio = compute_score(judge.acc_sum, judge.judged_cnt, judge.combo, judge.max_combo, total_notes)
+                                extra = f" combo={judge.combo} score={score:07d} acc={acc_ratio*100:6.2f}% part={len(particles)}"
+
+                                x = 0
+                                cui.addnstr(2, x, f"P {tot_p:6d} (", max(0, w - 1 - x), attr_dim)
+                                x += len(f"P {tot_p:6d} (")
+                                cui.addnstr(2, x, f"{past_k[0]:5d}", max(0, w - 1 - x), attr_tap)
+                                x += len(f"{past_k[0]:5d}")
+                                cui.addnstr(2, x, "/", max(0, w - 1 - x), attr_dim)
+                                x += 1
+                                cui.addnstr(2, x, f"{past_k[1]:5d}", max(0, w - 1 - x), attr_drag)
+                                x += len(f"{past_k[1]:5d}")
+                                cui.addnstr(2, x, "/", max(0, w - 1 - x), attr_dim)
+                                x += 1
+                                cui.addnstr(2, x, f"{past_k[2]:5d}", max(0, w - 1 - x), attr_hold)
+                                x += len(f"{past_k[2]:5d}")
+                                cui.addnstr(2, x, "/", max(0, w - 1 - x), attr_dim)
+                                x += 1
+                                cui.addnstr(2, x, f"{past_k[3]:5d}", max(0, w - 1 - x), attr_flick)
+                                x += len(f"{past_k[3]:5d}")
+                                cui.addnstr(2, x, ")  I ", max(0, w - 1 - x), attr_dim)
+                                x += len(")  I ")
+                                cui.addnstr(2, x, f"{tot_i:6d} (")
+                                x += len(f"{tot_i:6d} (")
+                                cui.addnstr(2, x, f"{inc_k[0]:5d}", max(0, w - 1 - x), attr_tap)
+                                x += len(f"{inc_k[0]:5d}")
+                                cui.addnstr(2, x, "/", max(0, w - 1 - x), attr_dim)
+                                x += 1
+                                cui.addnstr(2, x, f"{inc_k[1]:5d}", max(0, w - 1 - x), attr_drag)
+                                x += len(f"{inc_k[1]:5d}")
+                                cui.addnstr(2, x, "/", max(0, w - 1 - x), attr_dim)
+                                x += 1
+                                cui.addnstr(2, x, f"{inc_k[2]:5d}", max(0, w - 1 - x), attr_hold)
+                                x += len(f"{inc_k[2]:5d}")
+                                cui.addnstr(2, x, "/", max(0, w - 1 - x), attr_dim)
+                                x += 1
+                                cui.addnstr(2, x, f"{inc_k[3]:5d}", max(0, w - 1 - x), attr_flick)
+                                x += len(f"{inc_k[3]:5d}")
+                                cui.addnstr(2, x, ")", max(0, w - 1 - x), attr_dim)
+                                x += 1
+
+                                if x + 2 < int(w):
+                                    cui.addnstr(2, x, extra, max(0, w - 1 - x), attr_dim)
+                            except:
+                                pass
+
+                            if int(cui_view) != 0:
+                                row = 3
+                                help_lines = [
+                                    "Help:",
+                                    "  q: quit recording",
+                                    "  h: toggle this help",
+                                    "  j/k or Up/Down: scroll lines",
+                                    "  PgUp/PgDn: scroll faster",
+                                    "  g/G or Home/End: top/bottom",
+                                    "  +/-: adjust CUI refresh rate",
+                                    "",
+                                    "Columns: P=Past (already hit time passed), I=Incoming (t..t+approach) by kind: Tap/Drag/Hold/Flick",
+                                ]
+                                for ln in help_lines:
+                                    if row >= h:
+                                        break
+                                    try:
+                                        cui.addnstr(row, 0, ln, max(0, w - 1))
+                                    except:
+                                        pass
+                                    row += 1
+                            else:
+                                row = 3
+                                max_lines = max(0, h - row - 1)
+                                lids = sorted(note_times_by_line_kind.keys())
+                                if int(cui_scroll) < 0:
+                                    cui_scroll = 0
+                                if int(cui_scroll) > max(0, len(lids) - 1):
+                                    cui_scroll = max(0, len(lids) - 1)
+                                start = int(cui_scroll)
+                                shown = 0
+
+                                hdr = "Line      Past(T/D/H/F)                 Incoming(T/D/H/F)"
+                                try:
+                                    cui.addnstr(row, 0, hdr, max(0, w - 1))
+                                except:
+                                    pass
+                                row += 1
+
+                                for lid in lids[start:]:
+                                    if shown >= max_lines:
+                                        break
+                                    past4, inc4 = _line_note_counts_kind(int(lid), float(t))
+                                    s = f"L{int(lid):02d}   {past4[0]:5d}/{past4[1]:5d}/{past4[2]:5d}/{past4[3]:5d}        {inc4[0]:5d}/{inc4[1]:5d}/{inc4[2]:5d}/{inc4[3]:5d}"
+                                    try:
+                                        cui.addnstr(row, 0, s, max(0, w - 1))
+                                    except:
+                                        pass
+                                    row += 1
+                                    shown += 1
+
+                                try:
+                                    footer = f"lines {start+1}/{max(1, len(lids))}  view={'help' if int(cui_view)!=0 else 'lines'}  refresh={float(record_curses_fps):.1f}Hz"
+                                    cui.addnstr(h - 1, 0, footer, max(0, w - 1))
+                                except:
+                                    pass
+
+                            try:
+                                cui.refresh()
+                            except:
+                                pass
+                            last_cui_update_t = float(t)
                     except:
-                        last_record_log_t = float(t)
+                        pass
+                else:
+                    try:
+                        end_for_prog = float(record_end_time) if record_end_time is not None else float(chart_end)
+                        denom = max(1e-6, float(end_for_prog) - float(record_start_time))
+                        ratio = clamp((float(t) - float(record_start_time)) / denom, 0.0, 1.0)
+                        msg = f"[record] {ratio*100:6.2f}%  frame={record_frame_idx:7d}  t={float(t):.3f}s"
+                        print("\r" + msg + " " * 8, end="", flush=True)
+                    except:
+                        pass
+
+                    if record_log_notes and record_log_interval > 1e-6 and (float(t) - float(last_record_log_t)) >= float(record_log_interval):
+                        try:
+                            total_past = 0
+                            total_incoming = 0
+                            for lid in note_times_by_line:
+                                past, incoming = _line_note_counts(int(lid), float(t))
+                                total_past += int(past)
+                                total_incoming += int(incoming)
+                            seg_hint = ""
+                            if lines:
+                                try:
+                                    ln0 = lines[0]
+                                    seg_hint = f" seg(rot)={_track_seg_state(ln0.rot)} seg(alpha)={_track_seg_state(ln0.alpha)} seg(scroll)={_track_seg_state(ln0.scroll_px)}"
+                                except:
+                                    seg_hint = ""
+                            print(f"\n[record] past={int(total_past)} incoming={int(total_incoming)}{seg_hint}", flush=True)
+                            last_record_log_t = float(t)
+                        except:
+                            last_record_log_t = float(t)
 
         if (not record_headless) and expand > 1.0:
             bw = W / expand
@@ -1329,9 +1916,25 @@ def run(
 
         pygame.display.flip()
 
+    if record_use_curses and cui_ok and cui is not None:
+        try:
+            import curses
+            curses.nocbreak()
+            curses.echo()
+            curses.endwin()
+        except:
+            pass
+
+    if _signal is not None and _old_sigint is not None:
+        try:
+            _signal.signal(_signal.SIGINT, _old_sigint)
+        except:
+            pass
+
     if record_headless and record_enabled:
         try:
-            print("\n[record] done", flush=True)
+            if not record_use_curses:
+                print("\n[record] done", flush=True)
         except:
             pass
 

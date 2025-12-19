@@ -28,6 +28,7 @@ class Respack:
     hold_repeat: bool
     hold_compact: bool
     hold_keep_head: bool
+    hold_tail_no_scale: bool
     hide_particles: bool
     judge_colors: Dict[str, Tuple[int, int, int, int]]
 
@@ -59,8 +60,23 @@ def _parse_hex_rgba(v: Any, default: Tuple[int, int, int, int]) -> Tuple[int, in
 
 def _parse_info_yml_minimal(text: str) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
+
+    def _strip_inline_comment(s: str) -> str:
+        in_sq = False
+        in_dq = False
+        buf = []
+        for ch in s:
+            if ch == "'" and (not in_dq):
+                in_sq = not in_sq
+            elif ch == '"' and (not in_sq):
+                in_dq = not in_dq
+            if (not in_sq) and (not in_dq) and ch == "#":
+                break
+            buf.append(ch)
+        return "".join(buf).rstrip()
+
     for raw in text.splitlines():
-        line = raw.strip()
+        line = _strip_inline_comment(raw).strip()
         if not line or line.startswith("#"):
             continue
         if ":" not in line:

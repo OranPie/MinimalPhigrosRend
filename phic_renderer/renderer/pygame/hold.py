@@ -8,6 +8,8 @@ import pygame
 from ... import state
 from ...math.util import clamp
 from .draw import draw_poly_outline_rgba
+from .surface_pool import get_global_pool
+from .hold_cache import get_global_hold_cache
 
 
 def draw_hold_3slice(
@@ -41,7 +43,7 @@ def draw_hold_3slice(
     head_src = img.subsurface((0, 0, iw, head_h))
     mid_src = img.subsurface((0, head_h, iw, mid_h))
     tail_src = img.subsurface((0, head_h + mid_h, iw, tail_h))
-    
+
     vx = tail_xy[0] - head_xy[0]
     vy = tail_xy[1] - head_xy[1]
     length = math.hypot(vx, vy)
@@ -57,85 +59,8 @@ def draw_hold_3slice(
 
     out_w = target_w
     out_h = int(max(2, length))
-    surf = pygame.Surface((out_w, out_h), pygame.SRCALPHA)
 
-    def _blit_mid(y0: int, seg_h: int, repeat: bool):
-        if seg_h <= 0:
-            return
-        if not repeat:
-            piece = pygame.transform.smoothscale(mid_src, (out_w, int(seg_h)))
-            surf.blit(piece, (0, int(y0)))
-            return
-        tile_h = max(1, int(mid_src.get_height() * scale))
-        tile = pygame.transform.smoothscale(mid_src, (out_w, tile_h))
-        yy = int(y0)
-        y_end = int(y0 + seg_h)
-        while yy < y_end:
-            surf.blit(tile, (0, yy))
-            yy += tile_h
-
-    try:
-        head_piece = pygame.transform.smoothscale(head_src, (out_w, max(1, int(round(head_len)))))
-    except:
-        head_piece = head_src
-    try:
-        tail_piece = pygame.transform.smoothscale(tail_src, (out_w, max(1, int(round(tail_len)))))
-    except:
-        tail_piece = tail_src
-
-    head_draw_h = min(int(out_h), int(head_piece.get_height()))
-    tail_draw_h = min(int(out_h), int(tail_piece.get_height()))
-
-    keep_head = bool(getattr(respack, "hold_keep_head", False))
-    hide_head_now = (progress is not None) and (not keep_head)
-
-    y0_mid = 0 if hide_head_now else int(head_draw_h)
-    y1_mid = int(out_h - tail_draw_h)
-    mid_h_draw = int(max(0, y1_mid - y0_mid))
-    _blit_mid(y0_mid, mid_h_draw, repeat=bool(getattr(respack, "hold_repeat", False)))
-
-    if (not hide_head_now) and head_draw_h > 0:
-        try:
-            surf.blit(head_piece.subsurface((0, 0, out_w, head_draw_h)), (0, 0))
-        except:
-            surf.blit(head_piece, (0, 0))
-
-    if tail_draw_h > 0:
-        try:
-            y_src = max(0, int(tail_piece.get_height() - tail_draw_h))
-            crop = tail_piece.subsurface((0, int(y_src), out_w, tail_draw_h))
-            surf.blit(crop, (0, int(out_h - tail_draw_h)))
-        except:
-            surf.blit(tail_piece, (0, int(out_h - tail_piece.get_height())))
-
-    # During holding, allow sampling only the "tail side" portion of the texture and stretch it
-    # back to the current geometric length. This makes the texture appear to be "consumed".
-    if (progress is not None) and (not keep_head):
-        try:
-            p = clamp(float(progress), 0.0, 1.0)
-        except:
-            p = None
-        if p is not None and p > 1e-6:
-            keep = clamp(1.0 - float(p), 0.02, 1.0)
-            try:
-                sample_h = max(2, int(round(float(out_h) * float(keep))))
-                y0 = max(0, int(out_h) - int(sample_h))
-                crop = surf.subsurface((0, int(y0), int(out_w), int(sample_h))).copy()
-                surf = pygame.transform.smoothscale(crop, (int(out_w), int(out_h)))
-            except:
-                pass
-
-    try:
-        tr, tg, tb = note_rgb
-        tint_s = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
-        tint_s.fill((int(tr), int(tg), int(tb), 255))
-        surf.blit(tint_s, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-    except:
-        pass
-
-    a = int(255 * clamp(alpha01, 0.0, 1.0))
-    surf.set_alpha(a)
-
+    # Calculate rotation angle for cache key
     v = pygame.math.Vector2(float(vx), float(vy))
     v_len = float(v.length())
     if v_len < 1e-6:
@@ -144,7 +69,117 @@ def draw_hold_3slice(
     base_m = pygame.math.Vector2(0.0, 1.0)
     rot_deg = float(base_m.angle_to(v_m))
 
-    spr = pygame.transform.rotozoom(surf, rot_deg, 1.0)
+    # Try to get cached hold surface
+    hold_cache = get_global_hold_cache()
+    cached_surf = hold_cache.get(out_w, out_h, rot_deg, mh, progress, note_rgb)
+
+    if cached_surf is not None:
+        # Use cached surface
+        spr = cached_surf
+    else:
+        # Render hold surface from scratch
+        # Use surface pool to avoid per-frame allocation
+        pool = get_global_pool()
+        surf = pool.get(out_w, out_h, pygame.SRCALPHA)
+
+        def _blit_mid(y0: int, seg_h: int, repeat: bool):
+            if seg_h <= 0:
+                return
+            if not repeat:
+                piece = pygame.transform.smoothscale(mid_src, (out_w, int(seg_h)))
+                surf.blit(piece, (0, int(y0)))
+                return
+            tile_h = max(1, int(mid_src.get_height() * scale))
+            tile = pygame.transform.smoothscale(mid_src, (out_w, tile_h))
+            yy = int(y0)
+            y_end = int(y0 + seg_h)
+            while yy < y_end:
+                surf.blit(tile, (0, yy))
+                yy += tile_h
+
+        try:
+            head_piece = pygame.transform.smoothscale(head_src, (out_w, max(1, int(round(head_len)))))
+        except:
+            head_piece = head_src
+        try:
+            tail_piece = pygame.transform.smoothscale(tail_src, (out_w, max(1, int(round(tail_len)))))
+        except:
+            tail_piece = tail_src
+
+        head_draw_h = min(int(out_h), int(head_piece.get_height()))
+        tail_no_scale = bool(getattr(respack, "hold_tail_no_scale", False))
+        if tail_no_scale:
+            tail_draw_h = int(tail_piece.get_height())
+        else:
+            tail_draw_h = min(int(out_h), int(tail_piece.get_height()))
+
+        keep_head = bool(getattr(respack, "hold_keep_head", False))
+        hide_head_now = (progress is not None) and (not keep_head)
+
+        y0_mid = 0 if hide_head_now else int(head_draw_h)
+        y1_mid = int(out_h - tail_draw_h)
+        mid_h_draw = int(max(0, y1_mid - y0_mid))
+        _blit_mid(y0_mid, mid_h_draw, repeat=bool(getattr(respack, "hold_repeat", False)))
+
+        if (not hide_head_now) and head_draw_h > 0:
+            try:
+                surf.blit(head_piece.subsurface((0, 0, out_w, head_draw_h)), (0, 0))
+            except:
+                surf.blit(head_piece, (0, 0))
+
+        if tail_draw_h > 0:
+            try:
+                if tail_no_scale:
+                    tail_draw_piece = tail_piece
+                elif tail_piece.get_height() != int(tail_draw_h):
+                    tail_draw_piece = pygame.transform.smoothscale(tail_piece, (out_w, int(tail_draw_h)))
+                else:
+                    tail_draw_piece = tail_piece
+                surf.blit(tail_draw_piece, (0, int(out_h - tail_draw_h)))
+            except:
+                surf.blit(tail_piece, (0, int(out_h - tail_piece.get_height())))
+
+        # During holding, allow sampling only the "tail side" portion of the texture and stretch it
+        # back to the current geometric length. This makes the texture appear to be "consumed".
+        if (progress is not None) and (not keep_head) and bool(getattr(respack, "hold_compact", False)):
+            try:
+                p = clamp(float(progress), 0.0, 1.0)
+            except:
+                p = None
+            if p is not None and p > 1e-6:
+                keep = clamp(1.0 - float(p), 0.02, 1.0)
+                try:
+                    # When head is hidden, only crop the body+tail portion
+                    if hide_head_now:
+                        effective_h = out_h - head_draw_h  # body+tail height
+                        sample_h = max(2, int(round(float(effective_h) * float(keep))))
+                        y0 = head_draw_h + (effective_h - sample_h)
+                    else:
+                        sample_h = max(2, int(round(float(out_h) * float(keep))))
+                        y0 = max(0, int(out_h) - int(sample_h))
+                    crop = surf.subsurface((0, int(y0), int(out_w), int(sample_h))).copy()
+                    surf = pygame.transform.smoothscale(crop, (int(out_w), int(out_h)))
+                except:
+                    pass
+
+        try:
+            tr, tg, tb = note_rgb
+            tint_s = pool.get(surf.get_width(), surf.get_height(), pygame.SRCALPHA)
+            tint_s.fill((int(tr), int(tg), int(tb), 255))
+            surf.blit(tint_s, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            pool.release(tint_s)
+        except:
+            pass
+
+        a = int(255 * clamp(alpha01, 0.0, 1.0))
+        surf.set_alpha(a)
+
+        spr = pygame.transform.rotozoom(surf, rot_deg, 1.0)
+
+        # Cache the rotated surface for reuse
+        hold_cache.put(out_w, out_h, rot_deg, mh, progress, note_rgb, spr)
+
+    # Blit the hold surface (cached or freshly rendered)
     # Anchor: align the head end of the (rotated) sprite to head_xy.
     try:
         off = pygame.math.Vector2(0.0, float(out_h) * 0.5)

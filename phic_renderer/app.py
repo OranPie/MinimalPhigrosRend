@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import argparse
+import signal
 import sys
 import os
 from typing import Any, Dict, Optional
@@ -109,6 +110,21 @@ def main():
     g_dbg.add_argument("--debug_particles", action="store_true")
 
     args = ap.parse_args()
+
+    try:
+        setattr(state, "_sigint", False)
+    except:
+        pass
+    try:
+        def _on_sigint(_signum, _frame):
+            try:
+                setattr(state, "_sigint", True)
+            except:
+                pass
+        _old_sigint = signal.getsignal(signal.SIGINT)
+        signal.signal(signal.SIGINT, _on_sigint)
+    except:
+        _old_sigint = None
 
     cfg_mods: Optional[Dict[str, Any]] = None
 
@@ -237,26 +253,38 @@ def main():
 
     notes = apply_mods(mods_cfg, notes, lines)
 
-    run_renderer(
-        args,
-        W=W,
-        H=H,
-        expand=expand,
-        fmt=fmt,
-        offset=offset,
-        lines=lines,
-        notes=notes,
-        chart_info=chart_info,
-        bg_dim_alpha=bg_dim_alpha,
-        bg_path=bg_path,
-        music_path=music_path,
-        chart_path=chart_path,
-        advance_active=advance_active,
-        advance_cfg=advance_cfg,
-        advance_mix=advance_mix,
-        advance_tracks_bgm=advance_tracks_bgm,
-        advance_main_bgm=advance_main_bgm,
-        advance_segment_starts=advance_segment_starts,
-        advance_segment_bgm=advance_segment_bgm,
-        advance_base_dir=advance_base_dir,
-    )
+    try:
+        run_renderer(
+            args,
+            W=W,
+            H=H,
+            expand=expand,
+            fmt=fmt,
+            offset=offset,
+            lines=lines,
+            notes=notes,
+            chart_info=chart_info,
+            bg_dim_alpha=bg_dim_alpha,
+            bg_path=bg_path,
+            music_path=music_path,
+            chart_path=chart_path,
+            advance_active=advance_active,
+            advance_cfg=advance_cfg,
+            advance_mix=advance_mix,
+            advance_tracks_bgm=advance_tracks_bgm,
+            advance_main_bgm=advance_main_bgm,
+            advance_segment_starts=advance_segment_starts,
+            advance_segment_bgm=advance_segment_bgm,
+            advance_base_dir=advance_base_dir,
+        )
+    except KeyboardInterrupt:
+        try:
+            print("\n[phic_renderer] Interrupted", flush=True)
+        except:
+            pass
+    finally:
+        if _old_sigint is not None:
+            try:
+                signal.signal(signal.SIGINT, _old_sigint)
+            except:
+                pass

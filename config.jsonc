@@ -67,7 +67,7 @@
     "rpe_easing_shift": 0
   },
   "debug": {
-    "basic_debug": true,
+    "basic_debug": false,
     "debug_line_label": false,
     "debug_line_stats": false,
     "debug_judge_windows": false,

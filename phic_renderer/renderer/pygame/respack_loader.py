@@ -81,6 +81,7 @@ def load_respack(zip_path: str, *, audio: Any) -> Respack:
     hold_repeat = bool(info.get("holdRepeat", False))
     hold_compact = bool(info.get("holdCompact", False))
     hold_keep_head = bool(info.get("holdKeepHead", False))
+    hold_tail_no_scale = bool(info.get("holdTailNoScale", False))
 
     hide_particles = bool(info.get("hideParticles", False))
 
@@ -109,6 +110,7 @@ def load_respack(zip_path: str, *, audio: Any) -> Respack:
         hold_repeat=hold_repeat,
         hold_compact=hold_compact,
         hold_keep_head=hold_keep_head,
+        hold_tail_no_scale=hold_tail_no_scale,
         hide_particles=hide_particles,
         judge_colors=judge_colors,
     )

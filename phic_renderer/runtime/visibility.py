@@ -65,60 +65,83 @@ def precompute_t_enter(lines: List[RuntimeLine], notes: List[RuntimeNote], W: in
     base_w = int(0.06 * W)
     base_h = int(0.018 * H)
 
+    dt0 = max(1e-4, float(dt))
+    max_expand_iters = 32
+
     for n in notes:
-        # RPE has visibleTime concept, but this renderer doesn't necessarily have it; use upper bound lookback
-        t_hit = n.t_hit
+        if getattr(n, "fake", False):
+            n.t_enter = -1e9
+            continue
+
+        t_hit = float(n.t_hit)
         lookback = float(lookback_default)
-        try:
-            if float(getattr(n, "speed_mul", 1.0)) == 0.0:
-                lookback = max(float(lookback), 666.66)
-        except:
-            pass
+
+        ln = None
+        v = None
         try:
             ln = lines[n.line_id]
             v = _scroll_speed_px_per_sec(getattr(ln, "scroll_px", None), float(t_hit))
-            if v is not None and float(v) <= 1e-3:
-                lookback = max(float(lookback), 666.66)
+        except:
+            ln = None
+            v = None
+
+        # If the line is essentially not scrolling, entry time can be extremely early / ill-defined.
+        # Be conservative and avoid expensive scanning.
+        try:
+            if v is not None and float(v) <= 1e-4:
+                n.t_enter = -1e9
+                continue
         except:
             pass
 
-        dt0 = max(1e-4, float(dt))
-        max_steps = 12000
-        dt_scan = dt0
-        try:
-            if (float(lookback) / dt_scan) > float(max_steps):
-                dt_scan = float(lookback) / float(max_steps)
-        except:
-            dt_scan = dt0
-
-        t = float(t_hit)
-        earliest_visible = None
-        was_visible = False
-
-        steps = int(float(lookback) / float(dt_scan))
-        for _ in range(steps):
-            vis = _note_visible_on_screen(lines, n, t, W, H, base_w=base_w, base_h=base_h)
-            if vis:
-                earliest_visible = t
-                was_visible = True
-            elif was_visible:
-                lo = t
-                hi = earliest_visible
-                for _ in range(18):
-                    mid = (lo + hi) * 0.5
-                    if _note_visible_on_screen(lines, n, mid, W, H, base_w=base_w, base_h=base_h):
-                        hi = mid
-                    else:
-                        lo = mid
-                n.t_enter = hi
-                break
-            t -= float(dt_scan)
-
-        if n.t_enter == -1e9:
-            if was_visible:
-                n.t_enter = -1e9
-            else:
+        # Find a time point where the note is visible; prefer t_hit.
+        t_vis = t_hit
+        vis_at_hit = _note_visible_on_screen(lines, n, t_vis, W, H, base_w=base_w, base_h=base_h)
+        if not vis_at_hit:
+            step = dt0
+            found = False
+            for _ in range(max_expand_iters):
+                t2 = float(t_hit) - float(step)
+                if t2 < float(t_hit) - float(lookback):
+                    break
+                if _note_visible_on_screen(lines, n, t2, W, H, base_w=base_w, base_h=base_h):
+                    t_vis = t2
+                    found = True
+                    break
+                step *= 2.0
+            if not found:
+                # If we can't find visibility quickly, prefer earlier rendering (avoid pop-in).
                 n.t_enter = float(t_hit) - float(lookback)
+                continue
+
+        # Exponential search backwards from a visible point until we find an invisible point.
+        hi = float(t_vis)  # visible
+        lo = None          # invisible
+        step = dt0
+        for _ in range(max_expand_iters):
+            t2 = float(hi) - float(step)
+            if t2 < float(t_hit) - float(lookback):
+                break
+            if _note_visible_on_screen(lines, n, t2, W, H, base_w=base_w, base_h=base_h):
+                hi = t2
+                step *= 2.0
+            else:
+                lo = t2
+                break
+
+        if lo is None:
+            # Still visible all the way to the lookback bound; keep conservative.
+            n.t_enter = float(t_hit) - float(lookback)
+            continue
+
+        # Binary search boundary (lo invisible, hi visible)
+        for _ in range(20):
+            mid = (float(lo) + float(hi)) * 0.5
+            if _note_visible_on_screen(lines, n, mid, W, H, base_w=base_w, base_h=base_h):
+                hi = mid
+            else:
+                lo = mid
+        n.t_enter = float(hi)
 
 
 
