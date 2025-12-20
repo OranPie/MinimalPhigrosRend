@@ -34,5 +34,5 @@ coverage.xml
 *.log
 
 record/
-
+charts/
 output*

@@ -5,6 +5,7 @@ import os
 import signal
 import sys
 import tempfile
+import logging
 from typing import Any, Dict, Optional
 
 from . import state
@@ -15,11 +16,13 @@ from .renderer import run as run_renderer
 from .recording.frame_recorder import FrameRecorder
 from .recording.video_recorder import VideoRecorder, check_ffmpeg
 from .recording.audio_mixer import mix_wav
-from .respack import load_respack_info
+from .io.respack_impl import load_respack_info
 from .recording.presets import list_presets
+from .logging_setup import setup_logging
 
 
 def main():
+    logger = logging.getLogger(__name__)
     ap = argparse.ArgumentParser(prog="phic_renderer.record")
 
     g_in = ap.add_argument_group("Input")
@@ -53,6 +56,9 @@ def main():
     g_rec.add_argument("--judge_script", type=str, default=None, help="Optional judge script JSON to simulate non-perfect autoplay")
 
     args = ap.parse_args()
+
+    setup_logging(args)
+    logger.debug("record CLI args parsed")
 
     try:
         setattr(state, "_sigint", False)
@@ -103,6 +109,7 @@ def main():
     try:
         cfg_v2_raw = load_config_v2(str(args.config))
     except Exception as e:
+        logger.exception("Failed to load config: %s", args.config)
         raise SystemExit(f"Failed to load config: {args.config} ({e})")
 
     flat_cfg, mods_cfg = flatten_config_v2(cfg_v2_raw)
@@ -291,10 +298,10 @@ def main():
                     bgm_tracks=bgm_tracks,
                     hitsound_events=hitsound_events,
                 )
-                print("[Recording] Audio: Mixed")
+                logger.info("[Recording] Audio: Mixed")
             except Exception as e:
-                print(f"[Recording] Warning: Failed to prepare audio: {e}")
-                print("[Recording] Falling back to video-only mode")
+                logger.exception("[Recording] Failed to prepare audio")
+                logger.warning("[Recording] Falling back to video-only mode")
                 audio_path = None
 
         recorder = VideoRecorder(
@@ -307,9 +314,9 @@ def main():
             codec=args.codec
         )
 
-        print(f"[Recording] Mode: {'Video+Audio' if audio_path else 'Video-only'} → {rec_output}")
-        print(f"[Recording] Resolution: {W}x{H} @ {rec_fps}fps")
-        print(f"[Recording] Preset: {args.preset} (codec: {args.codec})")
+        logger.info("[Recording] Mode: %s → %s", "Video+Audio" if audio_path else "Video-only", rec_output)
+        logger.info("[Recording] Resolution: %sx%s @ %sfps", W, H, rec_fps)
+        logger.info("[Recording] Preset: %s (codec: %s)", args.preset, args.codec)
 
     else:
         recorder = None
@@ -320,13 +327,13 @@ def main():
                 raise SystemExit(f"Cannot create output directory: {rec_out_dir} ({e})")
 
             recorder = FrameRecorder(rec_out_dir, W, H, rec_fps)
-            print(f"[Recording] Mode: PNG frames → {rec_out_dir}")
-            print(f"[Recording] Resolution: {W}x{H} @ {rec_fps}fps")
+            logger.info("[Recording] Mode: PNG frames → %s", rec_out_dir)
+            logger.info("[Recording] Resolution: %sx%s @ %sfps", W, H, rec_fps)
 
     if recorder:
         try:
             recorder.open()
-            print("[Recording] Recorder initialized successfully")
+            logger.info("[Recording] Recorder initialized successfully")
         except Exception as e:
             raise SystemExit(f"Failed to initialize recorder: {e}")
 
@@ -380,13 +387,13 @@ def main():
         if recorder:
             try:
                 recorder.close()
-                print("[Recording] Finalized successfully")
+                logger.info("[Recording] Finalized successfully")
             except Exception as e:
-                print(f"[Recording] Warning: Failed to finalize: {e}")
+                logger.exception("[Recording] Failed to finalize")
 
         if interrupted:
             try:
-                print("[Recording] Interrupted", flush=True)
+                logger.info("[Recording] Interrupted")
             except:
                 pass
 

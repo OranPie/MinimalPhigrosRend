@@ -260,13 +260,18 @@ class GLApp:
                     best_dt = dt_hit
             if best is not None:
                 n = best.note
-                if int(n.kind) == 3:
-                    grade = self._judge.grade_window(float(n.t_hit), float(t))
+                if n.kind == 3:
+                    grade = self._judge.grade_window(n.t_hit, t)
                     if grade is not None:
+                        if grade == "BAD":
+                            grade = "GOOD"
+
                         best.hit = True
                         best.holding = True
                         best.hold_grade = grade
-                        best.next_hold_fx_ms = int(now_tick + hold_fx_interval_ms)
+                        # Hold counts into combo at press time
+                        self._judge.bump()
+                        best.next_hold_fx_ms = int(t * 1000.0) + hold_fx_interval_ms
                         try:
                             ln = lines[int(n.line_id)]
                             lx, ly, lr, _la01, sc_now, _la_raw = eval_line_state(ln, t)
@@ -365,7 +370,6 @@ class GLApp:
                     g = s.hold_grade or "PERFECT"
                     self._judge.acc_sum += JUDGE_WEIGHT.get(g, 0.0)
                     self._judge.judged_cnt += 1
-                    self._judge.bump()
                     s.hold_finalized = True
 
             if float(t) >= float(n.t_end) and (not s.hold_finalized):
@@ -373,7 +377,6 @@ class GLApp:
                     g = s.hold_grade or "PERFECT"
                     self._judge.acc_sum += JUDGE_WEIGHT.get(g, 0.0)
                     self._judge.judged_cnt += 1
-                    self._judge.bump()
                 else:
                     self._judge.mark_miss(s)
                 s.hold_finalized = True

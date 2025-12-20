@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..types import RuntimeLine, RuntimeNote
-from ..io.chart_pack import ChartPack, load_chart_pack
-from ..chart_loader import load_chart
+from ..io.chart_pack_impl import ChartPack, load_chart_pack
+from ..io.chart_loader_impl import load_chart
 from .timewarp import _TimeWarpEval, _TimeWarpIntegral
 from ..math.util import clamp
 
@@ -38,6 +38,149 @@ class AdvanceLoadResult:
     packs_keepalive: List[ChartPack]
 
 
+def _pick_first_existing(base_dir: str, candidates: List[str]) -> Optional[str]:
+    for fn in candidates:
+        p = os.path.join(base_dir, fn)
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def _auto_pick_asset_by_basename(base_dir: str, base_name: str, exts: Tuple[str, ...]) -> Optional[str]:
+    try:
+        items = os.listdir(base_dir)
+    except Exception:
+        return None
+
+    base_lower = str(base_name).lower()
+    for fn in items:
+        try:
+            if not fn.lower().endswith(exts):
+                continue
+            stem, _ = os.path.splitext(fn)
+            if stem.lower() == base_lower:
+                return os.path.join(base_dir, fn)
+        except Exception:
+            continue
+    return None
+
+
+def _resolve_loose_chart_dir(dir_path: str, diff: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """Resolve a local folder chart that does NOT have pack info.yml.
+
+    Expected layout:
+    - IN.json / AT.json (also allow in.json / at.json)
+    - bg / bgm files in the same folder
+    """
+
+    diff_u = str(diff or "IN").strip().upper()
+    if diff_u not in {"IN", "AT"}:
+        diff_u = "IN"
+
+    chart_p = _pick_first_existing(dir_path, [f"{diff_u}.json", f"{diff_u.lower()}.json"])
+
+    # Heuristics for assets
+    folder_name = os.path.basename(os.path.abspath(dir_path))
+
+    bg_exts = (".png", ".jpg", ".jpeg", ".webp")
+    bg_p = _pick_first_existing(dir_path, [
+        "illustration.png",
+        "illustration.jpg",
+        "illustration.jpeg",
+        "illustration.webp",
+        "background.png",
+        "background.jpg",
+        "background.jpeg",
+        "background.webp",
+        "bg.png",
+        "bg.jpg",
+        "bg.jpeg",
+        "bg.webp",
+    ])
+    if not bg_p:
+        bg_p = _auto_pick_asset_by_basename(dir_path, folder_name, bg_exts)
+
+    audio_exts = (".ogg", ".mp3", ".wav")
+    music_p = _pick_first_existing(dir_path, [
+        "song.ogg",
+        "song.mp3",
+        "song.wav",
+        "music.ogg",
+        "music.mp3",
+        "music.wav",
+        "bgm.ogg",
+        "bgm.mp3",
+        "bgm.wav",
+    ])
+    if not music_p:
+        music_p = _auto_pick_asset_by_basename(dir_path, folder_name, audio_exts)
+
+    return chart_p, music_p, bg_p
+
+
+def _list_loose_chart_files(dir_path: str) -> List[str]:
+    try:
+        items = os.listdir(dir_path)
+    except Exception:
+        return []
+
+    out: List[str] = []
+    for fn in items:
+        try:
+            if not fn.lower().endswith(".json"):
+                continue
+            if fn.lower() in {"info.json", "meta.json"}:
+                continue
+            out.append(os.path.join(dir_path, fn))
+        except Exception:
+            continue
+
+    def _key(p: str) -> Tuple[int, str]:
+        b = os.path.basename(p).lower()
+        if b in {"in.json", "at.json"}:
+            return (0, b)
+        return (1, b)
+
+    out.sort(key=_key)
+    return out
+
+
+def _build_advance_cfg_from_dir(dir_path: str) -> Tuple[Dict[str, Any], Optional[str], Optional[str]]:
+    charts = _list_loose_chart_files(dir_path)
+    if not charts:
+        raise SystemExit(f"No chart json found in folder: {dir_path}")
+
+    # Use directory-level heuristics for shared assets.
+    _chart_p, music_p, bg_p = _resolve_loose_chart_dir(dir_path, "IN")
+
+    tracks: List[Dict[str, Any]] = []
+    for p in charts:
+        tracks.append({
+            "input": p,
+            "start_at": 0.0,
+        })
+
+    cfg: Dict[str, Any] = {
+        "mode": "tracks",
+        "main": 0,
+        "tracks": tracks,
+    }
+
+    # Optionally attach shared bg/bgms to the main track so the existing loader picks them up.
+    if music_p:
+        try:
+            cfg["tracks"][0]["bgm"] = music_p
+        except Exception:
+            pass
+    if bg_p:
+        try:
+            cfg["tracks"][0]["bg"] = bg_p
+        except Exception:
+            pass
+
+    return cfg, music_p, bg_p
+
+
 def load_from_args(args: Any, W: int, H: int) -> AdvanceLoadResult:
     chart_path: Optional[str] = getattr(args, "input", None)
     pack: Optional[ChartPack] = None
@@ -59,14 +202,26 @@ def load_from_args(args: Any, W: int, H: int) -> AdvanceLoadResult:
 
     packs_keepalive: List[ChartPack] = []
 
-    if getattr(args, "advance", None):
-        with open(str(args.advance), "r", encoding="utf-8") as f:
-            advance_cfg = json.load(f) or {}
+    auto_advance_base_dir: Optional[str] = None
+    auto_advance_cfg: Optional[Dict[str, Any]] = None
+    if chart_path and os.path.isdir(chart_path) and (not os.path.exists(os.path.join(str(chart_path), "info.yml"))):
+        # Loose folder charts are not allowed to be loaded as a single chart.
+        # Instead, automatically build an advance config from all json charts in the folder.
+        auto_advance_base_dir = os.path.abspath(str(chart_path))
+        auto_advance_cfg, music_path, bg_path = _build_advance_cfg_from_dir(str(chart_path))
+        chart_info = {}
+
+    if getattr(args, "advance", None) or auto_advance_cfg is not None:
+        if auto_advance_cfg is not None:
+            advance_cfg = auto_advance_cfg
+            advance_base_dir = auto_advance_base_dir
+        else:
+            with open(str(args.advance), "r", encoding="utf-8") as f:
+                advance_cfg = json.load(f) or {}
+            advance_base_dir = os.path.dirname(os.path.abspath(str(args.advance)))
         advance_active = True
         advance_mix = bool(advance_cfg.get("mix", False))
         advance_mods = advance_cfg.get("mods") if isinstance(advance_cfg, dict) else None
-
-        advance_base_dir = os.path.dirname(os.path.abspath(str(args.advance)))
 
         mode = str(advance_cfg.get("mode", "sequence"))
         all_lines: List[RuntimeLine] = []

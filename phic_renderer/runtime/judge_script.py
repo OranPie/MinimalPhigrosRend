@@ -157,7 +157,6 @@ def parse_judge_script(data: Dict[str, Any]) -> JudgeScript:
             hp_f = _clamp01(float(hp))
         entries.append(JudgeEntry(start=st, end=ed, kind=kind, grade=grade_s, dt_spec=dt_spec, hold_percent=hp_f))
 
-    entries.sort(key=lambda x: (int(x.start), int(x.end)))
     return JudgeScript(meta=meta, entries=entries)
 
 

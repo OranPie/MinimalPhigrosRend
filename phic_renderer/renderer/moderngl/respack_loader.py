@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from ...io.respack import Respack, load_respack_info
+from ...io.respack_impl import Respack, load_respack_info
 from ...renderer.moderngl.texture import load_texture_rgba
 
 

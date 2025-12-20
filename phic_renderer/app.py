@@ -5,6 +5,7 @@ import argparse
 import signal
 import sys
 import os
+import logging
 from typing import Any, Dict, Optional
 
 from . import state
@@ -15,12 +16,15 @@ from .runtime.advance import load_from_args
 from .renderer import run as run_renderer
 from .config_v2 import dump_config_v2, flatten_config_v2, load_config_v2
 from .i18n import normalize_lang, pick_lang_from_config, tr
+from .logging_setup import setup_logging
 
 # Global respack instance (kept for backward-compat with the original single-file code)
 respack: Optional[Any] = None
 
 def main():
     global respack  # Declare we're using the global variable
+
+    logger = logging.getLogger(__name__)
 
     ap = argparse.ArgumentParser(prog="phic_renderer")
     g_in = ap.add_argument_group("Input")
@@ -91,6 +95,8 @@ def main():
     g_game.add_argument("--judge_script", type=str, default=None, help="Optional judge script JSON to simulate non-perfect autoplay")
     g_game.add_argument("--hold_fx_interval_ms", type=int, default=200)
     g_game.add_argument("--hold_tail_tol", type=float, default=0.8)
+    g_game.add_argument("--judge_width", type=float, default=0.12, help="Judgement width as ratio of screen width")
+    g_game.add_argument("--flick_threshold", type=float, default=0.02, help="Flick gesture threshold as ratio of screen width")
     g_game.add_argument("--start_time", type=float, default=None, help="Start time in seconds (cuts chart before this time)")
     g_game.add_argument("--end_time", type=float, default=None, help="End time in seconds (cuts chart after this time)")
 
@@ -112,6 +118,9 @@ def main():
     g_dbg.add_argument("--hit_debug", action="store_true")
 
     args = ap.parse_args()
+
+    setup_logging(args)
+    logger.debug("CLI args parsed")
 
     try:
         setattr(state, "_sigint", False)
@@ -188,20 +197,20 @@ def main():
 
     if not bool(getattr(args, "quiet", False)):
         title = tr(lang, "cui.title", "Mini Phigros Renderer")
-        print(_c(title, "1;37"))
+        logger.info(title)
         if getattr(args, "config", None):
-            print(_kv(tr(lang, "cui.config", "Config"), str(getattr(args, "config"))))
+            logger.info(_kv(tr(lang, "cui.config", "Config"), str(getattr(args, "config"))))
         elif getattr(args, "config_old", None):
-            print(_kv(tr(lang, "cui.config", "Config"), str(getattr(args, "config_old"))))
-        print(_kv(tr(lang, "cui.input", "Input"), getattr(args, "input", None) or getattr(args, "advance", None)))
-        print(_kv(tr(lang, "cui.window", "Window"), f"{int(args.w)}x{int(args.h)}"))
-        print(_kv(tr(lang, "cui.backend", "Backend"), f"{getattr(args, 'backend', None)} / {getattr(args, 'audio_backend', None)}"))
-        print(_kv(tr(lang, "cui.assets", "Assets"), f"respack={getattr(args, 'respack', None)} bg={getattr(args, 'bg', None)}"))
-        print(_kv(tr(lang, "cui.render", "Render"), f"speed={getattr(args, 'chart_speed', None)} approach={getattr(args, 'approach', None)} expand={getattr(args, 'expand', None)}"))
+            logger.info(_kv(tr(lang, "cui.config", "Config"), str(getattr(args, "config_old"))))
+        logger.info(_kv(tr(lang, "cui.input", "Input"), getattr(args, "input", None) or getattr(args, "advance", None)))
+        logger.info(_kv(tr(lang, "cui.window", "Window"), f"{int(args.w)}x{int(args.h)}"))
+        logger.info(_kv(tr(lang, "cui.backend", "Backend"), f"{getattr(args, 'backend', None)} / {getattr(args, 'audio_backend', None)}"))
+        logger.info(_kv(tr(lang, "cui.assets", "Assets"), f"respack={getattr(args, 'respack', None)} bg={getattr(args, 'bg', None)}"))
+        logger.info(_kv(tr(lang, "cui.render", "Render"), f"speed={getattr(args, 'chart_speed', None)} approach={getattr(args, 'approach', None)} expand={getattr(args, 'expand', None)}"))
         ap_on = tr(lang, "cui.on", "on") if bool(getattr(args, "autoplay", False)) else tr(lang, "cui.off", "off")
-        print(_kv(tr(lang, "cui.autoplay", "Autoplay"), ap_on))
-        print(_kv(tr(lang, "cui.start_end", "Start/End"), f"{getattr(args, 'start_time', None)} .. {getattr(args, 'end_time', None)}"))
-        print(_c(tr(lang, "cui.help.hint", "Tip: --save_config writes a commented config template."), "2;37"))
+        logger.info(_kv(tr(lang, "cui.autoplay", "Autoplay"), ap_on))
+        logger.info(_kv(tr(lang, "cui.start_end", "Start/End"), f"{getattr(args, 'start_time', None)} .. {getattr(args, 'end_time', None)}"))
+        logger.info(tr(lang, "cui.help.hint", "Tip: --save_config writes a commented config template."))
 
     W, H = args.w, args.h
     expand = float(args.expand) if args.expand is not None else 1.0
@@ -281,7 +290,7 @@ def main():
         )
     except KeyboardInterrupt:
         try:
-            print("\n[phic_renderer] Interrupted", flush=True)
+            logger.info("[phic_renderer] Interrupted")
         except:
             pass
     finally:

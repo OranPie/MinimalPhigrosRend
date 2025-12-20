@@ -39,6 +39,8 @@ from urllib3.util.retry import Retry
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from . import chart_provider_core as core
+from .workers import ApiWorker, DownloadWorker
+from .batch_download import BatchDownloadDialog
 
 # Try to import QtMultimedia (optional)
 try:
@@ -99,50 +101,7 @@ class PhiraChart:
             chartUpdated=d.get("chartUpdated", ""),
         )
 
-# ----------------------------- Network Workers -----------------------------
-
-class WorkerSignals(QtCore.QObject):
-    finished = QtCore.pyqtSignal(object)
-    error = QtCore.pyqtSignal(str)
-    progress = QtCore.pyqtSignal(int)
-
-class ApiWorker(QtCore.QRunnable):
-    """Generic API worker that calls a function and returns its result."""
-    def __init__(self, fn: T.Callable, *args, **kwargs):
-        super().__init__()
-        self.fn = fn
-        self.args = args
-        self.kwargs = kwargs
-        self.signals = WorkerSignals()
-
-    @QtCore.pyqtSlot()
-    def run(self):
-        try:
-            res = self.fn(*self.args, **self.kwargs)
-            self.signals.finished.emit(res)
-        except Exception as e:
-            self.signals.error.emit(str(e))
-
-class DownloadWorker(QtCore.QRunnable):
-    def __init__(self, url: str, dest_path: str):
-        super().__init__()
-        self.url = url
-        self.dest = dest_path
-        self.signals = WorkerSignals()
-
-    @QtCore.pyqtSlot()
-    def run(self):
-        try:
-            def _cb(pct: int) -> None:
-                try:
-                    self.signals.progress.emit(int(pct))
-                except Exception:
-                    pass
-
-            core.download_file(url=self.url, dest_path=self.dest, progress_cb=_cb, session=core.HTTP)
-            self.signals.finished.emit(self.dest)
-        except Exception as e:
-            self.signals.error.emit(str(e))
+# Network workers moved to workers.py
 
 # ----------------------------- Phira Client -----------------------------
 
@@ -553,6 +512,10 @@ class PhigrosInterface(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.pool = QtCore.QThreadPool(self)
+        try:
+            self.pool.setMaxThreadCount(8)
+        except Exception:
+            pass
         self._chart_index: dict[str, dict] = {}
         self._music_tree: list[dict] = []
         self._illustration_tree: list[dict] = []
@@ -590,9 +553,11 @@ class PhigrosInterface(QtWidgets.QWidget):
         self.combo_diff = QtWidgets.QComboBox()
         self.combo_diff.setMinimumWidth(160)
         self.btn_download = QtWidgets.QPushButton("Download Selected…")
+        self.btn_download_all = QtWidgets.QPushButton("Download All (Filtered)…")
         bb.addWidget(QtWidgets.QLabel("Difficulty:"))
         bb.addWidget(self.combo_diff)
         bb.addStretch(1)
+        bb.addWidget(self.btn_download_all)
         bb.addWidget(self.btn_download)
         layout.addLayout(bb)
 
@@ -601,6 +566,7 @@ class PhigrosInterface(QtWidgets.QWidget):
         self.edit_filter.textChanged.connect(self._refilter)
         self.table.itemSelectionChanged.connect(self._on_row_selected)
         self.btn_download.clicked.connect(self._download_selected)
+        self.btn_download_all.clicked.connect(self._download_all_filtered)
 
     # Loading index from GitHub
     def _load_index(self):
@@ -699,6 +665,59 @@ class PhigrosInterface(QtWidgets.QWidget):
 
         self._run_batch_download(jobs)
 
+    def _download_all_filtered(self):
+        dest_dir = self._pick_dest_dir()
+        if not dest_dir:
+            return
+
+        jobs: list[tuple[str, str]] = []  # (url, dest)
+        want_assets = bool(self.chk_assets.isChecked())
+
+        for row in range(self.table.rowCount()):
+            try:
+                base = self.table.item(row, 3).text()
+            except Exception:
+                continue
+            if not base:
+                continue
+
+            d = self._chart_index.get(base) or {}
+            diffs = list(d.get("diffs") or [])
+            paths = (d.get("paths") or {})
+            if not diffs:
+                continue
+
+            safe_base = re.sub(r"[^\w\-\.]+", "_", base)
+            out_dir = os.path.join(dest_dir, safe_base)
+            try:
+                os.makedirs(out_dir, exist_ok=True)
+            except Exception:
+                continue
+
+            for diff in diffs:
+                chart_path = paths.get(diff)
+                if not chart_path:
+                    continue
+                chart_url = PhigrosClient.raw_url(PhigrosClient.BRANCHES["chart"], chart_path)
+                jobs.append((chart_url, os.path.join(out_dir, f"{diff}.json")))
+
+            if want_assets:
+                try:
+                    music_path = PhigrosClient.find_asset_path(self._music_tree, base, (".ogg", ".mp3", ".wav"))
+                    illu_path = PhigrosClient.find_asset_path(self._illustration_tree, base, (".png", ".jpg", ".jpeg", ".webp"))
+                    if music_path:
+                        jobs.append((PhigrosClient.raw_url(PhigrosClient.BRANCHES["music"], music_path), os.path.join(out_dir, os.path.basename(music_path))))
+                    if illu_path:
+                        jobs.append((PhigrosClient.raw_url(PhigrosClient.BRANCHES["illustration"], illu_path), os.path.join(out_dir, os.path.basename(illu_path))))
+                except Exception:
+                    pass
+
+        if not jobs:
+            QtWidgets.QMessageBox.information(self, "Nothing to download", "No files found for current filter.")
+            return
+
+        self._run_batch_download(jobs)
+
     def _run_batch_download(self, jobs: list[tuple[str, str]]):
         if not jobs:
             QtWidgets.QMessageBox.information(self, "Nothing to download", "No files found for this selection.")
@@ -709,53 +728,7 @@ class PhigrosInterface(QtWidgets.QWidget):
     def _on_error(self, msg: str):
         QtWidgets.QMessageBox.critical(self, "Error", msg)
 
-# ----------------------------- Batch Download Dialog -----------------------------
-
-class BatchDownloadDialog(QtWidgets.QDialog):
-    def __init__(self, jobs: list[tuple[str, str]], parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Downloading…")
-        self.jobs = jobs
-        self.pool = QtCore.QThreadPool(self)
-        self._build_ui()
-        self._start()
-
-    def _build_ui(self):
-        lay = QtWidgets.QVBoxLayout(self)
-        self.list = QtWidgets.QListWidget()
-        for url, dest in self.jobs:
-            it = QtWidgets.QListWidgetItem(f"{os.path.basename(dest)}\n→ {url}")
-            it.setData(QtCore.Qt.UserRole, (url, dest))
-            self.list.addItem(it)
-        self.progress = QtWidgets.QProgressBar()
-        self.progress.setRange(0, len(self.jobs))
-        self.lbl = QtWidgets.QLabel("Starting…")
-        btns = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
-        btns.rejected.connect(self.reject)
-        lay.addWidget(self.list)
-        lay.addWidget(self.progress)
-        lay.addWidget(self.lbl)
-        lay.addWidget(btns)
-        self.resize(720, 420)
-
-    def _start(self):
-        self.completed = 0
-        for i in range(self.list.count()):
-            url, dest = self.list.item(i).data(QtCore.Qt.UserRole)
-            worker = DownloadWorker(url, dest)
-            worker.signals.finished.connect(self._one_done)
-            worker.signals.error.connect(self._one_err)
-            self.parent().pool.start(worker)  # use parent's pool to limit concurrency
-
-    def _one_done(self, path: str):
-        self.completed += 1
-        self.progress.setValue(self.completed)
-        self.lbl.setText(f"Completed {self.completed}/{self.progress.maximum()}…")
-        if self.completed >= self.progress.maximum():
-            self.lbl.setText("All done.")
-
-    def _one_err(self, msg: str):
-        QtWidgets.QMessageBox.critical(self, "Download error", msg)
+# Batch download dialog moved to batch_download.py
 
 # ----------------------------- Main Window -----------------------------
 

@@ -5,7 +5,7 @@ import json
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
-from .io.chart_loader import load_chart
+from .io.chart_loader_impl import load_chart
 
 
 def _sorted_playable(notes):

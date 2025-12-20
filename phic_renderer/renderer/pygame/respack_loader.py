@@ -5,7 +5,7 @@ import pygame
 
 from typing import Any
 
-from ...respack import Respack, load_respack_info
+from ...io.respack_impl import Respack, load_respack_info
 
 
 def _maybe_convert_alpha(surf: pygame.Surface) -> pygame.Surface:

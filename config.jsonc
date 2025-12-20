@@ -52,8 +52,11 @@
   },
   "gameplay": {
     "autoplay": true,
+    "judge_script": null,
     "hold_fx_interval_ms": 200,
     "hold_tail_tol": 0.8,
+    "judge_width": 0.12,
+    "flick_threshold": 0.02,
     "start_time": null,
     "end_time": null
   },
