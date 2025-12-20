@@ -44,8 +44,8 @@ class TransformCache:
         return round(scale * 10) / 10
 
     def _quantize_angle(self, angle: float) -> int:
-        """Quantize angle to nearest 5 degrees."""
-        return int(round(angle / 5.0) * 5)
+        """Quantize angle to 0.1 precision."""
+        return int(round(angle * 10))
 
     def _make_key(
         self,
