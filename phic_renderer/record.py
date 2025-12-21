@@ -404,29 +404,32 @@ def main():
             def _run_renderer_worker():
                 nonlocal interrupted
                 try:
-                    run_renderer(
-                        args,
-                        W=W,
-                        H=H,
-                        expand=expand,
-                        fmt=fmt,
-                        offset=offset,
-                        lines=lines,
-                        notes=notes,
-                        chart_info=adv.chart_info,
-                        bg_dim_alpha=adv.bg_dim_alpha,
-                        bg_path=adv.bg_path,
-                        music_path=adv.music_path,
-                        chart_path=adv.chart_path,
-                        advance_active=adv.advance_active,
-                        advance_cfg=adv.advance_cfg,
-                        advance_mix=adv.advance_mix,
-                        advance_tracks_bgm=adv.advance_tracks_bgm,
-                        advance_main_bgm=adv.advance_main_bgm,
-                        advance_segment_starts=adv.advance_segment_starts,
-                        advance_segment_bgm=adv.advance_segment_bgm,
-                        advance_base_dir=adv.advance_base_dir,
-                    )
+                    if getattr(args, "playlist_script", None):
+                        run_playlist_script(args)
+                    else:
+                        run_renderer(
+                            args,
+                            W=W,
+                            H=H,
+                            expand=expand,
+                            fmt=fmt,
+                            offset=offset,
+                            lines=lines,
+                            notes=notes,
+                            chart_info=adv.chart_info,
+                            bg_dim_alpha=adv.bg_dim_alpha,
+                            bg_path=adv.bg_path,
+                            music_path=adv.music_path,
+                            chart_path=adv.chart_path,
+                            advance_active=adv.advance_active,
+                            advance_cfg=adv.advance_cfg,
+                            advance_mix=adv.advance_mix,
+                            advance_tracks_bgm=adv.advance_tracks_bgm,
+                            advance_main_bgm=adv.advance_main_bgm,
+                            advance_segment_starts=adv.advance_segment_starts,
+                            advance_segment_bgm=adv.advance_segment_bgm,
+                            advance_base_dir=adv.advance_base_dir,
+                        )
                 except KeyboardInterrupt:
                     interrupted = True
                 except Exception:
@@ -457,31 +460,36 @@ def main():
                     pass
         else:
             try:
-                run_renderer(
-                    args,
-                    W=W,
-                    H=H,
-                    expand=expand,
-                    fmt=fmt,
-                    offset=offset,
-                    lines=lines,
-                    notes=notes,
-                    chart_info=adv.chart_info,
-                    bg_dim_alpha=adv.bg_dim_alpha,
-                    bg_path=adv.bg_path,
-                    music_path=adv.music_path,
-                    chart_path=adv.chart_path,
-                    advance_active=adv.advance_active,
-                    advance_cfg=adv.advance_cfg,
-                    advance_mix=adv.advance_mix,
-                    advance_tracks_bgm=adv.advance_tracks_bgm,
-                    advance_main_bgm=adv.advance_main_bgm,
-                    advance_segment_starts=adv.advance_segment_starts,
-                    advance_segment_bgm=adv.advance_segment_bgm,
-                    advance_base_dir=adv.advance_base_dir,
-                )
+                if getattr(args, "playlist_script", None):
+                    run_playlist_script(args)
+                else:
+                    run_renderer(
+                        args,
+                        W=W,
+                        H=H,
+                        expand=expand,
+                        fmt=fmt,
+                        offset=offset,
+                        lines=lines,
+                        notes=notes,
+                        chart_info=adv.chart_info,
+                        bg_dim_alpha=adv.bg_dim_alpha,
+                        bg_path=adv.bg_path,
+                        music_path=adv.music_path,
+                        chart_path=adv.chart_path,
+                        advance_active=adv.advance_active,
+                        advance_cfg=adv.advance_cfg,
+                        advance_mix=adv.advance_mix,
+                        advance_tracks_bgm=adv.advance_tracks_bgm,
+                        advance_main_bgm=adv.advance_main_bgm,
+                        advance_segment_starts=adv.advance_segment_starts,
+                        advance_segment_bgm=adv.advance_segment_bgm,
+                        advance_base_dir=adv.advance_base_dir,
+                    )
             except KeyboardInterrupt:
                 interrupted = True
+            except Exception:
+                logger.exception("Renderer worker failed")
     finally:
         if recorder:
             try:

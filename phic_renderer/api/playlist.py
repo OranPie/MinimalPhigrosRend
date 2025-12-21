@@ -451,6 +451,8 @@ def run_playlist(
 
     orig_start_time = getattr(args, "start_time", None)
     orig_end_time = getattr(args, "end_time", None)
+    orig_bg = getattr(args, "bg", None)
+    orig_bgm = getattr(args, "bgm", None)
 
     reuse_pygame = bool(str(getattr(args, "backend", "pygame") or "pygame").strip().lower() == "pygame")
     reuse_audio = False
@@ -607,6 +609,14 @@ def run_playlist(
                 setattr(args, "start_time", float(seg_start_time) if seg_start_time > 1e-9 else 0.0)
                 setattr(args, "end_time", float(meta.seg_end_time))
 
+                # Playlist segments should use per-chart assets by default.
+                # If CLI/config provided a global bg/bgm, it would otherwise override switching.
+                try:
+                    setattr(args, "bg", None)
+                    setattr(args, "bgm", None)
+                except Exception:
+                    pass
+
                 extra_ctx: Dict[str, Any] = {}
                 if reuse_pygame:
                     extra_ctx["reuse_pygame"] = True
@@ -649,6 +659,8 @@ def run_playlist(
                 try:
                     setattr(args, "start_time", orig_start_time)
                     setattr(args, "end_time", orig_end_time)
+                    setattr(args, "bg", orig_bg)
+                    setattr(args, "bgm", orig_bgm)
                 except Exception:
                     pass
 
