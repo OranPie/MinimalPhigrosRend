@@ -6,6 +6,7 @@ import signal
 import sys
 import tempfile
 import logging
+import threading
 from typing import Any, Dict, Optional
 
 from . import state
@@ -19,6 +20,8 @@ from .recording.audio_mixer import mix_wav
 from .io.respack_impl import load_respack_info
 from .recording.presets import list_presets
 from .logging_setup import setup_logging
+from .renderer.pygame.textual_ui import init_textual_ui
+from .api.playlist import run_playlist_script
 
 
 def main():
@@ -28,6 +31,21 @@ def main():
     g_in = ap.add_argument_group("Input")
     g_in.add_argument("--input", required=False, default=None, help="chart.json OR chart pack folder OR .zip/.pez pack")
     g_in.add_argument("--advance", type=str, default=None)
+    g_in.add_argument("--playlist_script", type=str, default=None, help="Run a playlist script (python file)")
+    g_in.add_argument("--playlist_charts_dir", type=str, default="charts")
+    g_in.add_argument("--playlist_notes_per_chart", type=int, default=10)
+    g_in.add_argument("--playlist_seed", type=int, default=None)
+    g_in.add_argument("--playlist_no_shuffle", action="store_true")
+    g_in.add_argument("--playlist_switch_mode", type=str, default="hit", choices=["hit", "judged"])
+    g_in.add_argument("--playlist_filter_levels", type=str, default=None)
+    g_in.add_argument("--playlist_filter_name_contains", type=str, default=None)
+    g_in.add_argument("--playlist_filter_min_total_notes", type=int, default=None)
+    g_in.add_argument("--playlist_filter_max_total_notes", type=int, default=None)
+    g_in.add_argument("--playlist_filter_limit", type=int, default=None)
+    g_in.add_argument("--playlist_start_mode", type=str, default="fresh", choices=["fresh", "resume"])
+    g_in.add_argument("--playlist_start_index", type=int, default=None)
+    g_in.add_argument("--playlist_start_from_hit_total", type=int, default=None)
+    g_in.add_argument("--playlist_start_from_combo_total", type=int, default=None)
 
     g_cfg = ap.add_argument_group("Config")
     g_cfg.add_argument("--config", type=str, required=True, help="Config v2 (JSONC) path")
@@ -48,6 +66,13 @@ def main():
     g_rec.add_argument("--log_interval", type=float, default=1.0, help="Seconds between CLI incoming/past logs (0 disables)")
     g_rec.add_argument("--log_notes", action="store_true", help="Log incoming/past note counts periodically")
     g_rec.add_argument("--no_hitsound", action="store_true", help="Do not include hitsounds in video audio track")
+    g_rec.add_argument(
+        "--ui",
+        type=str,
+        default="textual",
+        choices=["textual", "curses", "none"],
+        help="Headless UI backend: textual (recommended), curses (legacy), none",
+    )
     g_rec.add_argument("--no_curses", action="store_true", help="Disable curses CUI in headless mode")
     g_rec.add_argument("--curses_fps", type=float, default=10.0, help="Headless curses refresh rate")
     g_rec.add_argument("--no_particles", action="store_true", help="Do not render particles into recorded frames")
@@ -102,8 +127,8 @@ def main():
             raise SystemExit("--output is required for video/video+audio modes")
         rec_output = str(args.output)
 
-    if (not args.input) and (not args.advance):
-        raise SystemExit("Either --input or --advance must be provided")
+    if (not args.input) and (not args.advance) and (not getattr(args, "playlist_script", None)):
+        raise SystemExit("Either --input or --advance or --playlist_script must be provided")
 
     cfg_v2_raw: Optional[Dict[str, Any]] = None
     try:
@@ -137,19 +162,23 @@ def main():
 
     state.expand_factor = float(expand)
 
-    adv = load_from_args(args, W, H)
+    adv = None
+    fmt = None
+    offset = 0.0
+    lines = None
+    notes = None
 
-    fmt = adv.fmt
-    offset = adv.offset
-    lines = adv.lines
-    notes = adv.notes
+    if not getattr(args, "playlist_script", None):
+        adv = load_from_args(args, W, H)
+
+        fmt = adv.fmt
+        offset = adv.offset
+        lines = adv.lines
+        notes = adv.notes
 
     # Ensure recording has a finite stop time.
-    # Priority:
-    # 1) --end_time
-    # 2) --duration => end_time = start_time + duration
-    # 3) default => record until chart end (chart_end is relative to chart timeline)
-    if rec_end_time is None:
+    # For playlist_script, user must provide a finite stop via playlist switch/jump/stop.
+    if rec_end_time is None and (not getattr(args, "playlist_script", None)):
         if rec_duration is not None:
             rec_end_time = float(rec_start_time) + float(rec_duration)
         else:
@@ -165,10 +194,11 @@ def main():
     mods_cfg_out: Dict[str, Any] = {}
     if isinstance(mods_cfg, dict):
         mods_cfg_out.update(mods_cfg)
-    if adv.advance_active and isinstance(adv.advance_mods, dict):
+    if adv is not None and adv.advance_active and isinstance(adv.advance_mods, dict):
         mods_cfg_out.update(adv.advance_mods)
 
-    notes = apply_mods(mods_cfg_out, notes, lines)
+    if adv is not None:
+        notes = apply_mods(mods_cfg_out, notes, lines)
 
     audio_path: Optional[str] = None
     audio_temp_fd: Optional[int] = None
@@ -180,7 +210,7 @@ def main():
             raise SystemExit("ERROR: ffmpeg not found. Please install ffmpeg for video recording.\n"
                            "Install: https://ffmpeg.org/download.html")
 
-        if mode == "video+audio":
+        if mode == "video+audio" and (not getattr(args, "playlist_script", None)):
             try:
                 duration = max(0.0, float(rec_end_time) - float(rec_start_time))
                 if duration <= 1e-6:
@@ -346,7 +376,15 @@ def main():
     setattr(args, "record_headless", rec_headless)
     setattr(args, "record_log_interval", rec_log_interval)
     setattr(args, "record_log_notes", rec_log_notes)
-    setattr(args, "record_use_curses", (not bool(getattr(args, "no_curses", False))) and rec_headless)
+    ui = str(getattr(args, "ui", "textual") or "textual")
+    if not rec_headless:
+        ui = "none"
+
+    use_curses = (ui == "curses") and (not bool(getattr(args, "no_curses", False))) and rec_headless
+    use_textual = (ui == "textual") and rec_headless
+
+    setattr(args, "record_use_curses", bool(use_curses))
+    setattr(args, "record_use_textual", bool(use_textual))
     setattr(args, "record_curses_fps", float(getattr(args, "curses_fps", 10.0) or 10.0))
     setattr(args, "record_render_particles", (not bool(getattr(args, "no_particles", False))))
     setattr(args, "record_render_text", (not bool(getattr(args, "no_text", False))))
@@ -356,39 +394,100 @@ def main():
 
     interrupted = False
     try:
-        try:
-            run_renderer(
-                args,
-                W=W,
-                H=H,
-                expand=expand,
-                fmt=fmt,
-                offset=offset,
-                lines=lines,
-                notes=notes,
-                chart_info=adv.chart_info,
-                bg_dim_alpha=adv.bg_dim_alpha,
-                bg_path=adv.bg_path,
-                music_path=adv.music_path,
-                chart_path=adv.chart_path,
-                advance_active=adv.advance_active,
-                advance_cfg=adv.advance_cfg,
-                advance_mix=adv.advance_mix,
-                advance_tracks_bgm=adv.advance_tracks_bgm,
-                advance_main_bgm=adv.advance_main_bgm,
-                advance_segment_starts=adv.advance_segment_starts,
-                advance_segment_bgm=adv.advance_segment_bgm,
-                advance_base_dir=adv.advance_base_dir,
-            )
-        except KeyboardInterrupt:
-            interrupted = True
+        if bool(getattr(args, "record_headless", False)) and bool(getattr(args, "record_use_textual", False)):
+            ok, tui, err = init_textual_ui(refresh_hz=float(getattr(args, "record_curses_fps", 10.0) or 10.0))
+            if not ok or tui is None:
+                raise SystemExit(f"Textual UI requested but failed to start: {err}")
+
+            setattr(args, "textual_ui", tui)
+
+            def _run_renderer_worker():
+                nonlocal interrupted
+                try:
+                    run_renderer(
+                        args,
+                        W=W,
+                        H=H,
+                        expand=expand,
+                        fmt=fmt,
+                        offset=offset,
+                        lines=lines,
+                        notes=notes,
+                        chart_info=adv.chart_info,
+                        bg_dim_alpha=adv.bg_dim_alpha,
+                        bg_path=adv.bg_path,
+                        music_path=adv.music_path,
+                        chart_path=adv.chart_path,
+                        advance_active=adv.advance_active,
+                        advance_cfg=adv.advance_cfg,
+                        advance_mix=adv.advance_mix,
+                        advance_tracks_bgm=adv.advance_tracks_bgm,
+                        advance_main_bgm=adv.advance_main_bgm,
+                        advance_segment_starts=adv.advance_segment_starts,
+                        advance_segment_bgm=adv.advance_segment_bgm,
+                        advance_base_dir=adv.advance_base_dir,
+                    )
+                except KeyboardInterrupt:
+                    interrupted = True
+                except Exception:
+                    logger.exception("Renderer worker failed")
+                finally:
+                    try:
+                        tui.stop()
+                    except Exception:
+                        pass
+
+            th = threading.Thread(target=_run_renderer_worker, daemon=True)
+            th.start()
+
+            try:
+                tui.run()
+            finally:
+                try:
+                    setattr(state, "_sigint", True)
+                except Exception:
+                    pass
+                try:
+                    tui.stop()
+                except Exception:
+                    pass
+                try:
+                    th.join(timeout=2.0)
+                except Exception:
+                    pass
+        else:
+            try:
+                run_renderer(
+                    args,
+                    W=W,
+                    H=H,
+                    expand=expand,
+                    fmt=fmt,
+                    offset=offset,
+                    lines=lines,
+                    notes=notes,
+                    chart_info=adv.chart_info,
+                    bg_dim_alpha=adv.bg_dim_alpha,
+                    bg_path=adv.bg_path,
+                    music_path=adv.music_path,
+                    chart_path=adv.chart_path,
+                    advance_active=adv.advance_active,
+                    advance_cfg=adv.advance_cfg,
+                    advance_mix=adv.advance_mix,
+                    advance_tracks_bgm=adv.advance_tracks_bgm,
+                    advance_main_bgm=adv.advance_main_bgm,
+                    advance_segment_starts=adv.advance_segment_starts,
+                    advance_segment_bgm=adv.advance_segment_bgm,
+                    advance_base_dir=adv.advance_base_dir,
+                )
+            except KeyboardInterrupt:
+                interrupted = True
     finally:
-        # Ensure recorder is properly closed
         if recorder:
             try:
                 recorder.close()
                 logger.info("[Recording] Finalized successfully")
-            except Exception as e:
+            except Exception:
                 logger.exception("[Recording] Failed to finalize")
 
         if interrupted:

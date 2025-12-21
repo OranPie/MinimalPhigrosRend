@@ -17,6 +17,7 @@ from .renderer import run as run_renderer
 from .config_v2 import dump_config_v2, flatten_config_v2, load_config_v2
 from .i18n import normalize_lang, pick_lang_from_config, tr
 from .logging_setup import setup_logging
+from .api.playlist import run_playlist_script
 
 # Global respack instance (kept for backward-compat with the original single-file code)
 respack: Optional[Any] = None
@@ -30,6 +31,21 @@ def main():
     g_in = ap.add_argument_group("Input")
     g_in.add_argument("--input", required=False, default=None, help="chart.json OR chart pack folder OR .zip/.pez pack")
     g_in.add_argument("--advance", type=str, default=None)
+    g_in.add_argument("--playlist_script", type=str, default=None, help="Run a playlist script (python file)")
+    g_in.add_argument("--playlist_charts_dir", type=str, default="charts")
+    g_in.add_argument("--playlist_notes_per_chart", type=int, default=10)
+    g_in.add_argument("--playlist_seed", type=int, default=None)
+    g_in.add_argument("--playlist_no_shuffle", action="store_true")
+    g_in.add_argument("--playlist_switch_mode", type=str, default="hit", choices=["hit", "judged"])
+    g_in.add_argument("--playlist_filter_levels", type=str, default=None)
+    g_in.add_argument("--playlist_filter_name_contains", type=str, default=None)
+    g_in.add_argument("--playlist_filter_min_total_notes", type=int, default=None)
+    g_in.add_argument("--playlist_filter_max_total_notes", type=int, default=None)
+    g_in.add_argument("--playlist_filter_limit", type=int, default=None)
+    g_in.add_argument("--playlist_start_mode", type=str, default="fresh", choices=["fresh", "resume"])
+    g_in.add_argument("--playlist_start_index", type=int, default=None)
+    g_in.add_argument("--playlist_start_from_hit_total", type=int, default=None)
+    g_in.add_argument("--playlist_start_from_combo_total", type=int, default=None)
 
     g_cfg = ap.add_argument_group("Config")
     g_cfg.add_argument("--config", type=str, default=None, help="Config v2 (JSONC) path")
@@ -139,8 +155,8 @@ def main():
 
     cfg_mods: Optional[Dict[str, Any]] = None
 
-    if (not args.input) and (not args.advance):
-        raise SystemExit("Either --input or --advance must be provided")
+    if (not args.input) and (not args.advance) and (not getattr(args, "playlist_script", None)):
+        raise SystemExit("Either --input or --advance or --playlist_script must be provided")
 
     cfg_v2_raw: Optional[Dict[str, Any]] = None
     if args.config:
@@ -234,6 +250,10 @@ def main():
 
     # RPE easingType shift (some exporters are 1-based)
     easing.set_rpe_easing_shift(int(args.rpe_easing_shift))
+
+    if getattr(args, "playlist_script", None):
+        run_playlist_script(args)
+        return
 
     adv = load_from_args(args, W, H)
 

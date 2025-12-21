@@ -103,6 +103,10 @@ def hold_finalize(
                     note_id=int(getattr(n, "nid", -1)),
                     judgement=str(g),
                     hold_percent=float(prog),
+                    note_kind=int(getattr(n, "kind", 0) or 0),
+                    mh=bool(getattr(n, "mh", False)),
+                    line_id=int(getattr(n, "line_id", -1)),
+                    source="hold_finalize",
                 )
 
         if float(t) >= float(n.t_end) and (not s.hold_finalized):
@@ -123,9 +127,29 @@ def hold_finalize(
                     note_id=int(getattr(n, "nid", -1)),
                     judgement=str(g),
                     hold_percent=float(prog),
+                    note_kind=int(getattr(n, "kind", 0) or 0),
+                    mh=bool(getattr(n, "mh", False)),
+                    line_id=int(getattr(n, "line_id", -1)),
+                    source="hold_finalize",
                 )
             else:
                 judge.mark_miss(s)
+                try:
+                    dur = max(1e-6, (float(n.t_end) - float(n.t_hit)))
+                    prog = clamp((float(t) - float(n.t_hit)) / dur, 0.0, 1.0)
+                except Exception:
+                    prog = 0.0
+                push_hit_debug_cb(
+                    t_now=float(t),
+                    t_hit=float(n.t_hit),
+                    note_id=int(getattr(n, "nid", -1)),
+                    judgement="MISS",
+                    hold_percent=float(prog),
+                    note_kind=int(getattr(n, "kind", 0) or 0),
+                    mh=bool(getattr(n, "mh", False)),
+                    line_id=int(getattr(n, "line_id", -1)),
+                    source="hold_finalize",
+                )
             s.hold_finalized = True
             s.judged = True
 

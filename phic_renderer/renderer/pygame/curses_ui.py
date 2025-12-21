@@ -5,7 +5,8 @@ from typing import Any, Dict, List, Optional
 
 from ...math.util import clamp, now_sec
 from ...core.ui import compute_score
-from .rendering_helpers import line_note_counts_kind
+from ...runtime.kinematics import eval_line_state, note_world_pos
+from .rendering_helpers import line_note_counts_kind, track_seg_state
 
 
 def render_curses_ui(
@@ -30,6 +31,14 @@ def render_curses_ui(
     note_times_by_line_kind: Dict[int, Dict[int, List[float]]],
     approach: float,
     args: Any,
+    events_incoming: Optional[List[str]] = None,
+    events_past: Optional[List[str]] = None,
+    lines: Optional[List[Any]] = None,
+    notes: Optional[List[Any]] = None,
+    states: Optional[List[Any]] = None,
+    idx_next: Optional[int] = None,
+    W: Optional[int] = None,
+    H: Optional[int] = None,
 ) -> int:
     """Render the curses UI for recording mode. Returns updated cui_scroll."""
     if cui is None or curses_mod is None:
@@ -102,13 +111,27 @@ def render_curses_ui(
         # Recorder stats
         _render_recorder_stats(cui, w, speed, args, attr_ok, attr_warn, attr_bad, attr_dim)
 
-        # Help or line details view
         if int(cui_view) != 0:
             _render_help_view(cui, h, w)
         else:
-            cui_scroll = _render_lines_view(
-                cui, h, w, cui_scroll, t, approach,
-                note_times_by_line_kind, attr_dim, record_curses_fps
+            cui_scroll = _render_dashboard_view(
+                cui,
+                h,
+                w,
+                cui_scroll,
+                t,
+                approach,
+                note_times_by_line_kind,
+                attr_dim,
+                attr_head,
+                events_incoming,
+                events_past,
+                lines,
+                notes,
+                states,
+                idx_next,
+                W,
+                H,
             )
 
         try:
@@ -270,12 +293,12 @@ def _render_help_view(cui: Any, h: int, w: int):
         "Help:",
         "  q: quit recording",
         "  h: toggle this help",
-        "  j/k or Up/Down: scroll lines",
-        "  PgUp/PgDn: scroll faster",
+        "  j/k or Up/Down: select line",
+        "  PgUp/PgDn: select line faster",
         "  g/G or Home/End: top/bottom",
         "  +/-: adjust CUI refresh rate",
         "",
-        "Columns: P=Past (already hit time passed), I=Incoming (t..t+approach) by kind: Tap/Drag/Hold/Flick",
+        "P=Past (already hit time passed), I=Incoming (t..t+approach) by kind: Tap/Drag/Hold/Flick",
     ]
     for ln in help_lines:
         if row >= h:
@@ -287,45 +310,222 @@ def _render_help_view(cui: Any, h: int, w: int):
         row += 1
 
 
-def _render_lines_view(
-    cui: Any, h: int, w: int, cui_scroll: int, t: float, approach: float,
-    note_times_by_line_kind: Dict[int, Dict[int, List[float]]],
-    attr_dim: int, record_curses_fps: float
-) -> int:
-    """Render the lines view. Returns updated cui_scroll."""
-    row = 3
-    max_lines = max(0, h - row - 1)
-    lids = sorted(note_times_by_line_kind.keys())
-    if int(cui_scroll) < 0:
-        cui_scroll = 0
-    if int(cui_scroll) > max(0, len(lids) - 1):
-        cui_scroll = max(0, len(lids) - 1)
-    start = int(cui_scroll)
-    shown = 0
-
-    hdr = "Line      Past(T/D/H/F)                 Incoming(T/D/H/F)"
+def _safe_addnstr(cui: Any, y: int, x: int, s: str, w: int, attr: int = 0):
     try:
-        cui.addnstr(row, 0, hdr, max(0, w - 1))
+        if int(w) <= 0:
+            return
+        cui.addnstr(int(y), int(x), str(s), int(w), int(attr))
     except:
         pass
-    row += 1
 
-    for lid in lids[start:]:
-        if shown >= max_lines:
-            break
-        past4, inc4 = line_note_counts_kind(note_times_by_line_kind, int(lid), float(t), approach)
-        s = f"L{int(lid):02d}   {past4[0]:5d}/{past4[1]:5d}/{past4[2]:5d}/{past4[3]:5d}        {inc4[0]:5d}/{inc4[1]:5d}/{inc4[2]:5d}/{inc4[3]:5d}"
+
+def _draw_box(cui: Any, y0: int, x0: int, hh: int, ww: int, title: str, attr: int):
+    if hh < 2 or ww < 2:
+        return
+    top = "+" + ("-" * max(0, ww - 2)) + "+"
+    mid = "|" + (" " * max(0, ww - 2)) + "|"
+    bot = "+" + ("-" * max(0, ww - 2)) + "+"
+    _safe_addnstr(cui, y0, x0, top, ww, attr)
+    for r in range(1, max(1, hh - 1)):
+        _safe_addnstr(cui, y0 + r, x0, mid, ww, 0)
+    _safe_addnstr(cui, y0 + hh - 1, x0, bot, ww, attr)
+    if title:
+        tt = f" {title} "
+        _safe_addnstr(cui, y0, x0 + 1, tt, max(0, ww - 2), attr)
+
+
+def _render_box_lines(
+    cui: Any,
+    y0: int,
+    x0: int,
+    hh: int,
+    ww: int,
+    title: str,
+    lines: List[str],
+    attr_title: int,
+    attr_dim: int,
+):
+    _draw_box(cui, y0, x0, hh, ww, title, attr_title)
+    if hh <= 2 or ww <= 2:
+        return
+    max_rows = max(0, hh - 2)
+    max_w = max(0, ww - 2)
+    for i in range(min(max_rows, len(lines))):
+        _safe_addnstr(cui, y0 + 1 + i, x0 + 1, lines[i], max_w, attr_dim)
+
+
+def _render_dashboard_view(
+    cui: Any,
+    h: int,
+    w: int,
+    cui_scroll: int,
+    t: float,
+    approach: float,
+    note_times_by_line_kind: Dict[int, Dict[int, List[float]]],
+    attr_dim: int,
+    attr_head: int,
+    events_incoming: Optional[List[str]],
+    events_past: Optional[List[str]],
+    lines: Optional[List[Any]],
+    notes: Optional[List[Any]],
+    states: Optional[List[Any]],
+    idx_next: Optional[int],
+    W: Optional[int],
+    H: Optional[int],
+) -> int:
+    top = 5
+    if int(h) <= int(top) + 2 or int(w) <= 10:
+        return cui_scroll
+
+    avail_h = int(h) - int(top) - 1
+    avail_h = max(1, avail_h)
+
+    left_w = max(10, int(w) // 2)
+    right_w = max(10, int(w) - int(left_w) - 1)
+    left_x = 0
+    right_x = int(left_w) + 1
+
+    left_top_h = max(3, avail_h // 2)
+    left_bot_h = max(3, avail_h - left_top_h)
+
+    inc = list(events_incoming or [])
+    past = list(events_past or [])
+
+    inc_show = inc[: max(0, left_top_h - 2)]
+    past_show = past[: max(0, left_bot_h - 2)]
+
+    _render_box_lines(cui, top, left_x, left_top_h, left_w, "incoming events", inc_show, attr_head, attr_dim)
+    _render_box_lines(cui, top + left_top_h, left_x, left_bot_h, left_w, "past events", past_show, attr_head, attr_dim)
+
+    line_box_h = min(12, max(6, avail_h // 3))
+    note_box_h = max(3, avail_h - line_box_h)
+
+    line_lines: List[str] = []
+    lids = sorted(note_times_by_line_kind.keys())
+    sel_idx = 0
+    if lids:
+        if int(cui_scroll) < 0:
+            cui_scroll = 0
+        if int(cui_scroll) > max(0, len(lids) - 1):
+            cui_scroll = max(0, len(lids) - 1)
+        sel_idx = int(cui_scroll)
+        lid = int(lids[sel_idx])
+
+        past4, inc4 = line_note_counts_kind(note_times_by_line_kind, int(lid), float(t), float(approach))
+        line_lines.append(f"selected line: L{lid:02d}  idx={sel_idx+1}/{max(1, len(lids))}")
+        line_lines.append(f"P {past4[0]}/{past4[1]}/{past4[2]}/{past4[3]}   I {inc4[0]}/{inc4[1]}/{inc4[2]}/{inc4[3]}")
+        if lines is not None and int(lid) >= 0 and int(lid) < len(lines):
+            try:
+                lx, ly, lr, la01, lsc, laraw = eval_line_state(lines[int(lid)], float(t))
+                line_lines.append(f"pos=({lx:7.1f},{ly:7.1f})  rot={lr:+7.3f}  alpha01={la01:4.2f} raw={laraw:+6.3f}")
+                line_lines.append(f"scroll={lsc:10.2f}")
+                try:
+                    tr_rot = track_seg_state(getattr(lines[int(lid)], 'rot', None))
+                    tr_alp = track_seg_state(getattr(lines[int(lid)], 'alpha', None))
+                    tr_scr = track_seg_state(getattr(lines[int(lid)], 'scroll_px', None))
+                    line_lines.append(f"seg rot={tr_rot}  a={tr_alp}  scr={tr_scr}")
+                except:
+                    pass
+            except:
+                line_lines.append("(line state unavailable)")
+    else:
+        line_lines.append("no lines")
+
+    _render_box_lines(cui, top, right_x, line_box_h, right_w, "line properties", line_lines[: max(0, line_box_h - 2)], attr_head, attr_dim)
+
+    note_lines: List[str] = []
+    if notes is not None and states is not None and lines is not None and W is not None and H is not None:
         try:
-            cui.addnstr(row, 0, s, max(0, w - 1))
+            W0 = int(W)
+            H0 = int(H)
+            margin = 120
+            base_note_w = max(1, int(0.06 * float(W0)))
+            base_note_h = max(1, int(0.018 * float(H0)))
+
+            if idx_next is None:
+                start_i = 0
+            else:
+                start_i = max(0, int(idx_next) - 64)
+            end_i = min(len(notes), start_i + 512)
+
+            shown = 0
+            for i in range(start_i, end_i):
+                if shown >= max(1, note_box_h - 2):
+                    break
+                n = notes[i]
+                s = states[i] if i < len(states) else None
+
+                try:
+                    t_enter = float(getattr(n, 't_enter', -1e9))
+                except:
+                    t_enter = -1e9
+                if float(t) < float(t_enter):
+                    continue
+
+                try:
+                    lid = int(getattr(n, 'line_id', 0))
+                except:
+                    lid = 0
+                if lid < 0 or lid >= len(lines):
+                    continue
+
+                try:
+                    lx, ly, lr, la01, lsc, laraw = eval_line_state(lines[lid], float(t))
+                except:
+                    continue
+
+                kind = int(getattr(n, 'kind', 0) or 0)
+                above = bool(getattr(n, 'above', True))
+                nid = int(getattr(n, 'nid', i))
+                hit = bool(getattr(s, 'hit', False)) if s is not None else False
+                holding = bool(getattr(s, 'holding', False)) if s is not None else False
+                miss = bool(getattr(s, 'miss', False)) if s is not None else False
+
+                if kind == 3:
+                    try:
+                        sh = float(getattr(n, 'scroll_hit', 0.0))
+                        se = float(getattr(n, 'scroll_end', 0.0))
+                    except:
+                        continue
+                    if hit or holding or (float(t) >= float(getattr(n, 't_hit', 0.0))):
+                        head_target_scroll = sh if float(lsc) <= float(sh) else float(lsc)
+                    else:
+                        head_target_scroll = float(sh)
+                    hx, hy = note_world_pos(float(lx), float(ly), float(lr), float(lsc), n, float(head_target_scroll), False)
+                    tx, ty = note_world_pos(float(lx), float(ly), float(lr), float(lsc), n, float(se), True)
+                    minx = min(float(hx), float(tx))
+                    maxx = max(float(hx), float(tx))
+                    miny = min(float(hy), float(ty))
+                    maxy = max(float(hy), float(ty))
+                    if maxx < -margin or minx > float(W0 + margin) or maxy < -margin or miny > float(H0 + margin):
+                        continue
+                    flg = ("H" if hit else "-") + ("h" if holding else "-") + ("M" if miss else "-")
+                    note_lines.append(f"#{i:05d} nid={nid:6d} HOLD L{lid:02d} {'A' if above else 'B'} {flg} head=({hx:7.1f},{hy:7.1f}) tail=({tx:7.1f},{ty:7.1f})")
+                    shown += 1
+                else:
+                    try:
+                        sh = float(getattr(n, 'scroll_hit', 0.0))
+                    except:
+                        continue
+                    x, y = note_world_pos(float(lx), float(ly), float(lr), float(lsc), n, float(sh), False)
+                    ws = float(base_note_w) * float(getattr(n, 'size_px', 1.0) or 1.0)
+                    hs = float(base_note_h) * float(getattr(n, 'size_px', 1.0) or 1.0)
+                    if (float(x) + ws / 2 < -margin) or (float(x) - ws / 2 > float(W0 + margin)) or (float(y) + hs / 2 < -margin) or (float(y) - hs / 2 > float(H0 + margin)):
+                        continue
+                    kd = {1: 'TAP', 2: 'DRG', 4: 'FLK'}.get(kind, str(kind))
+                    flg = ("H" if hit else "-") + ("h" if holding else "-") + ("M" if miss else "-")
+                    note_lines.append(f"#{i:05d} nid={nid:6d} {kd:3s}  L{lid:02d} {'A' if above else 'B'} {flg} pos=({x:7.1f},{y:7.1f})")
+                    shown += 1
         except:
-            pass
-        row += 1
-        shown += 1
+            note_lines.append("(notes unavailable)")
+    else:
+        note_lines.append("(notes unavailable)")
+
+    _render_box_lines(cui, top + line_box_h, right_x, note_box_h, right_w, "on-screen notes", note_lines[: max(0, note_box_h - 2)], attr_head, attr_dim)
 
     try:
-        cui_view_str = 'help' if False else 'lines'
-        footer = f"lines {start+1}/{max(1, len(lids))}  view={cui_view_str}  refresh={float(record_curses_fps):.1f}Hz"
-        cui.addnstr(h - 1, 0, footer, max(0, w - 1))
+        footer = f"view=dashboard  line={sel_idx+1}/{max(1, len(lids))}  refresh={float(record_curses_fps):.1f}Hz"
+        _safe_addnstr(cui, int(h) - 1, 0, footer, max(0, int(w) - 1), attr_dim)
     except:
         pass
 

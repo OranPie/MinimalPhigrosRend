@@ -6,7 +6,7 @@ import math
 import os
 import time
 from collections import deque
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import pygame
 
@@ -60,6 +60,7 @@ from .pygame.recording_utils import (
     cleanup_curses_ui,
     handle_curses_input,
 )
+from .pygame.textual_ui import init_textual_ui, RecordUISnapshot
 from .pygame.init_helpers import (
     compute_total_notes,
     compute_chart_end,
@@ -108,9 +109,21 @@ def run(
     advance_segment_starts: List[float],
     advance_segment_bgm: List[Optional[str]],
     advance_base_dir: Optional[str],
+    judge: Optional[Judge] = None,
+    total_notes_override: Optional[int] = None,
+    chart_end_override: Optional[float] = None,
+    chart_info_override: Optional[Dict[str, Any]] = None,
+    ui_time_offset: float = 0.0,
+    stop_when_judged_cnt: Optional[int] = None,
+    stop_when_hit_total: Optional[int] = None,
+    should_stop_cb: Optional[Callable[[Dict[str, Any]], bool]] = None,
+    reuse_pygame: bool = False,
+    reuse_audio: bool = False,
+    audio: Any = None,
 ):
     logger = logging.getLogger(__name__)
-    pygame.init()
+    if (not bool(reuse_pygame)) or (not pygame.get_init()):
+        pygame.init()
 
     try:
         logger.info(
@@ -140,7 +153,6 @@ def run(
                 setattr(state, "_sigint", True)
             except:
                 pass
-
         try:
             _signal.signal(_signal.SIGINT, _on_sigint)
         except:
@@ -169,6 +181,29 @@ def run(
     record_render_text = bool(getattr(args, "record_render_text", True))
     record_preview_audio = bool(getattr(args, "record_preview_audio", False))
 
+    last_judge_event = None
+    last_judge_events_frame: List[Dict[str, Any]] = []
+
+    def _report_judge_event(ev: Dict[str, Any]):
+        nonlocal last_judge_event, last_judge_events_frame
+        try:
+            last_judge_event = dict(ev or {})
+            last_judge_events_frame.append(dict(ev or {}))
+        except Exception:
+            pass
+
+        # Also feed the UI event panels, independent of hit_debug.
+        try:
+            if (tui_ok and tui is not None) or (record_use_curses and cui_ok and cui is not None):
+                grade = str(ev.get("grade", ""))
+                t_now = float(ev.get("t_now", 0.0))
+                t_hit = float(ev.get("t_hit", 0.0))
+                nid = int(ev.get("note_id", -1))
+                dt_ms = (float(t_now) - float(t_hit)) * 1000.0
+                _push_cui_event(f"{grade:7s} nid={nid:6d} dt={float(dt_ms):+7.1f}ms", t_now=float(t_now))
+        except Exception:
+            pass
+
     logger.debug(
         "[pygame] record settings enabled=%s headless=%s fps=%s start=%s end=%s log_interval=%s log_notes=%s use_curses=%s",
         record_enabled,
@@ -181,7 +216,10 @@ def run(
         record_use_curses,
     )
 
-    audio = create_audio_backend(getattr(args, "audio_backend", "pygame"))
+    created_audio = False
+    if audio is None:
+        audio = create_audio_backend(getattr(args, "audio_backend", "pygame"))
+        created_audio = True
 
     try:
         logger.info("[pygame] audio backend: %s", str(getattr(args, "audio_backend", "pygame")))
@@ -371,7 +409,17 @@ def run(
     if record_headless:
         screen = pygame.Surface((W, H), pygame.SRCALPHA)
     else:
-        screen = pygame.display.set_mode((W, H))
+        if bool(reuse_pygame):
+            try:
+                _surf = pygame.display.get_surface()
+            except Exception:
+                _surf = None
+            if _surf is not None and tuple(getattr(_surf, "get_size")()) == (int(W), int(H)):
+                screen = _surf
+            else:
+                screen = pygame.display.set_mode((W, H))
+        else:
+            screen = pygame.display.set_mode((W, H))
         pygame.display.set_caption("Mini Phigros Renderer (Official + RPE, rot/alpha/color)")
         if respack and getattr(respack, "img", None):
             try:
@@ -409,8 +457,9 @@ def run(
 
     last_debug_ms = 0
 
-    # Apply start_time/end_time filtering for single charts
-    if not advance_active:
+    # Apply start_time/end_time filtering for single charts.
+    # Important: do NOT trim notes during recording; recording uses record_start_time to align timeline.
+    if (not advance_active) and (not record_enabled):
         notes = filter_notes_by_time(notes, getattr(args, "start_time", None), getattr(args, "end_time", None))
 
     # Minimal simultaneous grouping
@@ -418,9 +467,19 @@ def run(
 
     # Total notes
     total_notes = compute_total_notes(notes, advance_active, advance_cfg, W, H)
+    if total_notes_override is not None:
+        try:
+            total_notes = int(total_notes_override)
+        except Exception:
+            pass
 
     # chart end
     chart_end = compute_chart_end(notes, advance_active, getattr(args, "end_time", None) if (not advance_active) else None)
+    if chart_end_override is not None:
+        try:
+            chart_end = float(chart_end_override)
+        except Exception:
+            pass
 
     note_times_by_line = compute_note_times_by_line(notes)
     note_times_by_line_kind, note_times_by_kind = compute_note_times_by_line_kind(notes)
@@ -435,7 +494,8 @@ def run(
     states = [NoteState(n) for n in notes]
     idx_next = 0
 
-    judge = Judge()
+    if judge is None:
+        judge = Judge()
     hitfx: List[HitFX] = []
     particles: List[ParticleBurst] = []
 
@@ -502,6 +562,16 @@ def run(
     hit_debug = bool(getattr(args, "hit_debug", False))
     hit_debug_lines: deque = deque(maxlen=64)
     hit_debug_seq = 0
+    cui_events_incoming: List[str] = []
+    cui_events_past: deque = deque(maxlen=256)
+
+    def _push_cui_event(msg: str, *, t_now: float):
+        try:
+            s = f"{float(t_now):9.3f}s  {str(msg)}"
+            cui_events_incoming.append(s)
+            cui_events_past.appendleft(s)
+        except:
+            pass
 
     # timebase
     t0 = now_sec()
@@ -525,6 +595,9 @@ def run(
     cui_scroll = 0
     cui_view = 0
     cui_has_color = False
+
+    tui_ok = False
+    tui = None
 
     # input
     try:
@@ -563,7 +636,19 @@ def run(
     running = True
     note_render_count_last = 0
     note_dbg_cache: Dict[str, pygame.Surface] = {}
-    if record_use_curses:
+    tui_frame_step = 1
+    if record_enabled and record_fps > 1e-6:
+        try:
+            tui_frame_step = max(1, int(round(float(record_fps) / max(1e-6, float(record_curses_fps)))))
+        except Exception:
+            tui_frame_step = 1
+    if record_headless and bool(getattr(args, "record_use_textual", False)):
+        tui = getattr(args, "textual_ui", None)
+        tui_ok = tui is not None
+        if (not tui_ok) and (not bool(getattr(args, "no_curses", False))):
+            record_use_curses = True
+
+    if record_use_curses and (not tui_ok):
         cui_ok, cui, curses_mod, cui_has_color = init_curses_ui()
         if not cui_ok:
             record_use_curses = False
@@ -571,6 +656,19 @@ def run(
     while running:
         # Clear per-frame transform cache
         transform_cache.next_frame()
+
+        # On macOS, SDL/Cocoa event pumping must be done on the main thread.
+        # In headless recording with Textual UI, renderer may run in a worker thread;
+        # skip pygame event pumping entirely and rely on Textual state for quit/selection.
+        skip_pygame_events = bool(record_headless and tui_ok and tui is not None)
+
+        if skip_pygame_events:
+            try:
+                if bool(getattr(tui.state, "should_quit", False)):
+                    running = False
+                    break
+            except Exception:
+                pass
 
         if bool(getattr(state, "_sigint", False)):
             running = False
@@ -601,12 +699,16 @@ def run(
                     tr["stopped"] = True
 
         if record_headless:
-            pygame.event.pump()
             evs = []
         else:
-            evs = pygame.event.get()
+            evs = ([] if skip_pygame_events else pygame.event.get())
 
-        if record_use_curses and cui_ok and cui is not None:
+        try:
+            cui_events_incoming.clear()
+        except:
+            cui_events_incoming = []
+
+        if record_use_curses and (not tui_ok) and cui_ok and cui is not None:
             try:
                 should_quit, cui_view, cui_scroll, record_curses_fps = handle_curses_input(
                     cui,
@@ -625,6 +727,11 @@ def run(
             try:
                 pointers.process_event(ev)
             except Exception:
+                pass
+            try:
+                if (tui_ok and tui is not None) or (record_use_curses and cui_ok and cui is not None):
+                    _push_cui_event(f"pygame ev={getattr(ev, 'type', None)}", t_now=float((now_sec() - t0) * float(getattr(args, 'chart_speed', 1.0))))
+            except:
                 pass
             if ev.type == pygame.QUIT:
                 running = False
@@ -798,9 +905,37 @@ def run(
         def _mark_line_hit(lid: int, now_ms: int):
             line_last_hit_ms[lid] = int(now_ms)
 
-        def _push_hit_debug(*, t_now: float, t_hit: float, note_id: int, judgement: str, hold_percent: Optional[float] = None):
+        def _push_hit_debug(
+            *,
+            t_now: float,
+            t_hit: float,
+            note_id: int,
+            judgement: str,
+            hold_percent: Optional[float] = None,
+            note_kind: Optional[int] = None,
+            mh: Optional[bool] = None,
+            line_id: Optional[int] = None,
+            source: Optional[str] = None,
+        ):
             nonlocal hit_debug_seq
             if not hit_debug:
+                # still report judge event for playlist even if debug overlay is disabled
+                try:
+                    _report_judge_event(
+                        {
+                            "grade": str(judgement),
+                            "t_now": float(t_now),
+                            "t_hit": float(t_hit),
+                            "note_id": int(note_id),
+                            "note_kind": (int(note_kind) if note_kind is not None else None),
+                            "mh": (bool(mh) if mh is not None else None),
+                            "line_id": (int(line_id) if line_id is not None else None),
+                            "source": (str(source) if source is not None else None),
+                            "hold_percent": (float(hold_percent) if hold_percent is not None else None),
+                        }
+                    )
+                except Exception:
+                    pass
                 return
             hit_debug_seq += 1
             dt_ms = (float(t_now) - float(t_hit)) * 1000.0
@@ -817,6 +952,13 @@ def run(
                 "judgement": str(judgement),
                 "hold_percent": hp,
             })
+            try:
+                if hp is None:
+                    _push_cui_event(f"{str(judgement):7s} nid={int(note_id):6d} dt={float(dt_ms):+7.1f}ms", t_now=float(t_now))
+                else:
+                    _push_cui_event(f"{str(judgement):7s} nid={int(note_id):6d} dt={float(dt_ms):+7.1f}ms hold={float(hp)*100:5.1f}%", t_now=float(t_now))
+            except:
+                pass
 
         # Autoplay
         if getattr(args, "autoplay", False):
@@ -853,7 +995,16 @@ def run(
                             s.miss = True
                             s.judged = True
                             judge.mark_miss(s)
-                            _push_hit_debug(t_now=float(t_hit), t_hit=float(n.t_hit), note_id=int(getattr(n, "nid", -1)), judgement="MISS")
+                            _push_hit_debug(
+                                t_now=float(t_hit),
+                                t_hit=float(n.t_hit),
+                                note_id=int(getattr(n, "nid", -1)),
+                                judgement="MISS",
+                                note_kind=int(getattr(n, "kind", 0) or 0),
+                                mh=bool(getattr(n, "mh", False)),
+                                line_id=int(getattr(n, "line_id", -1)),
+                                source="autoplay",
+                            )
                             continue
                         _apply_grade(s, str(grade))
                         s.judged = True
@@ -872,7 +1023,16 @@ def run(
                         if respack and (not respack.hide_particles):
                             particles.append(ParticleBurst(x, y, int(t_fx * 1000.0), int(respack.hitfx_duration * 1000), c))
                         _mark_line_hit(n.line_id, int(t_fx * 1000.0))
-                        _push_hit_debug(t_now=float(t_fx), t_hit=float(n.t_hit), note_id=int(getattr(n, "nid", -1)), judgement=str(grade))
+                        _push_hit_debug(
+                            t_now=float(t_fx),
+                            t_hit=float(n.t_hit),
+                            note_id=int(getattr(n, "nid", -1)),
+                            judgement=str(grade),
+                            note_kind=int(getattr(n, "kind", 0) or 0),
+                            mh=bool(getattr(n, "mh", False)),
+                            line_id=int(getattr(n, "line_id", -1)),
+                            source="autoplay",
+                        )
                         if not record_enabled:
                             hitsound.play(n, int(t_fx * 1000.0), respack=respack)
                 else:
@@ -904,7 +1064,17 @@ def run(
                         s.hold_finalized = True
                         s.holding = False
                         judge.mark_miss(s)
-                        _push_hit_debug(t_now=float(t_hit), t_hit=float(n.t_hit), note_id=int(getattr(n, "nid", -1)), judgement="MISS", hold_percent=None)
+                        _push_hit_debug(
+                            t_now=float(t_hit),
+                            t_hit=float(n.t_hit),
+                            note_id=int(getattr(n, "nid", -1)),
+                            judgement="MISS",
+                            hold_percent=None,
+                            note_kind=int(getattr(n, "kind", 0) or 0),
+                            mh=bool(getattr(n, "mh", False)),
+                            line_id=int(getattr(n, "line_id", -1)),
+                            source="autoplay_hold",
+                        )
                         continue
 
                     if (not s.holding) and (grade is not None) and float(prev_autoplay_t) < float(t_hit) <= float(t):
@@ -928,7 +1098,17 @@ def run(
                         hitfx.append(HitFX(x, y, t_fx, c, lr))
                         if respack and (not respack.hide_particles):
                             particles.append(ParticleBurst(x, y, int(t_fx * 1000.0), int(respack.hitfx_duration * 1000), c))
-                        _push_hit_debug(t_now=float(t_fx), t_hit=float(n.t_hit), note_id=int(getattr(n, "nid", -1)), judgement=str(grade), hold_percent=0.0)
+                        _push_hit_debug(
+                            t_now=float(t_fx),
+                            t_hit=float(n.t_hit),
+                            note_id=int(getattr(n, "nid", -1)),
+                            judgement=str(grade),
+                            hold_percent=0.0,
+                            note_kind=int(getattr(n, "kind", 0) or 0),
+                            mh=bool(getattr(n, "mh", False)),
+                            line_id=int(getattr(n, "line_id", -1)),
+                            source="autoplay_hold",
+                        )
                         if not record_enabled:
                             hitsound.play(n, int(t_fx * 1000.0), respack=respack)
 
@@ -1043,12 +1223,62 @@ def run(
 
         # miss detection
         try:
-            detect_misses(states=states, idx_next=int(idx_next), t=float(t), miss_window=float(MISS_WINDOW), judge=judge)
+            detect_misses(
+                states=states,
+                idx_next=int(idx_next),
+                t=float(t),
+                miss_window=float(MISS_WINDOW),
+                judge=judge,
+                report_event_cb=_report_judge_event,
+            )
         except Exception:
             pass
 
         while idx_next < len(states) and states[idx_next].judged:
             idx_next += 1
+
+        stop_hit = False
+        stop_judged = False
+        if stop_when_hit_total is not None:
+            try:
+                stop_hit = int(getattr(judge, "hit_total", 0)) >= int(stop_when_hit_total)
+            except Exception:
+                stop_hit = False
+        if stop_when_judged_cnt is not None:
+            try:
+                stop_judged = int(getattr(judge, "judged_cnt", 0)) >= int(stop_when_judged_cnt)
+            except Exception:
+                stop_judged = False
+
+        if stop_hit or stop_judged:
+            running = False
+
+        if should_stop_cb is not None:
+            try:
+                if bool(
+                    should_stop_cb(
+                        {
+                            "t": float(t),
+                            "idx_next": int(idx_next),
+                            "total_notes": int(total_notes),
+                            "chart_end": float(chart_end),
+                            "judge": judge,
+                            "chart_info": (chart_info_override if chart_info_override is not None else chart_info),
+                            "record_enabled": bool(record_enabled),
+                            "record_headless": bool(record_headless),
+                            "last_judge_event": last_judge_event,
+                            "judge_events_frame": list(last_judge_events_frame),
+                        }
+                    )
+                ):
+                    running = False
+            except Exception:
+                pass
+
+        try:
+            last_judge_events_frame.clear()
+        except Exception:
+            last_judge_events_frame = []
 
         display_frame, line_text_draw_calls = _render_frame(t)
 
@@ -1072,6 +1302,14 @@ def run(
             except Exception:
                 pass
 
+        t_ui = float(t) + float(ui_time_offset or 0.0)
+        chart_end_ui = float(chart_end)
+        if chart_end_override is not None:
+            try:
+                chart_end_ui = float(chart_end_override)
+            except Exception:
+                chart_end_ui = float(chart_end)
+
         if record_headless and record_enabled:
             try:
                 post_render_record_headless_overlay(
@@ -1079,8 +1317,8 @@ def run(
                     display_frame=display_frame,
                     W=int(W),
                     H=int(H),
-                    t=float(t),
-                    chart_end=float(chart_end),
+                    t=float(t_ui),
+                    chart_end=float(chart_end_ui),
                     fmt=str(fmt),
                     idx_next=int(idx_next),
                     states_len=int(len(states)),
@@ -1219,7 +1457,147 @@ def run(
             record_frame_idx += 1
 
             if record_headless:
-                if record_use_curses and cui_ok and cui is not None:
+                if tui_ok and tui is not None:
+                    try:
+                        if bool(getattr(tui.state, 'should_quit', False)):
+                            running = False
+                        else:
+                            if (int(record_frame_idx) % int(tui_frame_step)) == 0:
+                                lids = sorted(note_times_by_line_kind.keys())
+                                sel_idx = int(getattr(tui.state, 'selected_line', 0) or 0)
+                                if sel_idx < 0:
+                                    sel_idx = 0
+                                if sel_idx > max(0, len(lids) - 1):
+                                    sel_idx = max(0, len(lids) - 1)
+                                try:
+                                    tui.state.selected_line = int(sel_idx)
+                                except Exception:
+                                    pass
+
+                                line_props: List[str] = []
+                                note_lines: List[str] = []
+                                if lids:
+                                    lid = int(lids[sel_idx])
+                                    approach_t = float(getattr(args, 'approach', 3.0) or 3.0)
+                                    past4, inc4 = line_note_counts_kind(note_times_by_line_kind, int(lid), float(t), float(approach_t))
+                                    try:
+                                        past_all, inc_all = line_note_counts(note_times_by_kind, float(t), float(approach_t))
+                                        line_props.append(f"ALL  P {past_all[0]}/{past_all[1]}/{past_all[2]}/{past_all[3]}   I {inc_all[0]}/{inc_all[1]}/{inc_all[2]}/{inc_all[3]}")
+                                    except Exception:
+                                        pass
+                                    line_props.append(f"selected L{lid:02d}  idx={sel_idx+1}/{max(1, len(lids))}")
+                                    line_props.append(f"P {past4[0]}/{past4[1]}/{past4[2]}/{past4[3]}   I {inc4[0]}/{inc4[1]}/{inc4[2]}/{inc4[3]}")
+                                    try:
+                                        lx, ly, lr, la01, lsc, laraw = eval_line_state(lines[int(lid)], float(t))
+                                        line_props.append(f"pos=({lx:7.1f},{ly:7.1f})  rot={lr:+7.3f}  alpha01={la01:4.2f} raw={laraw:+6.3f}")
+                                        line_props.append(f"scroll={lsc:10.2f}")
+                                        try:
+                                            tr_rot = track_seg_state(getattr(lines[int(lid)], 'rot', None))
+                                            tr_alp = track_seg_state(getattr(lines[int(lid)], 'alpha', None))
+                                            tr_scr = track_seg_state(getattr(lines[int(lid)], 'scroll_px', None))
+                                            line_props.append(f"seg rot={tr_rot}  a={tr_alp}  scr={tr_scr}")
+                                        except Exception:
+                                            pass
+                                    except Exception:
+                                        line_props.append("(line state unavailable)")
+                                else:
+                                    line_props.append("no lines")
+
+                                try:
+                                    margin = 120
+                                    if idx_next is None:
+                                        start_i = 0
+                                    else:
+                                        start_i = max(0, int(idx_next) - 64)
+                                    end_i = min(len(notes), start_i + 512)
+                                    shown = 0
+                                    for i in range(start_i, end_i):
+                                        if shown >= 48:
+                                            break
+                                        n = notes[i]
+                                        s = states[i] if i < len(states) else None
+                                        try:
+                                            t_enter = float(getattr(n, 't_enter', -1e9))
+                                        except Exception:
+                                            t_enter = -1e9
+                                        if float(t) < float(t_enter):
+                                            continue
+
+                                        lid = int(getattr(n, 'line_id', 0) or 0)
+                                        if lid < 0 or lid >= len(lines):
+                                            continue
+                                        try:
+                                            lx, ly, lr, la01, lsc, laraw = eval_line_state(lines[lid], float(t))
+                                        except Exception:
+                                            continue
+
+                                        kind = int(getattr(n, 'kind', 0) or 0)
+                                        above = bool(getattr(n, 'above', True))
+                                        nid = int(getattr(n, 'nid', i))
+                                        hit = bool(getattr(s, 'hit', False)) if s is not None else False
+                                        holding = bool(getattr(s, 'holding', False)) if s is not None else False
+                                        miss = bool(getattr(s, 'miss', False)) if s is not None else False
+                                        flg = ("H" if hit else "-") + ("h" if holding else "-") + ("M" if miss else "-")
+
+                                        if kind == 3:
+                                            sh = float(getattr(n, 'scroll_hit', 0.0) or 0.0)
+                                            se = float(getattr(n, 'scroll_end', 0.0) or 0.0)
+                                            if hit or holding or (float(t) >= float(getattr(n, 't_hit', 0.0) or 0.0)):
+                                                head_target_scroll = sh if float(lsc) <= float(sh) else float(lsc)
+                                            else:
+                                                head_target_scroll = float(sh)
+                                            hx, hy = note_world_pos(float(lx), float(ly), float(lr), float(lsc), n, float(head_target_scroll), False)
+                                            tx, ty = note_world_pos(float(lx), float(ly), float(lr), float(lsc), n, float(se), True)
+                                            minx = min(float(hx), float(tx))
+                                            maxx = max(float(hx), float(tx))
+                                            miny = min(float(hy), float(ty))
+                                            maxy = max(float(hy), float(ty))
+                                            if maxx < -margin or minx > float(W + margin) or maxy < -margin or miny > float(H + margin):
+                                                continue
+                                            note_lines.append(f"#{i:05d} nid={nid:6d} HOLD L{lid:02d} {'A' if above else 'B'} {flg} head=({hx:7.1f},{hy:7.1f}) tail=({tx:7.1f},{ty:7.1f})")
+                                            shown += 1
+                                        else:
+                                            sh = float(getattr(n, 'scroll_hit', 0.0) or 0.0)
+                                            x, y = note_world_pos(float(lx), float(ly), float(lr), float(lsc), n, float(sh), False)
+                                            ws = float(base_note_w) * float(getattr(n, 'size_px', 1.0) or 1.0)
+                                            hs = float(base_note_h) * float(getattr(n, 'size_px', 1.0) or 1.0)
+                                            if (float(x) + ws / 2 < -margin) or (float(x) - ws / 2 > float(W + margin)) or (float(y) + hs / 2 < -margin) or (float(y) - hs / 2 > float(H + margin)):
+                                                continue
+                                            kd = {1: 'TAP', 2: 'DRG', 4: 'FLK'}.get(kind, str(kind))
+                                            note_lines.append(f"#{i:05d} nid={nid:6d} {kd:3s}  L{lid:02d} {'A' if above else 'B'} {flg} pos=({x:7.1f},{y:7.1f})")
+                                            shown += 1
+                                except Exception:
+                                    note_lines = ["(notes unavailable)"]
+
+                                snap = RecordUISnapshot(
+                                    header_lines=(
+                                        (lambda: (
+                                            [
+                                                f"t={float(t):9.3f}s  frame={int(record_frame_idx):8d}  fps={float(record_fps):5.1f}",
+                                                f"start={float(record_start_time):9.3f}s  end={(float(record_end_time) if record_end_time is not None else float(chart_end)):9.3f}s  chart_end={float(chart_end):9.3f}s",
+                                                f"combo={int(getattr(judge, 'combo', 0) or 0):5d}  judged={int(getattr(judge, 'judged_cnt', 0) or 0):6d}  acc={(float(getattr(judge, 'acc_sum', 0.0) or 0.0) / max(1, int(getattr(judge, 'judged_cnt', 0) or 0))):.4f}",
+                                            ]
+                                        ))()
+                                    ),
+                                    progress01=(
+                                        (lambda: (
+                                            0.0
+                                            if (float((record_end_time if record_end_time is not None else chart_end) or 0.0) - float(record_start_time)) <= 1e-6
+                                            else (float(t) - float(record_start_time)) / float((record_end_time if record_end_time is not None else chart_end) - float(record_start_time))
+                                        ))()
+                                    ),
+                                    incoming=list(cui_events_incoming)[:80],
+                                    past=list(cui_events_past)[:200],
+                                    line_props=line_props[:40],
+                                    notes=note_lines[:120],
+                                    selected_line=int(sel_idx),
+                                    lines_total=int(len(lids)),
+                                )
+                                tui.push(snap)
+                    except Exception:
+                        pass
+
+                elif record_use_curses and cui_ok and cui is not None:
                     cui_scroll = render_curses_ui(
                         cui,
                         curses_mod,
@@ -1241,6 +1619,14 @@ def run(
                         note_times_by_line_kind=note_times_by_line_kind,
                         approach=float(getattr(args, "approach", 3.0) or 3.0),
                         args=args,
+                        events_incoming=list(cui_events_incoming),
+                        events_past=list(cui_events_past),
+                        lines=lines,
+                        notes=notes,
+                        states=states,
+                        idx_next=int(idx_next),
+                        W=int(W),
+                        H=int(H),
                     )
                     last_cui_update_t = float(t)
                 else:
@@ -1290,9 +1676,9 @@ def run(
             small=small,
             W=int(W),
             H=int(H),
-            t=float(t),
-            chart_end=float(chart_end),
-            chart_info=chart_info,
+            t=float(t_ui),
+            chart_end=float(chart_end_ui),
+            chart_info=(chart_info_override if chart_info_override is not None else chart_info),
             judge=judge,
             total_notes=int(total_notes),
             idx_next=int(idx_next),
@@ -1315,6 +1701,8 @@ def run(
     if record_use_curses and cui_ok and cui is not None:
         cleanup_curses_ui(cui)
 
+    # Textual UI is owned by the main thread (record.py). Do not stop it here.
+
     if _signal is not None and _old_sigint is not None:
         try:
             _signal.signal(_signal.SIGINT, _old_sigint)
@@ -1328,5 +1716,11 @@ def run(
         except:
             pass
 
-    audio.close()
-    pygame.quit()
+    try:
+        if created_audio and (not bool(reuse_audio)):
+            audio.close()
+    except Exception:
+        pass
+
+    if not bool(reuse_pygame):
+        pygame.quit()

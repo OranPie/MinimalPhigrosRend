@@ -320,7 +320,10 @@ def render_frame(
                     float(ly) + float(ty) * x_local + float(ny) * y_local,
                 )
             else:
-                head_target_scroll = n.scroll_hit if float(sc_now) <= float(n.scroll_hit) else float(sc_now)
+                if bool(getattr(s, "hit", False)) or bool(getattr(s, "holding", False)) or (float(t_draw) >= float(n.t_hit)):
+                    head_target_scroll = n.scroll_hit if float(sc_now) <= float(n.scroll_hit) else float(sc_now)
+                else:
+                    head_target_scroll = n.scroll_hit
                 dy = (float(head_target_scroll) - float(sc_now)) * float(flow_mul)
                 if hold_keep_head and dy < 0.0:
                     dy = 0.0

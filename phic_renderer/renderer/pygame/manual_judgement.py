@@ -149,6 +149,10 @@ def apply_manual_judgement(
                     t_hit=float(n.t_hit),
                     note_id=int(getattr(n, "nid", -1)),
                     judgement=str(grade),
+                    note_kind=int(getattr(n, "kind", 0) or 0),
+                    mh=bool(getattr(n, "mh", False)),
+                    line_id=int(getattr(n, "line_id", -1)),
+                    source="manual",
                 )
                 if not record_enabled:
                     hitsound.play(n, int(t * 1000.0), respack=respack)
@@ -187,6 +191,10 @@ def apply_manual_judgement(
                     t_hit=float(n.t_hit),
                     note_id=int(getattr(n, "nid", -1)),
                     judgement="PERFECT",
+                    note_kind=int(getattr(n, "kind", 0) or 0),
+                    mh=bool(getattr(n, "mh", False)),
+                    line_id=int(getattr(n, "line_id", -1)),
+                    source="manual",
                 )
                 if not record_enabled:
                     hitsound.play(n, int(t * 1000.0), respack=respack)
@@ -240,6 +248,10 @@ def apply_manual_judgement(
                     note_id=int(getattr(n, "nid", -1)),
                     judgement=str(grade_h),
                     hold_percent=0.0,
+                    note_kind=int(getattr(n, "kind", 0) or 0),
+                    mh=bool(getattr(n, "mh", False)),
+                    line_id=int(getattr(n, "line_id", -1)),
+                    source="manual_hold",
                 )
                 if not record_enabled:
                     hitsound.play(n, int(t * 1000.0), respack=respack)

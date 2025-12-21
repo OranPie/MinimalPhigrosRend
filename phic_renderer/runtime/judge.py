@@ -17,8 +17,10 @@ class Judge:
         self.max_combo = 0
         self.acc_sum = 0.0     # cumulative weight
         self.judged_cnt = 0    # judged count
+        self.hit_total = 0
 
     def bump(self):
+        self.hit_total += 1
         self.combo += 1
         self.max_combo = max(self.max_combo, self.combo)
 

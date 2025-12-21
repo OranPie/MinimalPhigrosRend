@@ -32,6 +32,8 @@ def draw_hold_3slice(
     if not respack:
         return
 
+    a = int(255 * clamp(alpha01, 0.0, 1.0))
+
     img_key = "hold_mh.png" if mh else "hold.png"
     img = respack.img[img_key]
     iw, ih = img.get_width(), img.get_height()
@@ -75,7 +77,11 @@ def draw_hold_3slice(
 
     if cached_surf is not None:
         # Use cached surface
-        spr = cached_surf
+        try:
+            spr = cached_surf.copy()
+            spr.set_alpha(a)
+        except Exception:
+            spr = cached_surf
     else:
         # Render hold surface from scratch
         # Use surface pool to avoid per-frame allocation
@@ -171,7 +177,6 @@ def draw_hold_3slice(
         except:
             pass
 
-        a = int(255 * clamp(alpha01, 0.0, 1.0))
         surf.set_alpha(a)
 
         spr = pygame.transform.rotozoom(surf, rot_deg, 1.0)
