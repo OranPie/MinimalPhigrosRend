@@ -23,3 +23,14 @@ class _TimeWarpIntegral:
         self.speed = float(speed)
         self.offset = float(offset)
         self.time_offset = float(time_offset)
+
+    def integral(self, t: float) -> float:
+        lt = (float(t) - self.start_at) * self.speed - self.offset + self.time_offset
+        if hasattr(self.base, "integral"):
+            return float(self.base.integral(lt))
+        if hasattr(self.base, "eval"):
+            return float(self.base.eval(lt))
+        return float(self.base(lt))
+
+    def __call__(self, t: float) -> float:
+        return self.integral(t)

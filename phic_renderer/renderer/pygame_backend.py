@@ -85,6 +85,8 @@ from .pygame.frame_renderer import render_frame as render_frame_impl
 from .pygame.record_writer import save_record_png, write_record_frame
 from .pygame.post_ui import post_render_non_headless, post_render_record_headless_overlay
 from .pygame.motion_blur import apply_motion_blur
+from .pygame.simulateplay import SimulatePlayer
+from .pygame.debug_pointer import draw_debug_pointer
 
 def run(
     args: Any,
@@ -153,6 +155,7 @@ def run(
                 setattr(state, "_sigint", True)
             except:
                 pass
+
         try:
             _signal.signal(_signal.SIGINT, _on_sigint)
         except:
@@ -300,7 +303,7 @@ def run(
         chart_speed = 1.0
     start_time_sec = 0.0
     end_time_sec = None
-    if (not advance_active) and getattr(args, "start_time", None) is not None:
+    if getattr(args, "start_time", None) is not None:
         try:
             start_time_sec = float(getattr(args, "start_time"))
         except:
@@ -322,6 +325,11 @@ def run(
                 volume=clamp(getattr(args, "bgm_volume", 0.8), 0.0, 1.0),
                 start_pos_sec=float(music_start_pos_sec),
             )
+            try:
+                if hasattr(audio, "set_music_speed"):
+                    audio.set_music_speed(float(chart_speed))
+            except Exception:
+                pass
             use_bgm_clock = True
             logger.info(
                 "[pygame] bgm play (file=%s, volume=%s, start_pos=%s)",
@@ -333,6 +341,8 @@ def run(
             logger.info("[pygame] bgm suppressed due to recording (file=%s)", str(bgm_file))
     else:
         use_bgm_clock = False
+        if bool(getattr(args, "advance_lazy_load", False)):
+            advance_mix = False
         if advance_mix:
             try:
                 if advance_tracks_bgm:
@@ -377,17 +387,42 @@ def run(
                 if advance_segment_bgm:
                     if advance_segment_bgm[0] and os.path.exists(str(advance_segment_bgm[0])):
                         if not record_enabled:
-                            audio.play_music_file(str(advance_segment_bgm[0]), volume=clamp(getattr(args, "bgm_volume", 0.8), 0.0, 1.0))
+                            audio.play_music_file(
+                                str(advance_segment_bgm[0]),
+                                volume=clamp(getattr(args, "bgm_volume", 0.8), 0.0, 1.0),
+                                start_pos_sec=float(music_start_pos_sec),
+                            )
+                            try:
+                                if hasattr(audio, "set_music_speed"):
+                                    audio.set_music_speed(float(chart_speed))
+                            except Exception:
+                                pass
                         advance_bgm_active = True
                         advance_segment_idx = 0
                         logger.info("[pygame] advance bgm: using segment[0]=%s", str(advance_segment_bgm[0]))
                 elif bgm_file and os.path.exists(str(bgm_file)):
                     if not record_enabled:
-                        audio.play_music_file(str(bgm_file), volume=clamp(getattr(args, "bgm_volume", 0.8), 0.0, 1.0))
+                        audio.play_music_file(
+                            str(bgm_file),
+                            volume=clamp(getattr(args, "bgm_volume", 0.8), 0.0, 1.0),
+                            start_pos_sec=float(music_start_pos_sec),
+                        )
+                        try:
+                            if hasattr(audio, "set_music_speed"):
+                                audio.set_music_speed(float(chart_speed))
+                        except Exception:
+                            pass
                     advance_bgm_active = True
                     logger.info("[pygame] advance bgm: using bgm_file=%s", str(bgm_file))
             except Exception:
                 pass
+
+        if (not record_enabled) and (not advance_mix) and advance_bgm_active and advance_segment_bgm and advance_segment_starts:
+            try:
+                if int(advance_segment_idx) < 0:
+                    advance_segment_idx = 0
+            except Exception:
+                advance_segment_idx = 0
 
     if getattr(args, "multicolor_lines", False):
         for ln in lines:
@@ -430,6 +465,14 @@ def run(
                         respack.img[k] = surf
                 try:
                     respack.hitfx_sheet = respack.img.get("hit_fx.png", respack.hitfx_sheet)
+                except:
+                    pass
+
+                try:
+                    respack.hitfx_sheet_good = respack.img.get(
+                        "hit_fx.good.png",
+                        getattr(respack, "hitfx_sheet_good", respack.hitfx_sheet),
+                    )
                 except:
                     pass
 
@@ -575,7 +618,7 @@ def run(
 
     # timebase
     t0 = now_sec()
-    if (not advance_active) and (not use_bgm_clock) and start_time_sec > 1e-9:
+    if (not use_bgm_clock) and start_time_sec > 1e-9:
         t0 = now_sec() - float(music_start_pos_sec)
     paused = False
     pause_t = 0.0
@@ -586,6 +629,8 @@ def run(
 
     trail_dim_cache_key: Optional[Tuple[int, int, int]] = None
     trail_dim_cache: Optional[pygame.Surface] = None
+
+    debug_pointer_hist: Dict[int, Any] = {}
 
     last_record_log_t = -1e9
     last_cui_update_t = -1e9
@@ -605,6 +650,16 @@ def run(
     except Exception:
         _flick_thr_ratio = 0.02
     pointers = PointerManager(int(W), int(H), float(_flick_thr_ratio))
+
+    sim_player = None
+    if bool(getattr(args, "simulateplay", False)) and (not bool(getattr(args, "autoplay", False))):
+        try:
+            sim_player = SimulatePlayer(
+                mode=str(getattr(args, "simulateplay_mode", "conservative")),
+                max_pointers=int(getattr(args, "simulateplay_max_pointers", 2) or 0),
+            )
+        except Exception:
+            sim_player = None
 
     # sizes
     base_note_w = int(0.06 * W)
@@ -681,7 +736,7 @@ def run(
 
         # schedule advance mixed sounds
         if (not record_enabled or record_preview_audio) and advance_active and advance_sound_tracks:
-            now_t = (now_sec() - t0) * float(getattr(args, "chart_speed", 1.0))
+            now_t = ((now_sec() - t0) - float(offset)) * float(getattr(args, "chart_speed", 1.0))
             for tr in advance_sound_tracks:
                 if tr.get("stopped"):
                     continue
@@ -757,7 +812,7 @@ def run(
                             t0 += now_sec() - pause_t
                         pause_frame = None
                 elif ev.key == pygame.K_r:
-                    if (not advance_active) and (not use_bgm_clock) and start_time_sec > 1e-9:
+                    if (not use_bgm_clock) and start_time_sec > 1e-9:
                         t0 = now_sec() - float(music_start_pos_sec)
                     else:
                         t0 = now_sec()
@@ -769,6 +824,25 @@ def run(
                             volume=clamp(getattr(args, "bgm_volume", 0.8), 0.0, 1.0),
                             start_pos_sec=float(music_start_pos_sec),
                         )
+                        try:
+                            if hasattr(audio, "set_music_speed"):
+                                audio.set_music_speed(float(chart_speed))
+                        except Exception:
+                            pass
+
+                    if (not record_enabled) and advance_active and advance_segment_bgm:
+                        try:
+                            if advance_segment_bgm[0] and os.path.exists(str(advance_segment_bgm[0])):
+                                audio.stop_music()
+                                audio.play_music_file(
+                                    str(advance_segment_bgm[0]),
+                                    volume=clamp(getattr(args, "bgm_volume", 0.8), 0.0, 1.0),
+                                    start_pos_sec=float(music_start_pos_sec),
+                                )
+                                if hasattr(audio, "set_music_speed"):
+                                    audio.set_music_speed(float(chart_speed))
+                        except Exception:
+                            pass
                     for s in states:
                         s.judged = s.hit = s.holding = s.released_early = s.miss = False
                     idx_next = 0
@@ -799,6 +873,50 @@ def run(
             t = (audio_t - offset) * float(chart_speed)
         else:
             t = ((now_sec() - t0) - offset) * float(chart_speed)
+
+        if sim_player is not None:
+            try:
+                sim_player.step(
+                    t=float(t),
+                    W=int(W),
+                    H=int(H),
+                    lines=lines,
+                    states=states,
+                    idx_next=int(idx_next),
+                    pointers=pointers,
+                )
+            except Exception:
+                pass
+
+        if (not record_enabled) and advance_active and (not advance_mix) and advance_bgm_active and advance_segment_bgm and advance_segment_starts:
+            try:
+                tgt = int(advance_segment_idx)
+                for i in range(int(len(advance_segment_starts))):
+                    if float(t) >= float(advance_segment_starts[i]):
+                        tgt = int(i)
+                    else:
+                        break
+                if tgt != int(advance_segment_idx):
+                    pth = None
+                    try:
+                        pth = advance_segment_bgm[tgt] if tgt < len(advance_segment_bgm) else None
+                    except Exception:
+                        pth = None
+                    if pth and os.path.exists(str(pth)):
+                        audio.stop_music()
+                        audio.play_music_file(
+                            str(pth),
+                            volume=clamp(getattr(args, "bgm_volume", 0.8), 0.0, 1.0),
+                            start_pos_sec=0.0,
+                        )
+                        try:
+                            if hasattr(audio, "set_music_speed"):
+                                audio.set_music_speed(float(chart_speed))
+                        except Exception:
+                            pass
+                        advance_segment_idx = int(tgt)
+            except Exception:
+                pass
 
         if record_enabled:
             if record_end_time is not None and float(t) > float(record_end_time):
@@ -1019,7 +1137,8 @@ def run(
                             c = (int(rr), int(gg), int(bb), 255)
                         elif respack:
                             c = respack.judge_colors.get("PERFECT", c)
-                        hitfx.append(HitFX(x, y, t_fx, c, lr))
+                        var = "good" if str(grade).upper() == "GOOD" else ""
+                        hitfx.append(HitFX(x, y, t_fx, c, lr, var))
                         if respack and (not respack.hide_particles):
                             particles.append(ParticleBurst(x, y, int(t_fx * 1000.0), int(respack.hitfx_duration * 1000), c))
                         _mark_line_hit(n.line_id, int(t_fx * 1000.0))
@@ -1095,7 +1214,8 @@ def run(
                         elif respack:
                             c = respack.judge_colors.get(grade, c)
                             c = respack.judge_colors.get("PERFECT", c)
-                        hitfx.append(HitFX(x, y, t_fx, c, lr))
+                        var = "good" if str(grade).upper() == "GOOD" else ""
+                        hitfx.append(HitFX(x, y, t_fx, c, lr, var))
                         if respack and (not respack.hide_particles):
                             particles.append(ParticleBurst(x, y, int(t_fx * 1000.0), int(respack.hitfx_duration * 1000), c))
                         _push_hit_debug(
@@ -1302,6 +1422,25 @@ def run(
             except Exception:
                 pass
 
+        if getattr(args, "debug_pointer", False):
+            try:
+                draw_debug_pointer(
+                    display_frame=display_frame,
+                    args=args,
+                    W=int(W),
+                    H=int(H),
+                    RW=int(RW),
+                    RH=int(RH),
+                    overrender=float(overrender),
+                    expand=float(expand),
+                    pointers=pointers,
+                    small=small,
+                    hist=debug_pointer_hist,
+                    now_ms=int(float(t) * 1000.0),
+                )
+            except Exception:
+                pass
+
         t_ui = float(t) + float(ui_time_offset or 0.0)
         chart_end_ui = float(chart_end)
         if chart_end_override is not None:
@@ -1309,6 +1448,8 @@ def run(
                 chart_end_ui = float(chart_end_override)
             except Exception:
                 chart_end_ui = float(chart_end)
+
+        playlist_timeline = bool(chart_end_override is not None) or abs(float(ui_time_offset or 0.0)) > 1e-9
 
         if record_headless and record_enabled:
             try:
@@ -1333,6 +1474,7 @@ def run(
                     advance_active=bool(advance_active),
                     hit_debug=bool(hit_debug),
                     hit_debug_lines=hit_debug_lines,
+                    start_time=(None if playlist_timeline else getattr(args, "start_time", None)),
                 )
             except Exception:
                 pass
@@ -1573,8 +1715,42 @@ def run(
                                     header_lines=(
                                         (lambda: (
                                             [
-                                                f"t={float(t):9.3f}s  frame={int(record_frame_idx):8d}  fps={float(record_fps):5.1f}",
-                                                f"start={float(record_start_time):9.3f}s  end={(float(record_end_time) if record_end_time is not None else float(chart_end)):9.3f}s  chart_end={float(chart_end):9.3f}s",
+                                                f"t={float(t_ui if playlist_timeline else t):9.3f}s  frame={int(record_frame_idx):8d}  fps={float(record_fps):5.1f}",
+                                                f"start={0.0 if playlist_timeline else float(record_start_time):9.3f}s  end={(float(chart_end_ui) if playlist_timeline else (float(record_end_time) if record_end_time is not None else float(chart_end))):9.3f}s  chart_end={float(chart_end_ui if playlist_timeline else chart_end):9.3f}s",
+                                                (lambda: (
+                                                    ""
+                                                    if not (
+                                                        isinstance((chart_info_override if chart_info_override is not None else chart_info), dict)
+                                                        and (chart_info_override if chart_info_override is not None else chart_info).get("seg_end_time") is not None
+                                                        and (chart_info_override if chart_info_override is not None else chart_info).get("seg_start_time") is not None
+                                                    )
+                                                    else (
+                                                        (lambda _ci: (
+                                                            "song_t={:9.3f}s  song={:6.2f}%".format(
+                                                                float(t) - float(_ci.get("seg_start_time", 0.0) or 0.0),
+                                                                100.0
+                                                                * (
+                                                                    0.0
+                                                                    if (
+                                                                        float(_ci.get("seg_end_time", 0.0) or 0.0)
+                                                                        - float(_ci.get("seg_start_time", 0.0) or 0.0)
+                                                                    )
+                                                                    <= 1e-6
+                                                                    else clamp(
+                                                                        (float(t) - float(_ci.get("seg_start_time", 0.0) or 0.0))
+                                                                        / max(
+                                                                            1e-6,
+                                                                            float(_ci.get("seg_end_time", 0.0) or 0.0)
+                                                                            - float(_ci.get("seg_start_time", 0.0) or 0.0),
+                                                                        ),
+                                                                        0.0,
+                                                                        1.0,
+                                                                    )
+                                                                ),
+                                                            )
+                                                        ))((chart_info_override if chart_info_override is not None else chart_info))
+                                                    )
+                                                ))(),
                                                 f"combo={int(getattr(judge, 'combo', 0) or 0):5d}  judged={int(getattr(judge, 'judged_cnt', 0) or 0):6d}  acc={(float(getattr(judge, 'acc_sum', 0.0) or 0.0) / max(1, int(getattr(judge, 'judged_cnt', 0) or 0))):.4f}",
                                             ]
                                         ))()
@@ -1582,8 +1758,15 @@ def run(
                                     progress01=(
                                         (lambda: (
                                             0.0
-                                            if (float((record_end_time if record_end_time is not None else chart_end) or 0.0) - float(record_start_time)) <= 1e-6
-                                            else (float(t) - float(record_start_time)) / float((record_end_time if record_end_time is not None else chart_end) - float(record_start_time))
+                                            if (
+                                                (float(chart_end_ui) if playlist_timeline else float((record_end_time if record_end_time is not None else chart_end) or 0.0))
+                                                - (0.0 if playlist_timeline else float(record_start_time))
+                                            ) <= 1e-6
+                                            else (float(t_ui if playlist_timeline else t) - (0.0 if playlist_timeline else float(record_start_time)))
+                                            / float(
+                                                (float(chart_end_ui) if playlist_timeline else float((record_end_time if record_end_time is not None else chart_end) or 0.0))
+                                                - (0.0 if playlist_timeline else float(record_start_time))
+                                            )
                                         ))()
                                     ),
                                     incoming=list(cui_events_incoming)[:80],
@@ -1604,14 +1787,14 @@ def run(
                         bool(cui_has_color),
                         int(cui_view),
                         int(cui_scroll),
-                        t=float(t),
+                        t=float(t_ui if playlist_timeline else t),
                         record_frame_idx=int(record_frame_idx),
-                        record_start_time=float(record_start_time),
-                        record_end_time=record_end_time,
+                        record_start_time=(0.0 if playlist_timeline else float(record_start_time)),
+                        record_end_time=(float(chart_end_ui) if playlist_timeline else record_end_time),
                         record_fps=float(record_fps),
                         record_wall_t0=float(record_wall_t0),
                         record_curses_fps=float(record_curses_fps),
-                        chart_end=float(chart_end),
+                        chart_end=float(chart_end_ui if playlist_timeline else chart_end),
                         judge=judge,
                         total_notes=int(total_notes),
                         particles_count=int(len(particles)),
@@ -1670,6 +1853,39 @@ def run(
         if record_headless:
             continue
 
+        _ui_ci = (chart_info_override if chart_info_override is not None else chart_info)
+        try:
+            if bool(advance_active) and isinstance(_ui_ci, dict) and bool(getattr(args, "advance_seq_overlay", False)):
+                seg_st = None
+                seg_en = None
+                seg_i = None
+                seg_n = None
+                for ln in lines:
+                    try:
+                        st = getattr(ln, "advance_seq_start_at", None)
+                        en = getattr(ln, "advance_seq_end_at", None)
+                        if st is None or en is None:
+                            continue
+                        if float(t_ui) < float(st) or float(t_ui) >= float(en):
+                            continue
+                        seg_st = float(st)
+                        seg_en = float(en)
+                        seg_i = getattr(ln, "advance_seq_index", None)
+                        seg_n = getattr(ln, "advance_seq_total", None)
+                        break
+                    except Exception:
+                        continue
+                if seg_st is not None and seg_en is not None:
+                    _ui_ci = dict(_ui_ci)
+                    _ui_ci["seg_start_time"] = float(seg_st)
+                    _ui_ci["seg_end_time"] = float(seg_en)
+                    if seg_i is not None:
+                        _ui_ci["seg_index"] = int(seg_i)
+                    if seg_n is not None:
+                        _ui_ci["seg_total"] = int(seg_n)
+        except Exception:
+            pass
+
         render_ui_overlay(
             screen,
             font=font,
@@ -1678,7 +1894,7 @@ def run(
             H=int(H),
             t=float(t_ui),
             chart_end=float(chart_end_ui),
-            chart_info=(chart_info_override if chart_info_override is not None else chart_info),
+            chart_info=_ui_ci,
             judge=judge,
             total_notes=int(total_notes),
             idx_next=int(idx_next),
@@ -1691,7 +1907,7 @@ def run(
             hit_debug=bool(hit_debug),
             hit_debug_lines=hit_debug_lines,
             advance_active=bool(advance_active),
-            start_time=getattr(args, "start_time", None),
+            start_time=(None if playlist_timeline else getattr(args, "start_time", None)),
             args=args,
             clock=clock,
         )

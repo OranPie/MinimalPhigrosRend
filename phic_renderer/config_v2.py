@@ -151,6 +151,9 @@ def flatten_config_v2(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[Dic
     pull("bg_dim", assets, "bg_dim")
 
     pull("autoplay", gameplay, "autoplay")
+    pull("simulateplay", gameplay, "simulateplay")
+    pull("simulateplay_mode", gameplay, "simulateplay_mode")
+    pull("simulateplay_max_pointers", gameplay, "simulateplay_max_pointers")
     pull("judge_script", gameplay, "judge_script")
     pull("hold_fx_interval_ms", gameplay, "hold_fx_interval_ms")
     pull("hold_tail_tol", gameplay, "hold_tail_tol")
@@ -163,10 +166,15 @@ def flatten_config_v2(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[Dic
     pull("lang", ui, "lang")
     pull("font_path", ui, "font_path")
     pull("font_size_multiplier", ui, "font_size_multiplier")
+    pull("advance_lazy_load", ui, "advance_lazy_load")
+    pull("advance_lazy_cache", ui, "advance_lazy_cache")
+    pull("advance_lazy_preload", ui, "advance_lazy_preload")
+    pull("advance_lazy_scan_total_notes", ui, "advance_lazy_scan_total_notes")
 
     pull("debug_line_label", debug, "debug_line_label")
     pull("debug_line_stats", debug, "debug_line_stats")
     pull("debug_judge_windows", debug, "debug_judge_windows")
+    pull("debug_pointer", debug, "debug_pointer")
     pull("debug_note_info", debug, "debug_note_info")
     pull("debug_particles", debug, "debug_particles")
     pull("hit_debug", debug, "hit_debug")
@@ -224,6 +232,9 @@ def dump_config_v2(args: Any, *, mods: Optional[Dict[str, Any]] = None, lang: Op
         },
         "gameplay": {
             "autoplay": bool(getattr(args, "autoplay", False)),
+            "simulateplay": bool(getattr(args, "simulateplay", False)),
+            "simulateplay_mode": str(getattr(args, "simulateplay_mode", "conservative")),
+            "simulateplay_max_pointers": int(getattr(args, "simulateplay_max_pointers", 2) or 2),
             "judge_script": getattr(args, "judge_script", None),
             "hold_fx_interval_ms": int(getattr(args, "hold_fx_interval_ms", 200) or 200),
             "hold_tail_tol": float(getattr(args, "hold_tail_tol", 0.8) or 0.8),
@@ -237,6 +248,10 @@ def dump_config_v2(args: Any, *, mods: Optional[Dict[str, Any]] = None, lang: Op
             "no_title_overlay": bool(getattr(args, "no_title_overlay", False)),
             "font_path": getattr(args, "font_path", None),
             "font_size_multiplier": float(getattr(args, "font_size_multiplier", 1.0)),
+            "advance_lazy_load": bool(getattr(args, "advance_lazy_load", False)),
+            "advance_lazy_cache": int(getattr(args, "advance_lazy_cache", 1) or 1),
+            "advance_lazy_preload": bool(getattr(args, "advance_lazy_preload", False)),
+            "advance_lazy_scan_total_notes": bool(getattr(args, "advance_lazy_scan_total_notes", False)),
         },
         "rpe": {
             "rpe_easing_shift": int(getattr(args, "rpe_easing_shift", 0)),
@@ -246,6 +261,7 @@ def dump_config_v2(args: Any, *, mods: Optional[Dict[str, Any]] = None, lang: Op
             "debug_line_label": bool(getattr(args, "debug_line_label", False)),
             "debug_line_stats": bool(getattr(args, "debug_line_stats", False)),
             "debug_judge_windows": bool(getattr(args, "debug_judge_windows", False)),
+            "debug_pointer": bool(getattr(args, "debug_pointer", False)),
             "debug_note_info": bool(getattr(args, "debug_note_info", False)),
             "debug_particles": bool(getattr(args, "debug_particles", False)),
         },

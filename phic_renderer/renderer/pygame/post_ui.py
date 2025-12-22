@@ -53,6 +53,7 @@ def post_render_record_headless_overlay(
     advance_active: bool,
     hit_debug: bool,
     hit_debug_lines: Any,
+    start_time: Any = None,
 ):
     if getattr(args, "record_render_particles", False):
         try:
@@ -83,7 +84,8 @@ def post_render_record_headless_overlay(
                 display_frame.blit(txt, (ui_x, ui_particles_y))
 
             if float(chart_end) > 1e-6:
-                pbar = progress_ratio(float(t), float(chart_end), advance_active=bool(advance_active), start_time=getattr(args, "start_time", None))
+                st = start_time if start_time is not None else getattr(args, "start_time", None)
+                pbar = progress_ratio(float(t), float(chart_end), advance_active=bool(advance_active), start_time=st)
                 pygame.draw.rect(display_frame, (40, 40, 40), pygame.Rect(0, 0, int(W), 6))
                 pygame.draw.rect(display_frame, (230, 230, 230), pygame.Rect(0, 0, int(int(W) * float(pbar)), 6))
 

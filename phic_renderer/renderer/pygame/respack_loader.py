@@ -55,6 +55,15 @@ def load_respack(zip_path: str, *, audio: Any) -> Respack:
     for fn in required_imgs:
         img[fn] = _maybe_convert_alpha(pygame.image.load(p(fn)))
 
+    # Optional: GOOD hitfx atlas
+    try:
+        fn_good = "hit_fx.good.png"
+        fp_good = p(fn_good)
+        if os.path.exists(fp_good):
+            img[fn_good] = _maybe_convert_alpha(pygame.image.load(fp_good))
+    except Exception:
+        pass
+
     sfx = {}
     for fn, key in [("click.ogg", "click"), ("drag.ogg", "drag"), ("flick.ogg", "flick")]:
         fp = p(fn)
@@ -98,6 +107,7 @@ def load_respack(zip_path: str, *, audio: Any) -> Respack:
         img=img,
         sfx=sfx,
         hitfx_sheet=img["hit_fx.png"],
+        hitfx_sheet_good=img.get("hit_fx.good.png", img["hit_fx.png"]),
         hitfx_frames_xy=(int(hitfx_frames[0]), int(hitfx_frames[1])),
         hitfx_duration=hitfx_duration,
         hitfx_scale=hitfx_scale,

@@ -51,6 +51,20 @@ class HoldCache:
             return -1
         return int(round(progress * 50))
 
+    def quantize(
+        self,
+        width: int,
+        length: int,
+        angle_deg: float,
+        progress: Optional[float],
+    ) -> Tuple[int, int, int, Optional[float]]:
+        qw = self._quantize_width(width)
+        ql = self._quantize_length(length)
+        qa = self._quantize_angle(angle_deg)
+        qp = self._quantize_progress(progress)
+        qpf = None if qp < 0 else float(qp) / 50.0
+        return qw, ql, qa, qpf
+
     def _make_key(
         self,
         width: int,
@@ -112,8 +126,7 @@ class HoldCache:
             # Move to end (most recently used)
             self._cache.move_to_end(key)
             self.stats_hits += 1
-            # Return a copy to avoid surface state contamination
-            return self._cache[key].copy()
+            return self._cache[key]
 
         self.stats_misses += 1
         return None

@@ -107,6 +107,14 @@ def render_frame(
 
     # Draw judge lines
     for ln, (lx, ly, lr, la01, _sc, _la_raw) in zip(lines, line_states):
+        try:
+            seq_st = getattr(ln, "advance_seq_start_at", None)
+            seq_en = getattr(ln, "advance_seq_end_at", None)
+            if seq_st is not None and seq_en is not None:
+                if float(t_draw) < float(seq_st) or float(t_draw) >= float(seq_en):
+                    continue
+        except Exception:
+            pass
         if la01 <= 1e-6:
             continue
 
@@ -240,6 +248,15 @@ def render_frame(
     for si in range(int(st0), int(st1)):
         s = states[si]
         n = s.note
+        try:
+            ln0 = lines[int(n.line_id)]
+            seq_st = getattr(ln0, "advance_seq_start_at", None)
+            seq_en = getattr(ln0, "advance_seq_end_at", None)
+            if seq_st is not None and seq_en is not None:
+                if float(t_draw) < float(seq_st) or float(t_draw) >= float(seq_en):
+                    continue
+        except Exception:
+            pass
         if n.kind != 3 and s.judged:
             if bool(getattr(s, "miss", False)):
                 mt = getattr(s, "miss_t", None)

@@ -53,6 +53,15 @@ def load_respack(zip_path: str, *, glctx: Any, audio: Any = None) -> Respack:
     for fn in required_imgs:
         img[fn] = load_texture_rgba(glctx, p(fn), flip_y=True)
 
+    # Optional: GOOD hitfx atlas
+    try:
+        fn_good = "hit_fx.good.png"
+        fp_good = p(fn_good)
+        if os.path.exists(fp_good):
+            img[fn_good] = load_texture_rgba(glctx, fp_good, flip_y=True)
+    except Exception:
+        pass
+
     sfx: dict[str, Any] = {}
     if audio is not None:
         for fn, key in [("click.ogg", "click"), ("drag.ogg", "drag"), ("flick.ogg", "flick")]:
@@ -97,6 +106,7 @@ def load_respack(zip_path: str, *, glctx: Any, audio: Any = None) -> Respack:
         img=img,
         sfx=sfx,
         hitfx_sheet=img["hit_fx.png"],
+        hitfx_sheet_good=img.get("hit_fx.good.png", img["hit_fx.png"]),
         hitfx_frames_xy=(int(hitfx_frames[0]), int(hitfx_frames[1])),
         hitfx_duration=hitfx_duration,
         hitfx_scale=hitfx_scale,

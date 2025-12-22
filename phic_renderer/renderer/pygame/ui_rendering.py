@@ -63,8 +63,33 @@ def render_ui_overlay(
     )
     screen.blit(score_txt, (ui_x, ui_score_y))
 
+    extra_lines: List[str] = []
+    try:
+        if bool(getattr(args, "advance_seq_overlay", False)) and bool(advance_active):
+            ci = chart_info if isinstance(chart_info, dict) else {}
+            st = ci.get("seg_start_time", None)
+            en = ci.get("seg_end_time", None)
+            si = ci.get("seg_index", None)
+            ss = ci.get("seg_total", None)
+            if st is not None and en is not None:
+                song_t = float(t) - float(st)
+                dur = max(1e-6, float(en) - float(st))
+                song_p = clamp(song_t / dur, 0.0, 1.0)
+                if si is not None and ss is not None:
+                    extra_lines.append(f"seq={int(si)}/{int(ss)}  song_t={song_t:7.3f}s  song={song_p*100:6.2f}%")
+                else:
+                    extra_lines.append(f"song_t={song_t:7.3f}s  song={song_p*100:6.2f}%")
+            elif si is not None and ss is not None:
+                extra_lines.append(f"seq={int(si)}/{int(ss)}")
+    except Exception:
+        pass
+
     fmt_txt = small.render(f"fmt={fmt}  t={t:7.3f}s  next={idx_next}/{states_len}  lines={lines_len}", True, (180, 180, 180))
     screen.blit(fmt_txt, (ui_x, ui_fmt_y))
+    if extra_lines:
+        for j, s in enumerate(extra_lines, start=1):
+            txt = small.render(str(s), True, (180, 180, 180))
+            screen.blit(txt, (ui_x, ui_fmt_y + j * small.get_linesize()))
 
     if hit_debug and hit_debug_lines:
         cols = max(1, int(getattr(args, "hit_debug_cols", 5) or 5))

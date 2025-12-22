@@ -16,6 +16,7 @@ class Respack:
     img: Dict[str, Any]
     sfx: Dict[str, Any]
     hitfx_sheet: Any
+    hitfx_sheet_good: Any
     hitfx_frames_xy: Tuple[int, int]
     hitfx_duration: float
     hitfx_scale: float

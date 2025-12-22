@@ -85,3 +85,9 @@ class PygameAudio:
             channel.stop()
         except:
             pass
+
+    def set_music_speed(self, speed: float) -> None:
+        return
+
+    def set_channel_speed(self, channel: Any, speed: float) -> None:
+        return

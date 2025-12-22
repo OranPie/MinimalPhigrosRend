@@ -21,7 +21,7 @@ from .io.respack_impl import load_respack_info
 from .recording.presets import list_presets
 from .logging_setup import setup_logging
 from .renderer.pygame.textual_ui import init_textual_ui
-from .api.playlist import run_playlist_script
+from .api.playlist import load_playlist_script, run_playlist_script, build_chart_metas
 
 
 def main():
@@ -34,6 +34,7 @@ def main():
     g_in.add_argument("--playlist_script", type=str, default=None, help="Run a playlist script (python file)")
     g_in.add_argument("--playlist_charts_dir", type=str, default="charts")
     g_in.add_argument("--playlist_notes_per_chart", type=int, default=10)
+    g_in.add_argument("--playlist_tail_time", type=float, default=0.5)
     g_in.add_argument("--playlist_seed", type=int, default=None)
     g_in.add_argument("--playlist_no_shuffle", action="store_true")
     g_in.add_argument("--playlist_switch_mode", type=str, default="hit", choices=["hit", "judged"])
@@ -73,6 +74,11 @@ def main():
         choices=["textual", "curses", "none"],
         help="Headless UI backend: textual (recommended), curses (legacy), none",
     )
+    g_rec.add_argument("--advance_seq_overlay", action="store_true")
+    g_rec.add_argument("--advance_lazy_load", action="store_true")
+    g_rec.add_argument("--advance_lazy_cache", type=int, default=1)
+    g_rec.add_argument("--advance_lazy_preload", action="store_true")
+    g_rec.add_argument("--advance_lazy_scan_total_notes", action="store_true")
     g_rec.add_argument("--no_curses", action="store_true", help="Disable curses CUI in headless mode")
     g_rec.add_argument("--curses_fps", type=float, default=10.0, help="Headless curses refresh rate")
     g_rec.add_argument("--no_particles", action="store_true", help="Do not render particles into recorded frames")
@@ -81,6 +87,9 @@ def main():
     g_rec.add_argument("--judge_script", type=str, default=None, help="Optional judge script JSON to simulate non-perfect autoplay")
 
     args = ap.parse_args()
+
+    if getattr(args, "playlist_script", None):
+        raise SystemExit("playlist mode is preparing; please use --advance with a generated advance JSON for now")
 
     setup_logging(args)
     logger.debug("record CLI args parsed")
@@ -139,10 +148,18 @@ def main():
 
     flat_cfg, mods_cfg = flatten_config_v2(cfg_v2_raw)
 
-    # Build a minimal args object that renderer expects. Main parameters come from config only.
-    # Do not provide CLI overrides for them.
+    # Apply config values, but do not override explicit CLI args.
+    # (Keep behavior consistent with phic_renderer/app.py.)
+    argv_l = list(getattr(sys, "argv", []) or [])
     for k, v in (flat_cfg or {}).items():
-        setattr(args, k, v)
+        try:
+            if not hasattr(args, k):
+                continue
+            if ("--" + str(k)) in argv_l:
+                continue
+            setattr(args, k, v)
+        except Exception:
+            continue
 
     if getattr(args, "judge_script", None):
         try:
@@ -196,6 +213,11 @@ def main():
         mods_cfg_out.update(mods_cfg)
     if adv is not None and adv.advance_active and isinstance(adv.advance_mods, dict):
         mods_cfg_out.update(adv.advance_mods)
+
+    try:
+        setattr(args, "_mods_cfg", dict(mods_cfg_out))
+    except Exception:
+        pass
 
     if adv is not None:
         notes = apply_mods(mods_cfg_out, notes, lines)
@@ -331,6 +353,169 @@ def main():
                 logger.info("[Recording] Audio: Mixed")
             except Exception as e:
                 logger.exception("[Recording] Failed to prepare audio")
+                logger.warning("[Recording] Falling back to video-only mode")
+                audio_path = None
+
+        if mode == "video+audio" and bool(getattr(args, "playlist_script", None)):
+            try:
+                W0 = int(W)
+                H0 = int(H)
+
+                charts_dir = str(getattr(args, "playlist_charts_dir", getattr(args, "charts_dir", "charts")) or "charts")
+                notes_per_chart = int(getattr(args, "playlist_notes_per_chart", 10) or 10)
+                tail_time = float(getattr(args, "playlist_tail_time", 0.0) or 0.0)
+
+                mod = load_playlist_script(str(getattr(args, "playlist_script")))
+
+                if hasattr(mod, "configure_args") and callable(getattr(mod, "configure_args")):
+                    try:
+                        getattr(mod, "configure_args")(args)
+                    except Exception:
+                        pass
+
+                metas = None
+                if hasattr(mod, "build_metas") and callable(getattr(mod, "build_metas")):
+                    try:
+                        metas = list(getattr(mod, "build_metas")(args) or [])
+                    except Exception:
+                        metas = None
+                if metas is None:
+                    metas = build_chart_metas(
+                        charts_dir=str(charts_dir),
+                        W=int(W0),
+                        H=int(H0),
+                        notes_per_chart=int(notes_per_chart),
+                        tail_time=float(tail_time),
+                        seed=getattr(args, "playlist_seed", None),
+                        shuffle=(not bool(getattr(args, "playlist_no_shuffle", False))),
+                        filter_levels=None,
+                        filter_name_contains=getattr(args, "playlist_filter_name_contains", None),
+                        filter_min_total_notes=getattr(args, "playlist_filter_min_total_notes", None),
+                        filter_max_total_notes=getattr(args, "playlist_filter_max_total_notes", None),
+                        filter_limit=getattr(args, "playlist_filter_limit", None),
+                        filter_fn=(getattr(args, "playlist_filter", None) if callable(getattr(args, "playlist_filter", None)) else None),
+                    )
+
+                if not metas:
+                    raise RuntimeError("No playable charts found for playlist")
+
+                try:
+                    setattr(args, "_playlist_metas_cache", list(metas))
+                except Exception:
+                    pass
+
+                from .io.chart_loader_impl import load_chart
+
+                total_duration = float(sum(float(getattr(m, "seg_duration", 0.0) or 0.0) for m in metas))
+                if total_duration <= 1e-6:
+                    raise RuntimeError("Invalid playlist duration")
+
+                bgm_tracks = []
+                bgm_vol = float(getattr(args, "bgm_volume", 0.8) or 0.8)
+                chart_speed = float(getattr(args, "chart_speed", 1.0) or 1.0)
+                if chart_speed <= 1e-9:
+                    chart_speed = 1.0
+
+                include_hitsound = not bool(getattr(args, "no_hitsound", False))
+                hitsound_events = []
+
+                respack_zip = getattr(args, "respack", None)
+                respack_sfx = {}
+                if include_hitsound and respack_zip and os.path.exists(str(respack_zip)):
+                    respack_tmpdir, _info = load_respack_info(str(respack_zip))
+                    base = str(getattr(respack_tmpdir, "name", ""))
+                    if base:
+                        cand = {
+                            "click": os.path.join(base, "click.ogg"),
+                            "drag": os.path.join(base, "drag.ogg"),
+                            "flick": os.path.join(base, "flick.ogg"),
+                        }
+                        for k, fp in cand.items():
+                            if os.path.exists(fp):
+                                respack_sfx[k] = fp
+
+                t0_playlist = 0.0
+                for meta in metas:
+                    seg_dur = float(getattr(meta, "seg_duration", 0.0) or 0.0)
+                    if seg_dur <= 1e-6:
+                        continue
+
+                    music_path = getattr(meta, "music_path", None)
+                    if music_path and os.path.exists(str(music_path)):
+                        ss0 = float(getattr(meta, "chart_offset", 0.0) or 0.0) + 0.0 / float(chart_speed)
+                        bgm_tracks.append((
+                            str(music_path),
+                            float(t0_playlist),
+                            float(seg_dur),
+                            float(bgm_vol),
+                            max(0.0, float(ss0)),
+                        ))
+
+                    if include_hitsound:
+                        try:
+                            _fmt, _off, _lines, notes = load_chart(str(getattr(meta, "chart_path")), int(W0), int(H0))
+                        except Exception:
+                            notes = []
+                        playable = [n for n in notes if not getattr(n, "fake", False)]
+                        try:
+                            playable.sort(key=lambda x: float(getattr(x, "t_hit", 0.0) or 0.0))
+                        except Exception:
+                            pass
+                        seg_notes = int(getattr(meta, "seg_notes", 0) or 0)
+                        if seg_notes > 0:
+                            playable = playable[:seg_notes]
+
+                        chart_dir = os.path.dirname(os.path.abspath(str(getattr(meta, "chart_path"))))
+                        for n in playable:
+                            try:
+                                t_hit = float(getattr(n, "t_hit", 0.0) or 0.0)
+                            except Exception:
+                                continue
+                            t_out = float(t0_playlist) + float(t_hit)
+                            if t_out < 0.0 or t_out >= float(total_duration):
+                                continue
+
+                            pth = None
+                            hs = getattr(n, "hitsound_path", None)
+                            if hs:
+                                try:
+                                    if os.path.isabs(str(hs)) and os.path.exists(str(hs)):
+                                        pth = str(hs)
+                                    else:
+                                        cand = os.path.join(str(chart_dir), str(hs))
+                                        if os.path.exists(cand):
+                                            pth = cand
+                                except Exception:
+                                    pth = None
+
+                            if not pth:
+                                try:
+                                    kind = int(getattr(n, "kind", 1) or 1)
+                                except Exception:
+                                    kind = 1
+                                key = "click"
+                                if kind == 2:
+                                    key = "drag"
+                                elif kind == 4:
+                                    key = "flick"
+                                pth = respack_sfx.get(key)
+
+                            if pth:
+                                hitsound_events.append((str(pth), float(t_out), 1.0))
+
+                    t0_playlist += float(seg_dur)
+
+                audio_temp_fd, audio_temp_keep = tempfile.mkstemp(suffix='.wav', prefix='phigros_playlist_mix_')
+                os.close(audio_temp_fd)
+                audio_path = mix_wav(
+                    out_wav_path=audio_temp_keep,
+                    duration=float(total_duration),
+                    bgm_tracks=bgm_tracks,
+                    hitsound_events=hitsound_events,
+                )
+                logger.info("[Recording] Audio: Mixed (playlist)")
+            except Exception:
+                logger.exception("[Recording] Failed to prepare playlist audio")
                 logger.warning("[Recording] Falling back to video-only mode")
                 audio_path = None
 

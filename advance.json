@@ -1,0 +1,2329 @@
+{
+  "mode": "sequence",
+  "mix": false,
+  "items": [
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/000AinSophAur.Yumeji/EZ.json",
+      "start": 0.0,
+      "end": 25.860824742268044,
+      "start_at": 0.0,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/000AinSophAur.Yumeji/000AinSophAur.Yumeji.ogg",
+      "bg": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/000AinSophAur.Yumeji/000AinSophAur.Yumeji.png"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/000AinSophAur.Yumeji/HD.json",
+      "start": 0.0,
+      "end": 11.324742268041238,
+      "start_at": 25.860824742268044,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/000AinSophAur.Yumeji/000AinSophAur.Yumeji.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/000AinSophAur.Yumeji/IN.json",
+      "start": 0.0,
+      "end": 19.056701030927837,
+      "start_at": 37.185567010309285,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/000AinSophAur.Yumeji/000AinSophAur.Yumeji.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/996.李化禹/EZ.json",
+      "start": 0.0,
+      "end": 17.21428571428571,
+      "start_at": 56.242268041237125,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/996.李化禹/996.李化禹.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/996.李化禹/HD.json",
+      "start": 0.0,
+      "end": 12.5,
+      "start_at": 73.45655375552283,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/996.李化禹/996.李化禹.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/996.李化禹/IN.json",
+      "start": 0.0,
+      "end": 9.339285714285714,
+      "start_at": 85.95655375552283,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/996.李化禹/996.李化禹.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AbsoluTedisoRdeR.AcuteDisarray/AT.json",
+      "start": 0.0,
+      "end": 11.1640625,
+      "start_at": 95.29583946980854,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AbsoluTedisoRdeR.AcuteDisarray/AbsoluTedisoRdeR.AcuteDisarray.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AbsoluTedisoRdeR.AcuteDisarray/EZ.json",
+      "start": 0.0,
+      "end": 12.6875,
+      "start_at": 106.45990196980854,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AbsoluTedisoRdeR.AcuteDisarray/AbsoluTedisoRdeR.AcuteDisarray.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AbsoluTedisoRdeR.AcuteDisarray/HD.json",
+      "start": 0.0,
+      "end": 22.0625,
+      "start_at": 119.14740196980854,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AbsoluTedisoRdeR.AcuteDisarray/AbsoluTedisoRdeR.AcuteDisarray.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AbsoluTedisoRdeR.AcuteDisarray/IN.json",
+      "start": 0.0,
+      "end": 9.875,
+      "start_at": 141.20990196980853,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AbsoluTedisoRdeR.AcuteDisarray/AbsoluTedisoRdeR.AcuteDisarray.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Adastraperaspera.RabbitHouse/EZ.json",
+      "start": 0.0,
+      "end": 9.941624365482234,
+      "start_at": 151.08490196980853,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Adastraperaspera.RabbitHouse/Adastraperaspera.RabbitHouse.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Adastraperaspera.RabbitHouse/HD.json",
+      "start": 0.0,
+      "end": 4.230964467005077,
+      "start_at": 161.02652633529075,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Adastraperaspera.RabbitHouse/Adastraperaspera.RabbitHouse.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Adastraperaspera.RabbitHouse/IN.json",
+      "start": 0.0,
+      "end": 4.307106598984772,
+      "start_at": 165.25749080229582,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Adastraperaspera.RabbitHouse/Adastraperaspera.RabbitHouse.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AfterDawn.S9ryne/EZ.json",
+      "start": 0.0,
+      "end": 42.5,
+      "start_at": 169.5645974012806,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AfterDawn.S9ryne/AfterDawn.S9ryne.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AfterDawn.S9ryne/HD.json",
+      "start": 0.0,
+      "end": 17.40909090909091,
+      "start_at": 212.0645974012806,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AfterDawn.S9ryne/AfterDawn.S9ryne.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AfterDawn.S9ryne/IN.json",
+      "start": 0.0,
+      "end": 5.681818181818182,
+      "start_at": 229.4736883103715,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AfterDawn.S9ryne/AfterDawn.S9ryne.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Ajourneytothemoonlight.Yesod/EZ.json",
+      "start": 0.0,
+      "end": 12.913793103448278,
+      "start_at": 235.1555064921897,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Ajourneytothemoonlight.Yesod/Ajourneytothemoonlight.Yesod.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Ajourneytothemoonlight.Yesod/HD.json",
+      "start": 0.0,
+      "end": 8.086206896551724,
+      "start_at": 248.06929959563797,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Ajourneytothemoonlight.Yesod/Ajourneytothemoonlight.Yesod.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Ajourneytothemoonlight.Yesod/IN.json",
+      "start": 0.0,
+      "end": 10.5,
+      "start_at": 256.1555064921897,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Ajourneytothemoonlight.Yesod/Ajourneytothemoonlight.Yesod.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aleph0.LeaF/EZ.json",
+      "start": 0.0,
+      "end": 14.42,
+      "start_at": 266.6555064921897,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aleph0.LeaF/Aleph0.LeaF.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aleph0.LeaF/HD.json",
+      "start": 0.0,
+      "end": 10.82,
+      "start_at": 281.07550649218973,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aleph0.LeaF/Aleph0.LeaF.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aleph0.LeaF/IN.json",
+      "start": 0.0,
+      "end": 10.34,
+      "start_at": 291.8955064921897,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aleph0.LeaF/Aleph0.LeaF.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aliceinaxxxxxxxx.Nagiha/EZ.json",
+      "start": 0.0,
+      "end": 15.5,
+      "start_at": 302.2355064921897,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aliceinaxxxxxxxx.Nagiha/Aliceinaxxxxxxxx.Nagiha.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aliceinaxxxxxxxx.Nagiha/HD.json",
+      "start": 0.0,
+      "end": 9.666666666666668,
+      "start_at": 317.7355064921897,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aliceinaxxxxxxxx.Nagiha/Aliceinaxxxxxxxx.Nagiha.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aliceinaxxxxxxxx.Nagiha/IN.json",
+      "start": 0.0,
+      "end": 5.916666666666667,
+      "start_at": 327.4021731588564,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aliceinaxxxxxxxx.Nagiha/Aliceinaxxxxxxxx.Nagiha.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AnotherMe.DAAN/EZ.json",
+      "start": 0.0,
+      "end": 19.357142857142858,
+      "start_at": 333.31883982552307,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AnotherMe.DAAN/AnotherMe.DAAN.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AnotherMe.DAAN/HD.json",
+      "start": 0.0,
+      "end": 18.5,
+      "start_at": 352.6759826826659,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AnotherMe.DAAN/AnotherMe.DAAN.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AnotherMe.DAAN/IN.json",
+      "start": 0.0,
+      "end": 11.5,
+      "start_at": 371.1759826826659,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AnotherMe.DAAN/AnotherMe.DAAN.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AnotherMe.NeutralMoon/EZ.json",
+      "start": 0.0,
+      "end": 13.1,
+      "start_at": 382.6759826826659,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AnotherMe.NeutralMoon/AnotherMe.NeutralMoon.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AnotherMe.NeutralMoon/HD.json",
+      "start": 0.0,
+      "end": 3.757142857142857,
+      "start_at": 395.7759826826659,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AnotherMe.NeutralMoon/AnotherMe.NeutralMoon.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AnotherMe.NeutralMoon/IN.json",
+      "start": 0.0,
+      "end": 14.985714285714286,
+      "start_at": 399.5331255398088,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AnotherMe.NeutralMoon/AnotherMe.NeutralMoon.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AnotherRound.JustinDai/EZ.json",
+      "start": 0.0,
+      "end": 15.03125,
+      "start_at": 414.51883982552306,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AnotherRound.JustinDai/AnotherRound.JustinDai.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AnotherRound.JustinDai/HD.json",
+      "start": 0.0,
+      "end": 8.3515625,
+      "start_at": 429.55008982552306,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AnotherRound.JustinDai/AnotherRound.JustinDai.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AnotherRound.JustinDai/IN.json",
+      "start": 0.0,
+      "end": 7.296875,
+      "start_at": 437.90165232552306,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AnotherRound.JustinDai/AnotherRound.JustinDai.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Antithese.Blacklolita/AT.json",
+      "start": 0.0,
+      "end": 16.546511627906977,
+      "start_at": 445.19852732552306,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Antithese.Blacklolita/Antithese.Blacklolita.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Antithese.Blacklolita/EZ.json",
+      "start": 0.0,
+      "end": 17.767441860465116,
+      "start_at": 461.74503895343,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Antithese.Blacklolita/Antithese.Blacklolita.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Antithese.Blacklolita/HD.json",
+      "start": 0.0,
+      "end": 16.8953488372093,
+      "start_at": 479.51248081389514,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Antithese.Blacklolita/Antithese.Blacklolita.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Antithese.Blacklolita/IN.json",
+      "start": 0.0,
+      "end": 7.651162790697675,
+      "start_at": 496.40782965110446,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Antithese.Blacklolita/Antithese.Blacklolita.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aphasia.闫东炜/EZ.json",
+      "start": 0.0,
+      "end": 15.03125,
+      "start_at": 504.05899244180216,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aphasia.闫东炜/Aphasia.闫东炜.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aphasia.闫东炜/HD.json",
+      "start": 0.0,
+      "end": 12.21875,
+      "start_at": 519.0902424418022,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aphasia.闫东炜/Aphasia.闫东炜.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aphasia.闫东炜/IN.json",
+      "start": 0.0,
+      "end": 11.28125,
+      "start_at": 531.3089924418022,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aphasia.闫东炜/Aphasia.闫东炜.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AphroditesChildshortver.RUQOA/EZ.json",
+      "start": 0.0,
+      "end": 25.8125,
+      "start_at": 542.5902424418022,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AphroditesChildshortver.RUQOA/AphroditesChildshortver.RUQOA.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AphroditesChildshortver.RUQOA/HD.json",
+      "start": 0.0,
+      "end": 22.0625,
+      "start_at": 568.4027424418022,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AphroditesChildshortver.RUQOA/AphroditesChildshortver.RUQOA.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AphroditesChildshortver.RUQOA/IN.json",
+      "start": 0.0,
+      "end": 14.328125,
+      "start_at": 590.4652424418022,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AphroditesChildshortver.RUQOA/AphroditesChildshortver.RUQOA.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Apocalypse.アリスシャッハと魔法の楽団/EZ.json",
+      "start": 0.0,
+      "end": 16.045454545454547,
+      "start_at": 604.7933674418022,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Apocalypse.アリスシャッハと魔法の楽団/Apocalypse.アリスシャッハと魔法の楽団.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Apocalypse.アリスシャッハと魔法の楽団/HD.json",
+      "start": 0.0,
+      "end": 3.6363636363636362,
+      "start_at": 620.8388219872567,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Apocalypse.アリスシャッハと魔法の楽団/Apocalypse.アリスシャッハと魔法の楽団.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Apocalypse.アリスシャッハと魔法の楽団/IN.json",
+      "start": 0.0,
+      "end": 8.954545454545453,
+      "start_at": 624.4751856236203,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Apocalypse.アリスシャッハと魔法の楽団/Apocalypse.アリスシャッハと魔法の楽団.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Apocalyptic.ZClaxxSumaiLight/EZ.json",
+      "start": 0.0,
+      "end": 12.875,
+      "start_at": 633.4297310781658,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Apocalyptic.ZClaxxSumaiLight/Apocalyptic.ZClaxxSumaiLight.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Apocalyptic.ZClaxxSumaiLight/HD.json",
+      "start": 0.0,
+      "end": 12.875,
+      "start_at": 646.3047310781658,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Apocalyptic.ZClaxxSumaiLight/Apocalyptic.ZClaxxSumaiLight.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Apocalyptic.ZClaxxSumaiLight/IN.json",
+      "start": 0.0,
+      "end": 22.25,
+      "start_at": 659.1797310781658,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Apocalyptic.ZClaxxSumaiLight/Apocalyptic.ZClaxxSumaiLight.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Archidoxen.Se_IRA/EZ.json",
+      "start": 0.0,
+      "end": 14.75,
+      "start_at": 681.4297310781658,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Archidoxen.Se_IRA/Archidoxen.Se_IRA.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Archidoxen.Se_IRA/HD.json",
+      "start": 0.0,
+      "end": 8.5625,
+      "start_at": 696.1797310781658,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Archidoxen.Se_IRA/Archidoxen.Se_IRA.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Archidoxen.Se_IRA/IN.json",
+      "start": 0.0,
+      "end": 14.75,
+      "start_at": 704.7422310781658,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Archidoxen.Se_IRA/Archidoxen.Se_IRA.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Ark.kanoryo/AT.json",
+      "start": 0.0,
+      "end": 6.833333333333333,
+      "start_at": 719.4922310781658,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Ark.kanoryo/Ark.kanoryo.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Ark.kanoryo/EZ.json",
+      "start": 0.0,
+      "end": 15.166666666666666,
+      "start_at": 726.3255644114992,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Ark.kanoryo/Ark.kanoryo.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Ark.kanoryo/HD.json",
+      "start": 0.0,
+      "end": 4.5,
+      "start_at": 741.4922310781658,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Ark.kanoryo/Ark.kanoryo.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Ark.kanoryo/IN.json",
+      "start": 0.0,
+      "end": 4.166666666666666,
+      "start_at": 745.9922310781658,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Ark.kanoryo/Ark.kanoryo.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Arkhei.SeraAmagi/EZ.json",
+      "start": 0.0,
+      "end": 8.0,
+      "start_at": 750.1588977448324,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Arkhei.SeraAmagi/Arkhei.SeraAmagi.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Arkhei.SeraAmagi/HD.json",
+      "start": 0.0,
+      "end": 7.196428571428571,
+      "start_at": 758.1588977448324,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Arkhei.SeraAmagi/Arkhei.SeraAmagi.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Arkhei.SeraAmagi/IN.json",
+      "start": 0.0,
+      "end": 6.392857142857142,
+      "start_at": 765.355326316261,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Arkhei.SeraAmagi/Arkhei.SeraAmagi.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ArtificialExistence.JunKuroda/EZ.json",
+      "start": 0.0,
+      "end": 28.615183246073297,
+      "start_at": 771.7481834591181,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ArtificialExistence.JunKuroda/ArtificialExistence.JunKuroda.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ArtificialExistence.JunKuroda/HD.json",
+      "start": 0.0,
+      "end": 8.981675392670157,
+      "start_at": 800.3633667051914,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ArtificialExistence.JunKuroda/ArtificialExistence.JunKuroda.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ArtificialExistence.JunKuroda/IN.json",
+      "start": 0.0,
+      "end": 13.222513089005236,
+      "start_at": 809.3450420978616,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ArtificialExistence.JunKuroda/ArtificialExistence.JunKuroda.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ATHAZA.LeaF/AT.json",
+      "start": 0.0,
+      "end": 6.017857142857142,
+      "start_at": 822.5675551868668,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ATHAZA.LeaF/ATHAZA.LeaF.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ATHAZA.LeaF/EZ.json",
+      "start": 0.0,
+      "end": 8.642857142857142,
+      "start_at": 828.5854123297239,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ATHAZA.LeaF/ATHAZA.LeaF.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ATHAZA.LeaF/HD.json",
+      "start": 0.0,
+      "end": 8.642857142857142,
+      "start_at": 837.228269472581,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ATHAZA.LeaF/ATHAZA.LeaF.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ATHAZA.LeaF/IN.json",
+      "start": 0.0,
+      "end": 8.0,
+      "start_at": 845.8711266154381,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ATHAZA.LeaF/ATHAZA.LeaF.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/atruthseekerCommunicationwithUtopiawillbelost.kuro/EZ.json",
+      "start": 0.0,
+      "end": 16.228155339805824,
+      "start_at": 853.8711266154381,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/atruthseekerCommunicationwithUtopiawillbelost.kuro/atruthseekerCommunicationwithUtopiawillbelost.kuro.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/atruthseekerCommunicationwithUtopiawillbelost.kuro/HD.json",
+      "start": 0.0,
+      "end": 15.645631067961164,
+      "start_at": 870.0992819552439,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/atruthseekerCommunicationwithUtopiawillbelost.kuro/atruthseekerCommunicationwithUtopiawillbelost.kuro.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/atruthseekerCommunicationwithUtopiawillbelost.kuro/IN.json",
+      "start": 0.0,
+      "end": 4.504854368932039,
+      "start_at": 885.7449130232051,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/atruthseekerCommunicationwithUtopiawillbelost.kuro/atruthseekerCommunicationwithUtopiawillbelost.kuro.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AvataarReincarnationofKalpa.ScarletteakaCrYmson/AT.json",
+      "start": 0.0,
+      "end": 14.166666666666666,
+      "start_at": 890.2497673921371,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AvataarReincarnationofKalpa.ScarletteakaCrYmson/AvataarReincarnationofKalpa.ScarletteakaCrYmson.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AvataarReincarnationofKalpa.ScarletteakaCrYmson/EZ.json",
+      "start": 0.0,
+      "end": 33.166666666666664,
+      "start_at": 904.4164340588037,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AvataarReincarnationofKalpa.ScarletteakaCrYmson/AvataarReincarnationofKalpa.ScarletteakaCrYmson.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AvataarReincarnationofKalpa.ScarletteakaCrYmson/HD.json",
+      "start": 0.0,
+      "end": 15.833333333333332,
+      "start_at": 937.5831007254703,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AvataarReincarnationofKalpa.ScarletteakaCrYmson/AvataarReincarnationofKalpa.ScarletteakaCrYmson.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AvataarReincarnationofKalpa.ScarletteakaCrYmson/IN.json",
+      "start": 0.0,
+      "end": 8.833333333333332,
+      "start_at": 953.4164340588037,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/AvataarReincarnationofKalpa.ScarletteakaCrYmson/AvataarReincarnationofKalpa.ScarletteakaCrYmson.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aventyr.GrandThawRigelTheatre/EZ.json",
+      "start": 0.0,
+      "end": 7.7727272727272725,
+      "start_at": 962.2497673921371,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aventyr.GrandThawRigelTheatre/Aventyr.GrandThawRigelTheatre.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aventyr.GrandThawRigelTheatre/HD.json",
+      "start": 0.0,
+      "end": 3.227272727272727,
+      "start_at": 970.0224946648643,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aventyr.GrandThawRigelTheatre/Aventyr.GrandThawRigelTheatre.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aventyr.GrandThawRigelTheatre/IN.json",
+      "start": 0.0,
+      "end": 2.3181818181818183,
+      "start_at": 973.2497673921371,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Aventyr.GrandThawRigelTheatre/Aventyr.GrandThawRigelTheatre.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BANGINGSTRIKE.DewPleiades/AT.json",
+      "start": 0.0,
+      "end": 2.9358974358974357,
+      "start_at": 975.567949210319,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BANGINGSTRIKE.DewPleiades/BANGINGSTRIKE.DewPleiades.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BANGINGSTRIKE.DewPleiades/EZ.json",
+      "start": 0.0,
+      "end": 8.192307692307692,
+      "start_at": 978.5038466462164,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BANGINGSTRIKE.DewPleiades/BANGINGSTRIKE.DewPleiades.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BANGINGSTRIKE.DewPleiades/HD.json",
+      "start": 0.0,
+      "end": 6.653846153846153,
+      "start_at": 986.6961543385241,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BANGINGSTRIKE.DewPleiades/BANGINGSTRIKE.DewPleiades.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BANGINGSTRIKE.DewPleiades/IN.json",
+      "start": 0.0,
+      "end": 4.217948717948717,
+      "start_at": 993.3500004923703,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BANGINGSTRIKE.DewPleiades/BANGINGSTRIKE.DewPleiades.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BelieveLightfeat果丸哒呦.ScalerMestie果丸哒呦/EZ.json",
+      "start": 0.0,
+      "end": 10.5,
+      "start_at": 997.5679492103191,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BelieveLightfeat果丸哒呦.ScalerMestie果丸哒呦/BelieveLightfeat果丸哒呦.ScalerMestie果丸哒呦.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BelieveLightfeat果丸哒呦.ScalerMestie果丸哒呦/HD.json",
+      "start": 0.0,
+      "end": 17.166666666666664,
+      "start_at": 1008.0679492103191,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BelieveLightfeat果丸哒呦.ScalerMestie果丸哒呦/BelieveLightfeat果丸哒呦.ScalerMestie果丸哒呦.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BelieveLightfeat果丸哒呦.ScalerMestie果丸哒呦/IN.json",
+      "start": 0.0,
+      "end": 12.833333333333332,
+      "start_at": 1025.2346158769858,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BelieveLightfeat果丸哒呦.ScalerMestie果丸哒呦/BelieveLightfeat果丸哒呦.ScalerMestie果丸哒呦.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BetterGraphicAnimation.ルゼ/EZ.json",
+      "start": 0.0,
+      "end": 9.666666666666666,
+      "start_at": 1038.067949210319,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BetterGraphicAnimation.ルゼ/BetterGraphicAnimation.ルゼ.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BetterGraphicAnimation.ルゼ/HD.json",
+      "start": 0.0,
+      "end": 9.25,
+      "start_at": 1047.7346158769858,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BetterGraphicAnimation.ルゼ/BetterGraphicAnimation.ルゼ.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BetterGraphicAnimation.ルゼ/IN.json",
+      "start": 0.0,
+      "end": 13.166666666666666,
+      "start_at": 1056.9846158769858,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BetterGraphicAnimation.ルゼ/BetterGraphicAnimation.ルゼ.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Bitterblossom.imvi/EZ.json",
+      "start": 0.0,
+      "end": 23.833333333333332,
+      "start_at": 1070.1512825436525,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Bitterblossom.imvi/Bitterblossom.imvi.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Bitterblossom.imvi/HD.json",
+      "start": 0.0,
+      "end": 26.166666666666664,
+      "start_at": 1093.9846158769858,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Bitterblossom.imvi/Bitterblossom.imvi.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Bitterblossom.imvi/IN.json",
+      "start": 0.0,
+      "end": 15.833333333333332,
+      "start_at": 1120.1512825436525,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Bitterblossom.imvi/Bitterblossom.imvi.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Bloom.targ麻团qwq/EZ.json",
+      "start": 0.0,
+      "end": 34.1,
+      "start_at": 1135.9846158769858,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Bloom.targ麻团qwq/Bloom.targ麻团qwq.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Bloom.targ麻团qwq/HD.json",
+      "start": 0.0,
+      "end": 11.3,
+      "start_at": 1170.0846158769857,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Bloom.targ麻团qwq/Bloom.targ麻团qwq.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Bloom.targ麻团qwq/IN.json",
+      "start": 0.0,
+      "end": 26.1,
+      "start_at": 1181.3846158769857,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Bloom.targ麻团qwq/Bloom.targ麻团qwq.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BonusTime.MegaloPaleWhite/EZ.json",
+      "start": 0.0,
+      "end": 10.5,
+      "start_at": 1207.4846158769856,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BonusTime.MegaloPaleWhite/BonusTime.MegaloPaleWhite.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BonusTime.MegaloPaleWhite/HD.json",
+      "start": 0.0,
+      "end": 7.833333333333333,
+      "start_at": 1217.9846158769856,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BonusTime.MegaloPaleWhite/BonusTime.MegaloPaleWhite.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BonusTime.MegaloPaleWhite/IN.json",
+      "start": 0.0,
+      "end": 4.666666666666666,
+      "start_at": 1225.8179492103188,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BonusTime.MegaloPaleWhite/BonusTime.MegaloPaleWhite.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Bougainvillea.Jade/EZ.json",
+      "start": 0.0,
+      "end": 17.5,
+      "start_at": 1230.4846158769856,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Bougainvillea.Jade/Bougainvillea.Jade.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Bougainvillea.Jade/HD.json",
+      "start": 0.0,
+      "end": 17.5,
+      "start_at": 1247.9846158769856,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Bougainvillea.Jade/Bougainvillea.Jade.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Bougainvillea.Jade/IN.json",
+      "start": 0.0,
+      "end": 19.75,
+      "start_at": 1265.4846158769856,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Bougainvillea.Jade/Bougainvillea.Jade.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BoundedQuietude.FiniteLimitvsSiLiS/EZ.json",
+      "start": 0.0,
+      "end": 3.714285714285714,
+      "start_at": 1285.2346158769856,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BoundedQuietude.FiniteLimitvsSiLiS/BoundedQuietude.FiniteLimitvsSiLiS.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BoundedQuietude.FiniteLimitvsSiLiS/HD.json",
+      "start": 0.0,
+      "end": 11.857142857142858,
+      "start_at": 1288.9489015912714,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BoundedQuietude.FiniteLimitvsSiLiS/BoundedQuietude.FiniteLimitvsSiLiS.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BoundedQuietude.FiniteLimitvsSiLiS/IN.json",
+      "start": 0.0,
+      "end": 6.928571428571428,
+      "start_at": 1300.8060444484142,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BoundedQuietude.FiniteLimitvsSiLiS/BoundedQuietude.FiniteLimitvsSiLiS.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BRAINHACKER.SOMON/EZ.json",
+      "start": 0.0,
+      "end": 16.069620253164558,
+      "start_at": 1307.7346158769856,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BRAINHACKER.SOMON/BRAINHACKER.SOMON.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BRAINHACKER.SOMON/HD.json",
+      "start": 0.0,
+      "end": 6.006329113924051,
+      "start_at": 1323.8042361301502,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BRAINHACKER.SOMON/BRAINHACKER.SOMON.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BRAINHACKER.SOMON/IN.json",
+      "start": 0.0,
+      "end": 4.867088607594937,
+      "start_at": 1329.8105652440743,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BRAINHACKER.SOMON/BRAINHACKER.SOMON.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BraveNotes.TurquoiseDRIVENota/EZ.json",
+      "start": 0.0,
+      "end": 8.3125,
+      "start_at": 1334.6776538516692,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BraveNotes.TurquoiseDRIVENota/BraveNotes.TurquoiseDRIVENota.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BraveNotes.TurquoiseDRIVENota/HD.json",
+      "start": 0.0,
+      "end": 7.0625,
+      "start_at": 1342.9901538516692,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BraveNotes.TurquoiseDRIVENota/BraveNotes.TurquoiseDRIVENota.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BraveNotes.TurquoiseDRIVENota/IN.json",
+      "start": 0.0,
+      "end": 6.4375,
+      "start_at": 1350.0526538516692,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BraveNotes.TurquoiseDRIVENota/BraveNotes.TurquoiseDRIVENota.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BreakOver.Kforest/AT.json",
+      "start": 0.0,
+      "end": 15.662162162162163,
+      "start_at": 1356.4901538516692,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BreakOver.Kforest/BreakOver.Kforest.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BreakOver.Kforest/EZ.json",
+      "start": 0.0,
+      "end": 15.662162162162163,
+      "start_at": 1372.1523160138313,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BreakOver.Kforest/BreakOver.Kforest.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BreakOver.Kforest/HD.json",
+      "start": 0.0,
+      "end": 12.175675675675677,
+      "start_at": 1387.8144781759934,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BreakOver.Kforest/BreakOver.Kforest.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BreakOver.Kforest/IN.json",
+      "start": 0.0,
+      "end": 10.878378378378379,
+      "start_at": 1399.990153851669,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BreakOver.Kforest/BreakOver.Kforest.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BreakThroughTheBarrier.lixound/EZ.json",
+      "start": 0.0,
+      "end": 4.590909090909091,
+      "start_at": 1410.8685322300473,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BreakThroughTheBarrier.lixound/BreakThroughTheBarrier.lixound.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BreakThroughTheBarrier.lixound/HD.json",
+      "start": 0.0,
+      "end": 3.142045454545454,
+      "start_at": 1415.4594413209563,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BreakThroughTheBarrier.lixound/BreakThroughTheBarrier.lixound.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BreakThroughTheBarrier.lixound/IN.json",
+      "start": 0.0,
+      "end": 3.653409090909091,
+      "start_at": 1418.6014867755018,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BreakThroughTheBarrier.lixound/BreakThroughTheBarrier.lixound.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BrokenSky.JungoMAX3feat刘佳宜Snow幻影刃shadow/EZ.json",
+      "start": 0.0,
+      "end": 13.423076923076923,
+      "start_at": 1422.2548958664108,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BrokenSky.JungoMAX3feat刘佳宜Snow幻影刃shadow/BrokenSky.JungoMAX3feat刘佳宜Snow幻影刃shadow.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BrokenSky.JungoMAX3feat刘佳宜Snow幻影刃shadow/HD.json",
+      "start": 0.0,
+      "end": 6.038461538461538,
+      "start_at": 1435.6779727894877,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BrokenSky.JungoMAX3feat刘佳宜Snow幻影刃shadow/BrokenSky.JungoMAX3feat刘佳宜Snow幻影刃shadow.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BrokenSky.JungoMAX3feat刘佳宜Snow幻影刃shadow/IN.json",
+      "start": 0.0,
+      "end": 18.03846153846154,
+      "start_at": 1441.7164343279492,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/BrokenSky.JungoMAX3feat刘佳宜Snow幻影刃shadow/BrokenSky.JungoMAX3feat刘佳宜Snow幻影刃shadow.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Burn.NceS/EZ.json",
+      "start": 0.0,
+      "end": 11.04054054054054,
+      "start_at": 1459.7548958664106,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Burn.NceS/Burn.NceS.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Burn.NceS/HD.json",
+      "start": 0.0,
+      "end": 5.5675675675675675,
+      "start_at": 1470.7954364069512,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Burn.NceS/Burn.NceS.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Burn.NceS/IN.json",
+      "start": 0.0,
+      "end": 6.581081081081082,
+      "start_at": 1476.3630039745187,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Burn.NceS/Burn.NceS.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/bye.DingerBox/EZ.json",
+      "start": 0.0,
+      "end": 20.5625,
+      "start_at": 1482.9440850555998,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/bye.DingerBox/bye.DingerBox.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/bye.DingerBox/HD.json",
+      "start": 0.0,
+      "end": 20.5625,
+      "start_at": 1503.5065850555998,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/bye.DingerBox/bye.DingerBox.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/bye.DingerBox/IN.json",
+      "start": 0.0,
+      "end": 15.6875,
+      "start_at": 1524.0690850555998,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/bye.DingerBox/bye.DingerBox.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cereris.SunsetRayNceS/EZ.json",
+      "start": 0.0,
+      "end": 8.728571428571428,
+      "start_at": 1539.7565850555998,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cereris.SunsetRayNceS/Cereris.SunsetRayNceS.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cereris.SunsetRayNceS/HD.json",
+      "start": 0.0,
+      "end": 5.985714285714286,
+      "start_at": 1548.4851564841713,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cereris.SunsetRayNceS/Cereris.SunsetRayNceS.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cereris.SunsetRayNceS/IN.json",
+      "start": 0.0,
+      "end": 5.985714285714286,
+      "start_at": 1554.4708707698856,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cereris.SunsetRayNceS/Cereris.SunsetRayNceS.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CervelleConnexion.SCTL/EZ.json",
+      "start": 0.0,
+      "end": 7.26056338028169,
+      "start_at": 1560.4565850555998,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CervelleConnexion.SCTL/CervelleConnexion.SCTL.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CervelleConnexion.SCTL/HD.json",
+      "start": 0.0,
+      "end": 5.147887323943662,
+      "start_at": 1567.7171484358814,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CervelleConnexion.SCTL/CervelleConnexion.SCTL.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CervelleConnexion.SCTL/IN.json",
+      "start": 0.0,
+      "end": 5.570422535211268,
+      "start_at": 1572.865035759825,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CervelleConnexion.SCTL/CervelleConnexion.SCTL.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Chronologika.Hundotte/EZ.json",
+      "start": 0.0,
+      "end": 10.5,
+      "start_at": 1578.4354582950364,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Chronologika.Hundotte/Chronologika.Hundotte.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Chronologika.Hundotte/HD.json",
+      "start": 0.0,
+      "end": 6.166666666666666,
+      "start_at": 1588.9354582950364,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Chronologika.Hundotte/Chronologika.Hundotte.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Chronologika.Hundotte/IN.json",
+      "start": 0.0,
+      "end": 6.166666666666666,
+      "start_at": 1595.102124961703,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Chronologika.Hundotte/Chronologika.Hundotte.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Chronomia.Lime/EZ.json",
+      "start": 0.0,
+      "end": 7.107929515418502,
+      "start_at": 1601.2687916283699,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Chronomia.Lime/Chronomia.Lime.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Chronomia.Lime/HD.json",
+      "start": 0.0,
+      "end": 7.372246696035242,
+      "start_at": 1608.3767211437882,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Chronomia.Lime/Chronomia.Lime.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Chronomia.Lime/IN.json",
+      "start": 0.0,
+      "end": 15.037444933920705,
+      "start_at": 1615.7489678398235,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Chronomia.Lime/Chronomia.Lime.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ChronosCollapseLaCampanella.SunsetRay/EZ.json",
+      "start": 0.0,
+      "end": 10.666666666666666,
+      "start_at": 1630.7864127737441,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ChronosCollapseLaCampanella.SunsetRay/ChronosCollapseLaCampanella.SunsetRay.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ChronosCollapseLaCampanella.SunsetRay/HD.json",
+      "start": 0.0,
+      "end": 6.5,
+      "start_at": 1641.4530794404109,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ChronosCollapseLaCampanella.SunsetRay/ChronosCollapseLaCampanella.SunsetRay.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ChronosCollapseLaCampanella.SunsetRay/IN.json",
+      "start": 0.0,
+      "end": 7.166666666666666,
+      "start_at": 1647.9530794404109,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ChronosCollapseLaCampanella.SunsetRay/ChronosCollapseLaCampanella.SunsetRay.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Chronostasis.黒皇帝/EZ.json",
+      "start": 0.0,
+      "end": 21.46938775510204,
+      "start_at": 1655.1197461070776,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Chronostasis.黒皇帝/Chronostasis.黒皇帝.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Chronostasis.黒皇帝/HD.json",
+      "start": 0.0,
+      "end": 14.122448979591837,
+      "start_at": 1676.5891338621796,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Chronostasis.黒皇帝/Chronostasis.黒皇帝.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Chronostasis.黒皇帝/IN.json",
+      "start": 0.0,
+      "end": 5.091836734693878,
+      "start_at": 1690.7115828417714,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Chronostasis.黒皇帝/Chronostasis.黒皇帝.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cipher20.TetrajectoryfeatCtymax/EZ.json",
+      "start": 0.0,
+      "end": 11.142458100558658,
+      "start_at": 1695.8034195764653,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cipher20.TetrajectoryfeatCtymax/Cipher20.TetrajectoryfeatCtymax.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cipher20.TetrajectoryfeatCtymax/HD.json",
+      "start": 0.0,
+      "end": 11.058659217877095,
+      "start_at": 1706.945877677024,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cipher20.TetrajectoryfeatCtymax/Cipher20.TetrajectoryfeatCtymax.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cipher20.TetrajectoryfeatCtymax/IN.json",
+      "start": 0.0,
+      "end": 11.142458100558658,
+      "start_at": 1718.004536894901,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cipher20.TetrajectoryfeatCtymax/Cipher20.TetrajectoryfeatCtymax.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ClassMemories.AntistarfeatCtymax/EZ.json",
+      "start": 0.0,
+      "end": 5.879310344827586,
+      "start_at": 1729.1469949954599,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ClassMemories.AntistarfeatCtymax/ClassMemories.AntistarfeatCtymax.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ClassMemories.AntistarfeatCtymax/HD.json",
+      "start": 0.0,
+      "end": 4.017241379310345,
+      "start_at": 1735.0263053402875,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ClassMemories.AntistarfeatCtymax/ClassMemories.AntistarfeatCtymax.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ClassMemories.AntistarfeatCtymax/IN.json",
+      "start": 0.0,
+      "end": 3.603448275862069,
+      "start_at": 1739.0435467195978,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ClassMemories.AntistarfeatCtymax/ClassMemories.AntistarfeatCtymax.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ClockParadox.WyvernP/EZ.json",
+      "start": 0.0,
+      "end": 30.5,
+      "start_at": 1742.6469949954599,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ClockParadox.WyvernP/ClockParadox.WyvernP.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ClockParadox.WyvernP/HD.json",
+      "start": 0.0,
+      "end": 21.07142857142857,
+      "start_at": 1773.1469949954599,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ClockParadox.WyvernP/ClockParadox.WyvernP.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ClockParadox.WyvernP/IN.json",
+      "start": 0.0,
+      "end": 20.21428571428571,
+      "start_at": 1794.2184235668885,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ClockParadox.WyvernP/ClockParadox.WyvernP.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ColorfulDays.P4koofeatつゆり花鈴/EZ.json",
+      "start": 0.0,
+      "end": 16.49264705882353,
+      "start_at": 1814.4327092811743,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ColorfulDays.P4koofeatつゆり花鈴/ColorfulDays.P4koofeatつゆり花鈴.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ColorfulDays.P4koofeatつゆり花鈴/HD.json",
+      "start": 0.0,
+      "end": 6.897058823529412,
+      "start_at": 1830.9253563399977,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ColorfulDays.P4koofeatつゆり花鈴/ColorfulDays.P4koofeatつゆり花鈴.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ColorfulDays.P4koofeatつゆり花鈴/IN.json",
+      "start": 0.0,
+      "end": 6.235294117647059,
+      "start_at": 1837.8224151635272,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ColorfulDays.P4koofeatつゆり花鈴/ColorfulDays.P4koofeatつゆり花鈴.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CometFeat符白牙.CNHKSS/EZ.json",
+      "start": 0.0,
+      "end": 25.833333333333332,
+      "start_at": 1844.0577092811743,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CometFeat符白牙.CNHKSS/CometFeat符白牙.CNHKSS.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CometFeat符白牙.CNHKSS/HD.json",
+      "start": 0.0,
+      "end": 16.5,
+      "start_at": 1869.8910426145076,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CometFeat符白牙.CNHKSS/CometFeat符白牙.CNHKSS.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CometFeat符白牙.CNHKSS/IN.json",
+      "start": 0.0,
+      "end": 16.833333333333332,
+      "start_at": 1886.3910426145076,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CometFeat符白牙.CNHKSS/CometFeat符白牙.CNHKSS.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ComputeItWithSomeDevilishAlcoholicSteampunkEngines.かめりあ/EZ.json",
+      "start": 0.0,
+      "end": 13.590909090909092,
+      "start_at": 1903.2243759478408,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ComputeItWithSomeDevilishAlcoholicSteampunkEngines.かめりあ/ComputeItWithSomeDevilishAlcoholicSteampunkEngines.かめりあ.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ComputeItWithSomeDevilishAlcoholicSteampunkEngines.かめりあ/HD.json",
+      "start": 0.0,
+      "end": 10.318181818181817,
+      "start_at": 1916.8152850387498,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ComputeItWithSomeDevilishAlcoholicSteampunkEngines.かめりあ/ComputeItWithSomeDevilishAlcoholicSteampunkEngines.かめりあ.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ComputeItWithSomeDevilishAlcoholicSteampunkEngines.かめりあ/IN.json",
+      "start": 0.0,
+      "end": 5.681818181818182,
+      "start_at": 1927.1334668569316,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/ComputeItWithSomeDevilishAlcoholicSteampunkEngines.かめりあ/ComputeItWithSomeDevilishAlcoholicSteampunkEngines.かめりあ.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Concvssion.Halv/EZ.json",
+      "start": 0.0,
+      "end": 6.973684210526315,
+      "start_at": 1932.8152850387498,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Concvssion.Halv/Concvssion.Halv.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Concvssion.Halv/HD.json",
+      "start": 0.0,
+      "end": 15.026315789473683,
+      "start_at": 1939.788969249276,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Concvssion.Halv/Concvssion.Halv.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Concvssion.Halv/IN.json",
+      "start": 0.0,
+      "end": 12.973684210526315,
+      "start_at": 1954.8152850387498,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Concvssion.Halv/Concvssion.Halv.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CraveWave.LandRoot/EZ.json",
+      "start": 0.0,
+      "end": 18.900000000000002,
+      "start_at": 1967.788969249276,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CraveWave.LandRoot/CraveWave.LandRoot.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CraveWave.LandRoot/HD.json",
+      "start": 0.0,
+      "end": 18.900000000000002,
+      "start_at": 1986.6889692492762,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CraveWave.LandRoot/CraveWave.LandRoot.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CraveWave.LandRoot/IN.json",
+      "start": 0.0,
+      "end": 7.7,
+      "start_at": 2005.5889692492763,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CraveWave.LandRoot/CraveWave.LandRoot.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Credits.Frums/AT.json",
+      "start": 0.0,
+      "end": 4.689944134078212,
+      "start_at": 2013.2889692492763,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Credits.Frums/Credits.Frums.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Credits.Frums/EZ.json",
+      "start": 0.0,
+      "end": 15.91899441340782,
+      "start_at": 2017.9789133833544,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Credits.Frums/Credits.Frums.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Credits.Frums/HD.json",
+      "start": 0.0,
+      "end": 4.689944134078212,
+      "start_at": 2033.8979077967622,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Credits.Frums/Credits.Frums.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Credits.Frums/IN.json",
+      "start": 0.0,
+      "end": 4.689944134078212,
+      "start_at": 2038.5878519308403,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Credits.Frums/Credits.Frums.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cristalisia.onoken/EZ.json",
+      "start": 0.0,
+      "end": 10.350746268656717,
+      "start_at": 2043.2777960649184,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cristalisia.onoken/Cristalisia.onoken.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cristalisia.onoken/HD.json",
+      "start": 0.0,
+      "end": 4.082089552238806,
+      "start_at": 2053.6285423335753,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cristalisia.onoken/Cristalisia.onoken.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cristalisia.onoken/IN.json",
+      "start": 0.0,
+      "end": 8.559701492537314,
+      "start_at": 2057.710631885814,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cristalisia.onoken/Cristalisia.onoken.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CROSSSOUL.HyuNfeatSyepias/EZ.json",
+      "start": 0.0,
+      "end": 10.7,
+      "start_at": 2066.2703333783516,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CROSSSOUL.HyuNfeatSyepias/CROSSSOUL.HyuNfeatSyepias.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CROSSSOUL.HyuNfeatSyepias/HD.json",
+      "start": 0.0,
+      "end": 8.3,
+      "start_at": 2076.9703333783514,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CROSSSOUL.HyuNfeatSyepias/CROSSSOUL.HyuNfeatSyepias.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CROSSSOUL.HyuNfeatSyepias/IN.json",
+      "start": 0.0,
+      "end": 7.1,
+      "start_at": 2085.2703333783516,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CROSSSOUL.HyuNfeatSyepias/CROSSSOUL.HyuNfeatSyepias.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CrushBETA.shadow_bling/EZ.json",
+      "start": 0.0,
+      "end": 22.4,
+      "start_at": 2092.3703333783515,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CrushBETA.shadow_bling/CrushBETA.shadow_bling.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CrushBETA.shadow_bling/HD.json",
+      "start": 0.0,
+      "end": 4.4,
+      "start_at": 2114.7703333783516,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CrushBETA.shadow_bling/CrushBETA.shadow_bling.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CrushBETA.shadow_bling/IN.json",
+      "start": 0.0,
+      "end": 12.5,
+      "start_at": 2119.1703333783516,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/CrushBETA.shadow_bling/CrushBETA.shadow_bling.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/cryout.JuE/EZ.json",
+      "start": 0.0,
+      "end": 9.166666666666666,
+      "start_at": 2131.6703333783516,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/cryout.JuE/cryout.JuE.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/cryout.JuE/HD.json",
+      "start": 0.0,
+      "end": 3.333333333333333,
+      "start_at": 2140.837000045018,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/cryout.JuE/cryout.JuE.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/cryout.JuE/IN.json",
+      "start": 0.0,
+      "end": 3.333333333333333,
+      "start_at": 2144.1703333783516,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/cryout.JuE/cryout.JuE.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/csqn.Aoi/EZ.json",
+      "start": 0.0,
+      "end": 16.017241379310345,
+      "start_at": 2147.503666711685,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/csqn.Aoi/csqn.Aoi.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/csqn.Aoi/HD.json",
+      "start": 0.0,
+      "end": 14.293103448275863,
+      "start_at": 2163.5209080909954,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/csqn.Aoi/csqn.Aoi.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/csqn.Aoi/IN.json",
+      "start": 0.0,
+      "end": 8.344827586206897,
+      "start_at": 2177.814011539271,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/csqn.Aoi/csqn.Aoi.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cthugha.USAO/AT.json",
+      "start": 0.0,
+      "end": 10.077464788732394,
+      "start_at": 2186.158839125478,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cthugha.USAO/Cthugha.USAO.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cthugha.USAO/EZ.json",
+      "start": 0.0,
+      "end": 16.274647887323944,
+      "start_at": 2196.2363039142106,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cthugha.USAO/Cthugha.USAO.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cthugha.USAO/HD.json",
+      "start": 0.0,
+      "end": 11.41549295774648,
+      "start_at": 2212.5109518015347,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cthugha.USAO/Cthugha.USAO.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cthugha.USAO/IN.json",
+      "start": 0.0,
+      "end": 7.823943661971831,
+      "start_at": 2223.9264447592814,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cthugha.USAO/Cthugha.USAO.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cuvism.Fl00tvsHalv/AT.json",
+      "start": 0.0,
+      "end": 8.231958762886599,
+      "start_at": 2231.7503884212533,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cuvism.Fl00tvsHalv/Cuvism.Fl00tvsHalv.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cuvism.Fl00tvsHalv/EZ.json",
+      "start": 0.0,
+      "end": 24.00515463917526,
+      "start_at": 2239.98234718414,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cuvism.Fl00tvsHalv/Cuvism.Fl00tvsHalv.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cuvism.Fl00tvsHalv/HD.json",
+      "start": 0.0,
+      "end": 10.70618556701031,
+      "start_at": 2263.987501823315,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cuvism.Fl00tvsHalv/Cuvism.Fl00tvsHalv.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cuvism.Fl00tvsHalv/IN.json",
+      "start": 0.0,
+      "end": 8.077319587628867,
+      "start_at": 2274.6936873903255,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Cuvism.Fl00tvsHalv/Cuvism.Fl00tvsHalv.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DancewithSilence.かめりあ/EZ.json",
+      "start": 0.0,
+      "end": 42.21875,
+      "start_at": 2282.7710069779546,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DancewithSilence.かめりあ/DancewithSilence.かめりあ.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DancewithSilence.かめりあ/HD.json",
+      "start": 0.0,
+      "end": 21.125,
+      "start_at": 2324.9897569779546,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DancewithSilence.かめりあ/DancewithSilence.かめりあ.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DancewithSilence.かめりあ/IN.json",
+      "start": 0.0,
+      "end": 26.75,
+      "start_at": 2346.1147569779546,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DancewithSilence.かめりあ/DancewithSilence.かめりあ.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Dash.小红Akane李祥辉/EZ.json",
+      "start": 0.0,
+      "end": 13.625,
+      "start_at": 2372.8647569779546,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Dash.小红Akane李祥辉/Dash.小红Akane李祥辉.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Dash.小红Akane李祥辉/HD.json",
+      "start": 0.0,
+      "end": 6.828125,
+      "start_at": 2386.4897569779546,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Dash.小红Akane李祥辉/Dash.小红Akane李祥辉.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Dash.小红Akane李祥辉/IN.json",
+      "start": 0.0,
+      "end": 6.828125,
+      "start_at": 2393.3178819779546,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Dash.小红Akane李祥辉/Dash.小红Akane李祥辉.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DataErr0r.Cosmograph/EZ.json",
+      "start": 0.0,
+      "end": 27.166666666666664,
+      "start_at": 2400.1460069779546,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DataErr0r.Cosmograph/DataErr0r.Cosmograph.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DataErr0r.Cosmograph/HD.json",
+      "start": 0.0,
+      "end": 8.5,
+      "start_at": 2427.312673644621,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DataErr0r.Cosmograph/DataErr0r.Cosmograph.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DataErr0r.Cosmograph/IN.json",
+      "start": 0.0,
+      "end": 8.833333333333334,
+      "start_at": 2435.812673644621,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DataErr0r.Cosmograph/DataErr0r.Cosmograph.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/dBdoll.YUESTEVENuen/AT.json",
+      "start": 0.0,
+      "end": 24.40625,
+      "start_at": 2444.6460069779546,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/dBdoll.YUESTEVENuen/dBdoll.YUESTEVENuen.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/dBdoll.YUESTEVENuen/EZ.json",
+      "start": 0.0,
+      "end": 29.5625,
+      "start_at": 2469.0522569779546,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/dBdoll.YUESTEVENuen/dBdoll.YUESTEVENuen.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/dBdoll.YUESTEVENuen/HD.json",
+      "start": 0.0,
+      "end": 24.171875,
+      "start_at": 2498.6147569779546,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/dBdoll.YUESTEVENuen/dBdoll.YUESTEVENuen.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/dBdoll.YUESTEVENuen/IN.json",
+      "start": 0.0,
+      "end": 17.4921875,
+      "start_at": 2522.7866319779546,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/dBdoll.YUESTEVENuen/dBdoll.YUESTEVENuen.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DeadSoul.SoundSouler/EZ.json",
+      "start": 0.0,
+      "end": 6.409090909090909,
+      "start_at": 2540.2788194779546,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DeadSoul.SoundSouler/DeadSoul.SoundSouler.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DeadSoul.SoundSouler/HD.json",
+      "start": 0.0,
+      "end": 4.477272727272727,
+      "start_at": 2546.6879103870456,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DeadSoul.SoundSouler/DeadSoul.SoundSouler.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DeadSoul.SoundSouler/IN.json",
+      "start": 0.0,
+      "end": 4.477272727272727,
+      "start_at": 2551.165183114318,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DeadSoul.SoundSouler/DeadSoul.SoundSouler.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Demiurge.Rabpit/EZ.json",
+      "start": 0.0,
+      "end": 30.770270270270274,
+      "start_at": 2555.6424558415906,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Demiurge.Rabpit/Demiurge.Rabpit.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Demiurge.Rabpit/HD.json",
+      "start": 0.0,
+      "end": 12.121621621621623,
+      "start_at": 2586.412726111861,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Demiurge.Rabpit/Demiurge.Rabpit.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Demiurge.Rabpit/IN.json",
+      "start": 0.0,
+      "end": 28.87837837837838,
+      "start_at": 2598.5343477334827,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Demiurge.Rabpit/Demiurge.Rabpit.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Demonkin.ForgedReigns/EZ.json",
+      "start": 0.0,
+      "end": 15.96875,
+      "start_at": 2627.412726111861,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Demonkin.ForgedReigns/Demonkin.ForgedReigns.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Demonkin.ForgedReigns/HD.json",
+      "start": 0.0,
+      "end": 15.1875,
+      "start_at": 2643.381476111861,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Demonkin.ForgedReigns/Demonkin.ForgedReigns.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Demonkin.ForgedReigns/IN.json",
+      "start": 0.0,
+      "end": 2.6875,
+      "start_at": 2658.568976111861,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Demonkin.ForgedReigns/Demonkin.ForgedReigns.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DerRichter.Ωμεγα/AT.json",
+      "start": 0.0,
+      "end": 13.9375,
+      "start_at": 2661.256476111861,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DerRichter.Ωμεγα/DerRichter.Ωμεγα.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DerRichter.Ωμεγα/EZ.json",
+      "start": 0.0,
+      "end": 17.53125,
+      "start_at": 2675.193976111861,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DerRichter.Ωμεγα/DerRichter.Ωμεγα.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DerRichter.Ωμεγα/HD.json",
+      "start": 0.0,
+      "end": 13.15625,
+      "start_at": 2692.725226111861,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DerRichter.Ωμεγα/DerRichter.Ωμεγα.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DerRichter.Ωμεγα/IN.json",
+      "start": 0.0,
+      "end": 3.9375,
+      "start_at": 2705.881476111861,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DerRichter.Ωμεγα/DerRichter.Ωμεγα.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DESTRUCTION321.Normal1zervsBrokenNerdz/AT.json",
+      "start": 0.0,
+      "end": 3.0500200733845593,
+      "start_at": 2709.818976111861,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DESTRUCTION321.Normal1zervsBrokenNerdz/DESTRUCTION321.Normal1zervsBrokenNerdz.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DESTRUCTION321.Normal1zervsBrokenNerdz/EZ.json",
+      "start": 0.0,
+      "end": 17.305624282259796,
+      "start_at": 2712.8689961852456,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DESTRUCTION321.Normal1zervsBrokenNerdz/DESTRUCTION321.Normal1zervsBrokenNerdz.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DESTRUCTION321.Normal1zervsBrokenNerdz/HD.json",
+      "start": 0.0,
+      "end": 3.3009373803766326,
+      "start_at": 2730.1746204675055,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DESTRUCTION321.Normal1zervsBrokenNerdz/DESTRUCTION321.Normal1zervsBrokenNerdz.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DESTRUCTION321.Normal1zervsBrokenNerdz/IN.json",
+      "start": 0.0,
+      "end": 2.9916672112933793,
+      "start_at": 2733.475557847882,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DESTRUCTION321.Normal1zervsBrokenNerdz/DESTRUCTION321.Normal1zervsBrokenNerdz.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DevIAtiOnshortver.polysha/EZ.json",
+      "start": 0.0,
+      "end": 21.016129032258064,
+      "start_at": 2736.4672250591757,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DevIAtiOnshortver.polysha/DevIAtiOnshortver.polysha.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DevIAtiOnshortver.polysha/HD.json",
+      "start": 0.0,
+      "end": 9.660714285714285,
+      "start_at": 2757.4833540914337,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DevIAtiOnshortver.polysha/DevIAtiOnshortver.polysha.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DevIAtiOnshortver.polysha/IN.json",
+      "start": 0.0,
+      "end": 9.790322580645162,
+      "start_at": 2767.144068377148,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DevIAtiOnshortver.polysha/DevIAtiOnshortver.polysha.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Devotion.Connexio/EZ.json",
+      "start": 0.0,
+      "end": 13.793413173652695,
+      "start_at": 2776.9343909577933,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Devotion.Connexio/Devotion.Connexio.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Devotion.Connexio/HD.json",
+      "start": 0.0,
+      "end": 5.350299401197605,
+      "start_at": 2790.727804131446,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Devotion.Connexio/Devotion.Connexio.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Devotion.Connexio/IN.json",
+      "start": 0.0,
+      "end": 9.122754491017965,
+      "start_at": 2796.0781035326436,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Devotion.Connexio/Devotion.Connexio.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DiamondDust.MasahiroGodspeedAoki/AT.json",
+      "start": 0.0,
+      "end": 11.6,
+      "start_at": 2805.2008580236616,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DiamondDust.MasahiroGodspeedAoki/DiamondDust.MasahiroGodspeedAoki.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DiamondDust.MasahiroGodspeedAoki/EZ.json",
+      "start": 0.0,
+      "end": 14.6,
+      "start_at": 2816.8008580236615,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DiamondDust.MasahiroGodspeedAoki/DiamondDust.MasahiroGodspeedAoki.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DiamondDust.MasahiroGodspeedAoki/HD.json",
+      "start": 0.0,
+      "end": 12.424999999999999,
+      "start_at": 2831.4008580236614,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DiamondDust.MasahiroGodspeedAoki/DiamondDust.MasahiroGodspeedAoki.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DiamondDust.MasahiroGodspeedAoki/IN.json",
+      "start": 0.0,
+      "end": 12.3125,
+      "start_at": 2843.8258580236616,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DiamondDust.MasahiroGodspeedAoki/DiamondDust.MasahiroGodspeedAoki.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DiamondEyes.SYNTHETIC/EZ.json",
+      "start": 0.0,
+      "end": 19.357142857142858,
+      "start_at": 2856.1383580236616,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DiamondEyes.SYNTHETIC/DiamondEyes.SYNTHETIC.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DiamondEyes.SYNTHETIC/HD.json",
+      "start": 0.0,
+      "end": 15.071428571428571,
+      "start_at": 2875.4955008808042,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DiamondEyes.SYNTHETIC/DiamondEyes.SYNTHETIC.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DiamondEyes.SYNTHETIC/IN.json",
+      "start": 0.0,
+      "end": 7.9330357142857135,
+      "start_at": 2890.5669294522327,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DiamondEyes.SYNTHETIC/DiamondEyes.SYNTHETIC.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Disorder.HyuNfeatYURI/EZ.json",
+      "start": 0.0,
+      "end": 14.178756476683937,
+      "start_at": 2898.4999651665185,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Disorder.HyuNfeatYURI/Disorder.HyuNfeatYURI.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Disorder.HyuNfeatYURI/HD.json",
+      "start": 0.0,
+      "end": 3.6088082901554404,
+      "start_at": 2912.6787216432026,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Disorder.HyuNfeatYURI/Disorder.HyuNfeatYURI.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Disorder.HyuNfeatYURI/IN.json",
+      "start": 0.0,
+      "end": 3.6088082901554404,
+      "start_at": 2916.287529933358,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Disorder.HyuNfeatYURI/Disorder.HyuNfeatYURI.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DistortedFate.Sakuzyo/AT.json",
+      "start": 0.0,
+      "end": 9.700000000000001,
+      "start_at": 2919.896338223514,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DistortedFate.Sakuzyo/DistortedFate.Sakuzyo.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DistortedFate.Sakuzyo/EZ.json",
+      "start": 0.0,
+      "end": 16.7,
+      "start_at": 2929.5963382235136,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DistortedFate.Sakuzyo/DistortedFate.Sakuzyo.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DistortedFate.Sakuzyo/HD.json",
+      "start": 0.0,
+      "end": 14.9,
+      "start_at": 2946.2963382235134,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DistortedFate.Sakuzyo/DistortedFate.Sakuzyo.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DistortedFate.Sakuzyo/IN.json",
+      "start": 0.0,
+      "end": 9.9,
+      "start_at": 2961.1963382235135,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DistortedFate.Sakuzyo/DistortedFate.Sakuzyo.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Dlyrotz.Likey/EZ.json",
+      "start": 0.0,
+      "end": 15.242857142857144,
+      "start_at": 2971.0963382235136,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Dlyrotz.Likey/Dlyrotz.Likey.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Dlyrotz.Likey/HD.json",
+      "start": 0.0,
+      "end": 15.242857142857144,
+      "start_at": 2986.339195366371,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Dlyrotz.Likey/Dlyrotz.Likey.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Dlyrotz.Likey/IN.json",
+      "start": 0.0,
+      "end": 15.242857142857144,
+      "start_at": 3001.582052509228,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Dlyrotz.Likey/Dlyrotz.Likey.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DontNeverAround.HAMA/EZ.json",
+      "start": 0.0,
+      "end": 12.842857142857143,
+      "start_at": 3016.8249096520854,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DontNeverAround.HAMA/DontNeverAround.HAMA.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DontNeverAround.HAMA/HD.json",
+      "start": 0.0,
+      "end": 10.785714285714286,
+      "start_at": 3029.6677667949425,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DontNeverAround.HAMA/DontNeverAround.HAMA.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DontNeverAround.HAMA/IN.json",
+      "start": 0.0,
+      "end": 8.728571428571428,
+      "start_at": 3040.4534810806567,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DontNeverAround.HAMA/DontNeverAround.HAMA.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Doppelganger.LeaF/EZ.json",
+      "start": 0.0,
+      "end": 11.214285714285714,
+      "start_at": 3049.182052509228,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Doppelganger.LeaF/Doppelganger.LeaF.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Doppelganger.LeaF/HD.json",
+      "start": 0.0,
+      "end": 7.25,
+      "start_at": 3060.396338223514,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Doppelganger.LeaF/Doppelganger.LeaF.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Doppelganger.LeaF/IN.json",
+      "start": 0.0,
+      "end": 5.214285714285714,
+      "start_at": 3067.646338223514,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Doppelganger.LeaF/Doppelganger.LeaF.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Dreamland.z1onkyrrin/EZ.json",
+      "start": 0.0,
+      "end": 12.0,
+      "start_at": 3072.8606239377996,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Dreamland.z1onkyrrin/Dreamland.z1onkyrrin.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Dreamland.z1onkyrrin/HD.json",
+      "start": 0.0,
+      "end": 11.25,
+      "start_at": 3084.8606239377996,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Dreamland.z1onkyrrin/Dreamland.z1onkyrrin.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Dreamland.z1onkyrrin/IN.json",
+      "start": 0.0,
+      "end": 6.5,
+      "start_at": 3096.1106239377996,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/Dreamland.z1onkyrrin/Dreamland.z1onkyrrin.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DropIt.Asuka/EZ.json",
+      "start": 0.0,
+      "end": 10.5,
+      "start_at": 3102.6106239377996,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DropIt.Asuka/DropIt.Asuka.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DropIt.Asuka/HD.json",
+      "start": 0.0,
+      "end": 6.69047619047619,
+      "start_at": 3113.1106239377996,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DropIt.Asuka/DropIt.Asuka.ogg"
+    },
+    {
+      "input": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DropIt.Asuka/IN.json",
+      "start": 0.0,
+      "end": 4.904761904761904,
+      "start_at": 3119.8011001282757,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/DropIt.Asuka/DropIt.Asuka.ogg"
+    }
+  ]
+}

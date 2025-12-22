@@ -53,14 +53,86 @@ def draw_hold_3slice(
         return
     ang = math.atan2(vy, vx)
 
-    target_w = max(2, int(hold_body_w * size_scale))
-    scale = target_w / max(1, iw)
+    target_w_raw = max(2, int(hold_body_w * size_scale))
 
-    tail_len = tail_h * scale
-    head_len = head_h * scale
+    def _clip_segment_to_aabb(
+        x0: float,
+        y0: float,
+        x1: float,
+        y1: float,
+        xmin: float,
+        ymin: float,
+        xmax: float,
+        ymax: float,
+    ) -> Optional[Tuple[float, float]]:
+        dx = float(x1) - float(x0)
+        dy = float(y1) - float(y0)
+        t0 = 0.0
+        t1 = 1.0
 
-    out_w = target_w
-    out_h = int(max(2, length))
+        def _clip(p: float, q: float) -> bool:
+            nonlocal t0, t1
+            if abs(p) < 1e-12:
+                return q >= 0.0
+            r = q / p
+            if p < 0.0:
+                if r > t1:
+                    return False
+                if r > t0:
+                    t0 = r
+            else:
+                if r < t0:
+                    return False
+                if r < t1:
+                    t1 = r
+            return True
+
+        if not _clip(-dx, float(x0) - float(xmin)):
+            return None
+        if not _clip(dx, float(xmax) - float(x0)):
+            return None
+        if not _clip(-dy, float(y0) - float(ymin)):
+            return None
+        if not _clip(dy, float(ymax) - float(y0)):
+            return None
+        if t1 < t0:
+            return None
+        return (t0, t1)
+
+    ow = float(overlay.get_width())
+    oh = float(overlay.get_height())
+    m = float(target_w_raw) * 1.5
+    clip = _clip_segment_to_aabb(
+        float(head_xy[0]),
+        float(head_xy[1]),
+        float(tail_xy[0]),
+        float(tail_xy[1]),
+        -m,
+        -m,
+        ow + m,
+        oh + m,
+    )
+    if clip is None:
+        return
+    t_clip0, t_clip1 = clip
+    clip_hide_head = t_clip0 > 1e-6
+    clip_hide_tail = t_clip1 < 1.0 - 1e-6
+    head_xy = (
+        float(head_xy[0]) + float(vx) * float(t_clip0),
+        float(head_xy[1]) + float(vy) * float(t_clip0),
+    )
+    tail_xy = (
+        float(head_xy[0]) + float(vx) * float(t_clip1),
+        float(head_xy[1]) + float(vy) * float(t_clip1),
+    )
+    vx = float(tail_xy[0]) - float(head_xy[0])
+    vy = float(tail_xy[1]) - float(head_xy[1])
+    length = math.hypot(vx, vy)
+    if length < 1e-3:
+        return
+    ang = math.atan2(vy, vx)
+
+    out_h_raw = int(max(2, length))
 
     # Calculate rotation angle for cache key
     v = pygame.math.Vector2(float(vx), float(vy))
@@ -71,22 +143,28 @@ def draw_hold_3slice(
     base_m = pygame.math.Vector2(0.0, 1.0)
     rot_deg = float(base_m.angle_to(v_m))
 
-    # Try to get cached hold surface
     hold_cache = get_global_hold_cache()
-    cached_surf = hold_cache.get(out_w, out_h, rot_deg, mh, progress, note_rgb)
+
+    out_w, out_h, rot_q_deg, progress_q = hold_cache.quantize(target_w_raw, out_h_raw, rot_deg, progress)
+    rot_q_deg_f = float(rot_q_deg)
+    scale = float(out_w) / max(1, iw)
+    tail_len = tail_h * scale
+    head_len = head_h * scale
+
+    cached_surf = hold_cache.get(out_w, out_h, rot_q_deg_f, mh, progress_q, note_rgb)
 
     if cached_surf is not None:
-        # Use cached surface
-        try:
+        if a >= 255:
+            spr = cached_surf
+        else:
             spr = cached_surf.copy()
             spr.set_alpha(a)
-        except Exception:
-            spr = cached_surf
     else:
         # Render hold surface from scratch
         # Use surface pool to avoid per-frame allocation
         pool = get_global_pool()
         surf = pool.get(out_w, out_h, pygame.SRCALPHA)
+        pooled_surf = surf
 
         def _blit_mid(y0: int, seg_h: int, repeat: bool):
             if seg_h <= 0:
@@ -120,7 +198,9 @@ def draw_hold_3slice(
             tail_draw_h = min(int(out_h), int(tail_piece.get_height()))
 
         keep_head = bool(getattr(respack, "hold_keep_head", False))
-        hide_head_now = (progress is not None) and (not keep_head)
+        hide_head_now = ((progress_q is not None) and (not keep_head)) or bool(clip_hide_head)
+        if clip_hide_tail:
+            tail_draw_h = 0
 
         y0_mid = 0 if hide_head_now else int(head_draw_h)
         y1_mid = int(out_h - tail_draw_h)
@@ -133,7 +213,7 @@ def draw_hold_3slice(
             except:
                 surf.blit(head_piece, (0, 0))
 
-        if tail_draw_h > 0:
+        if (not clip_hide_tail) and tail_draw_h > 0:
             try:
                 if tail_no_scale:
                     tail_draw_piece = tail_piece
@@ -147,9 +227,9 @@ def draw_hold_3slice(
 
         # During holding, allow sampling only the "tail side" portion of the texture and stretch it
         # back to the current geometric length. This makes the texture appear to be "consumed".
-        if (progress is not None) and (not keep_head) and bool(getattr(respack, "hold_compact", False)):
+        if (progress_q is not None) and (not keep_head) and bool(getattr(respack, "hold_compact", False)):
             try:
-                p = clamp(float(progress), 0.0, 1.0)
+                p = clamp(float(progress_q), 0.0, 1.0)
             except:
                 p = None
             if p is not None and p > 1e-6:
@@ -164,6 +244,12 @@ def draw_hold_3slice(
                         sample_h = max(2, int(round(float(out_h) * float(keep))))
                         y0 = max(0, int(out_h) - int(sample_h))
                     crop = surf.subsurface((0, int(y0), int(out_w), int(sample_h))).copy()
+                    if pooled_surf is not None:
+                        try:
+                            pool.release(pooled_surf)
+                        except Exception:
+                            pass
+                        pooled_surf = None
                     surf = pygame.transform.smoothscale(crop, (int(out_w), int(out_h)))
                 except:
                     pass
@@ -177,19 +263,26 @@ def draw_hold_3slice(
         except:
             pass
 
-        surf.set_alpha(a)
-
-        spr = pygame.transform.rotozoom(surf, rot_deg, 1.0)
+        spr = pygame.transform.rotozoom(surf, rot_q_deg_f, 1.0)
+        if pooled_surf is not None:
+            try:
+                pool.release(pooled_surf)
+            except Exception:
+                pass
 
         # Cache the rotated surface for reuse
-        hold_cache.put(out_w, out_h, rot_deg, mh, progress, note_rgb, spr)
+        hold_cache.put(out_w, out_h, rot_q_deg_f, mh, progress_q, note_rgb, spr)
+
+        if a < 255:
+            spr = spr.copy()
+            spr.set_alpha(a)
 
     # Blit the hold surface (cached or freshly rendered)
     # Anchor: align the head end of the (rotated) sprite to head_xy.
     try:
         off = pygame.math.Vector2(0.0, float(out_h) * 0.5)
         off_m = pygame.math.Vector2(float(off.x), float(-off.y))
-        off_m = off_m.rotate(rot_deg)
+        off_m = off_m.rotate(rot_q_deg_f)
         off = pygame.math.Vector2(float(off_m.x), float(-off_m.y))
         cx = float(head_xy[0]) - float(off.x)
         cy = float(head_xy[1]) - float(off.y)
@@ -199,7 +292,7 @@ def draw_hold_3slice(
         overlay.blit(spr, (head_xy[0] - spr.get_width() / 2, head_xy[1] - spr.get_height() / 2))
 
     if draw_outline:
-        hw = target_w * 0.5
+        hw = float(out_w) * 0.5
         nx, ny = -math.sin(ang), math.cos(ang)
         pts = [
             (head_xy[0] + nx * hw, head_xy[1] + ny * hw),

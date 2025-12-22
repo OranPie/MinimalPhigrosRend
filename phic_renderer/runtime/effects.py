@@ -12,6 +12,7 @@ class HitFX:
     t0: float
     rgba: Tuple[int, int, int, int]
     rot: float
+    variant: str = ""
 
 
 class ParticleBurst:

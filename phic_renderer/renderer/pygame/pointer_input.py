@@ -107,6 +107,52 @@ class PointerManager:
         st.x = float(x)
         st.y = float(y)
 
+    def sim_down(self, pointer_id: int, x: Optional[float], y: Optional[float]) -> None:
+        st = self._get(int(pointer_id))
+        st.down = True
+        st.press_edge = True
+        st.release_edge = False
+        st.gesture = None
+        st.moved_px = 0.0
+        st._last_x = float(x) if x is not None else None
+        st._last_y = float(y) if y is not None else None
+        st.x = float(x) if x is not None else None
+        st.y = float(y) if y is not None else None
+
+    def sim_move(self, pointer_id: int, x: Optional[float], y: Optional[float]) -> None:
+        st = self._get(int(pointer_id))
+        if not st.down:
+            return
+        self._update_move(st, x, y)
+
+    def sim_up(self, pointer_id: int, *, gesture: Optional[str] = None, no_gesture: bool = False) -> None:
+        st = self._get(int(pointer_id))
+        if not st.down:
+            return
+        st.down = False
+        st.release_edge = True
+        if bool(no_gesture):
+            st.gesture = None
+            return
+        if gesture is not None:
+            st.gesture = str(gesture)
+            return
+        thr_px = float(self._flick_threshold_px())
+        is_flick = bool(float(st.moved_px) >= float(thr_px))
+        st.gesture = "flick" if is_flick else "tap"
+
+    def sim_gesture(self, pointer_id: int, x: Optional[float], y: Optional[float], *, gesture: str) -> None:
+        st = self._get(int(pointer_id))
+        st.down = False
+        st.press_edge = False
+        st.release_edge = True
+        st.gesture = str(gesture)
+        st.moved_px = 0.0
+        st._last_x = float(x) if x is not None else None
+        st._last_y = float(y) if y is not None else None
+        st.x = float(x) if x is not None else None
+        st.y = float(y) if y is not None else None
+
     def _px_from_finger(self, fx: float, fy: float) -> Tuple[float, float]:
         return float(fx) * float(self.W), float(fy) * float(self.H)
 

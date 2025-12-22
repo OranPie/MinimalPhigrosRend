@@ -40,6 +40,13 @@ def draw_hitfx(
 
     fw, fh = respack.hitfx_frames_xy
     sheet = respack.hitfx_sheet
+    try:
+        if str(getattr(fx, "variant", "") or "").lower() == "good":
+            sheet2 = getattr(respack, "hitfx_sheet_good", None)
+            if sheet2 is not None:
+                sheet = sheet2
+    except Exception:
+        pass
     sw, sh = sheet.get_width(), sheet.get_height()
     cell_w, cell_h = sw // fw, sh // fh
 

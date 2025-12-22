@@ -201,7 +201,8 @@ class GLApp:
                                 pass
                         elif respack is not None:
                             c = respack.judge_colors.get("PERFECT", c)
-                        self._hitfx.append(HitFX(x=x, y=y, t0=float(t), rgba=c, rot=float(lr)))
+                        var = "good" if str(getattr(self._judge, "grade_window", lambda *_: "")(float(n.t_hit), float(t)) or "").upper() == "GOOD" else ""
+                        self._hitfx.append(HitFX(x=x, y=y, t0=float(t), rgba=c, rot=float(lr), variant=var))
                         if respack is not None and (not bool(getattr(respack, "hide_particles", False))):
                             try:
                                 self._particles.append(ParticleBurst(x, y, int(now_tick), int(float(respack.hitfx_duration) * 1000.0), c))
@@ -234,7 +235,7 @@ class GLApp:
                                 pass
                         elif respack is not None:
                             c = respack.judge_colors.get("PERFECT", c)
-                        self._hitfx.append(HitFX(x=x, y=y, t0=float(t), rgba=c, rot=float(lr)))
+                        self._hitfx.append(HitFX(x=x, y=y, t0=float(t), rgba=c, rot=float(lr), variant=""))
                         if respack is not None and (not bool(getattr(respack, "hide_particles", False))):
                             try:
                                 self._particles.append(ParticleBurst(x, y, int(now_tick), int(float(respack.hitfx_duration) * 1000.0), c))
@@ -292,7 +293,8 @@ class GLApp:
                                 or respack.judge_colors.get("PERFECT")
                                 or c
                             )
-                        self._hitfx.append(HitFX(x=x, y=y, t0=float(t), rgba=c, rot=float(lr)))
+                        var = "good" if str(grade).upper() == "GOOD" else ""
+                        self._hitfx.append(HitFX(x=x, y=y, t0=float(t), rgba=c, rot=float(lr), variant=var))
                         if respack is not None and (not bool(getattr(respack, "hide_particles", False))):
                             try:
                                 self._particles.append(ParticleBurst(x, y, int(now_tick), int(float(respack.hitfx_duration) * 1000.0), c))
@@ -327,7 +329,8 @@ class GLApp:
                                 or respack.judge_colors.get("PERFECT")
                                 or c
                             )
-                        self._hitfx.append(HitFX(x=x, y=y, t0=float(t), rgba=c, rot=float(lr)))
+                        var = "good" if str(grade).upper() == "GOOD" else ""
+                        self._hitfx.append(HitFX(x=x, y=y, t0=float(t), rgba=c, rot=float(lr), variant=var))
                         if respack is not None and (not bool(getattr(respack, "hide_particles", False))):
                             try:
                                 self._particles.append(ParticleBurst(x, y, int(now_tick), int(float(respack.hitfx_duration) * 1000.0), c))
@@ -406,7 +409,7 @@ class GLApp:
                             c = (int(rr), int(gg), int(bb), 255)
                         except:
                             pass
-                    self._hitfx.append(HitFX(x=x, y=y, t0=float(t), rgba=c, rot=float(lr)))
+                    self._hitfx.append(HitFX(x=x, y=y, t0=float(t), rgba=c, rot=float(lr), variant=""))
                     if not bool(getattr(respack, "hide_particles", False)):
                         try:
                             self._particles.append(ParticleBurst(x, y, int(now_tick), int(float(respack.hitfx_duration) * 1000.0), c))
@@ -1028,6 +1031,13 @@ class GLApp:
 
             fw, fh = respack.hitfx_frames_xy
             sheet = respack.hitfx_sheet
+            try:
+                if str(getattr(fx, "variant", "") or "").lower() == "good":
+                    sheet2 = getattr(respack, "hitfx_sheet_good", None)
+                    if sheet2 is not None:
+                        sheet = sheet2
+            except Exception:
+                pass
             sw, sh = sheet.size
             cell_w = float(sw) / max(1, int(fw))
             cell_h = float(sh) / max(1, int(fh))

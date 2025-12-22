@@ -34,6 +34,7 @@ def main():
     g_in.add_argument("--playlist_script", type=str, default=None, help="Run a playlist script (python file)")
     g_in.add_argument("--playlist_charts_dir", type=str, default="charts")
     g_in.add_argument("--playlist_notes_per_chart", type=int, default=10)
+    g_in.add_argument("--playlist_tail_time", type=float, default=0.5)
     g_in.add_argument("--playlist_seed", type=int, default=None)
     g_in.add_argument("--playlist_no_shuffle", action="store_true")
     g_in.add_argument("--playlist_switch_mode", type=str, default="hit", choices=["hit", "judged"])
@@ -108,6 +109,9 @@ def main():
 
     g_game = ap.add_argument_group("Gameplay")
     g_game.add_argument("--autoplay", action="store_true")
+    g_game.add_argument("--simulateplay", action="store_true")
+    g_game.add_argument("--simulateplay_mode", type=str, default="conservative", choices=["conservative", "aggressive"])
+    g_game.add_argument("--simulateplay_max_pointers", type=int, default=2)
     g_game.add_argument("--judge_script", type=str, default=None, help="Optional judge script JSON to simulate non-perfect autoplay")
     g_game.add_argument("--hold_fx_interval_ms", type=int, default=200)
     g_game.add_argument("--hold_tail_tol", type=float, default=0.8)
@@ -118,8 +122,14 @@ def main():
 
     g_ui = ap.add_argument_group("UI")
     g_ui.add_argument("--no_title_overlay", action="store_true")
+    g_ui.add_argument("--advance_seq_overlay", action="store_true")
     g_ui.add_argument("--font_path", type=str, default=None)
     g_ui.add_argument("--font_size_multiplier", type=float, default=1.0)
+
+    g_ui.add_argument("--advance_lazy_load", action="store_true")
+    g_ui.add_argument("--advance_lazy_cache", type=int, default=1)
+    g_ui.add_argument("--advance_lazy_preload", action="store_true")
+    g_ui.add_argument("--advance_lazy_scan_total_notes", action="store_true")
 
     g_rpe = ap.add_argument_group("RPE")
     g_rpe.add_argument("--rpe_easing_shift", type=int, default=0)
@@ -129,11 +139,15 @@ def main():
     g_dbg.add_argument("--debug_line_label", action="store_true")
     g_dbg.add_argument("--debug_line_stats", action="store_true")
     g_dbg.add_argument("--debug_judge_windows", action="store_true")
+    g_dbg.add_argument("--debug_pointer", action="store_true")
     g_dbg.add_argument("--debug_note_info", action="store_true")
     g_dbg.add_argument("--debug_particles", action="store_true")
     g_dbg.add_argument("--hit_debug", action="store_true")
 
     args = ap.parse_args()
+
+    if getattr(args, "playlist_script", None):
+        raise SystemExit("playlist mode is preparing; please use --advance with a generated advance JSON for now")
 
     setup_logging(args)
     logger.debug("CLI args parsed")
@@ -192,6 +206,12 @@ def main():
                     continue
                 setattr(args, k, v)
         except:
+            pass
+
+    if bool(getattr(args, "simulateplay", False)):
+        try:
+            setattr(args, "autoplay", False)
+        except Exception:
             pass
 
     if args.save_config:
@@ -281,6 +301,11 @@ def main():
         mods_cfg.update(cfg_mods)
     if advance_active and advance_cfg is not None and isinstance(locals().get("advance_mods"), dict):
         mods_cfg.update(locals()["advance_mods"])
+
+    try:
+        setattr(args, "_mods_cfg", dict(mods_cfg))
+    except Exception:
+        pass
 
     notes = apply_mods(mods_cfg, notes, lines)
 

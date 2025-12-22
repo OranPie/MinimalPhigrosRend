@@ -188,14 +188,16 @@ def hold_tick_fx(
             ln = lines[n.line_id]
             lx, ly, lr, la01, sc_now, la_raw = eval_line_state(ln, float(t))
             x, y = note_world_pos(lx, ly, lr, sc_now, n, sc_now, for_tail=False)
-            c = respack.judge_colors.get("PERFECT", (255, 255, 255, 255))
+            g = str(getattr(s, "hold_grade", None) or "PERFECT").upper()
+            c = respack.judge_colors.get(g, respack.judge_colors.get("PERFECT", (255, 255, 255, 255)))
             if getattr(n, "tint_hitfx_rgb", None) is not None:
                 try:
                     rr, gg, bb = n.tint_hitfx_rgb
                     c = (int(rr), int(gg), int(bb), 255)
                 except Exception:
                     pass
-            hitfx.append(HitFX_cls(x, y, float(t), c, lr))
+            var = "good" if g == "GOOD" else ""
+            hitfx.append(HitFX_cls(x, y, float(t), c, lr, var))
             if not respack.hide_particles:
                 particles.append(
                     ParticleBurst_cls(x, y, int(float(t) * 1000.0), int(respack.hitfx_duration * 1000), c)

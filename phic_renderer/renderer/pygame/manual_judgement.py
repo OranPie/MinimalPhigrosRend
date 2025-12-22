@@ -140,7 +140,8 @@ def apply_manual_judgement(
                         or respack.judge_colors.get("PERFECT")
                         or c
                     )
-                hitfx.append(HitFX_cls(x, y, t, c, lr))
+                var = "good" if str(grade).upper() == "GOOD" else ""
+                hitfx.append(HitFX_cls(x, y, t, c, lr, var))
                 if respack and (not respack.hide_particles):
                     particles.append(ParticleBurst_cls(x, y, int(t * 1000.0), int(respack.hitfx_duration * 1000), c))
                 mark_line_hit_cb(n.line_id, int(t * 1000.0))
@@ -182,7 +183,7 @@ def apply_manual_judgement(
                     c = (int(rr), int(gg), int(bb), 255)
                 elif respack:
                     c = respack.judge_colors.get("PERFECT", c)
-                hitfx.append(HitFX_cls(x, y, t, c, lr))
+                hitfx.append(HitFX_cls(x, y, t, c, lr, ""))
                 if respack and (not respack.hide_particles):
                     particles.append(ParticleBurst_cls(x, y, int(t * 1000.0), int(respack.hitfx_duration * 1000), c))
                 mark_line_hit_cb(n.line_id, int(t * 1000.0))
@@ -238,7 +239,8 @@ def apply_manual_judgement(
                         or respack.judge_colors.get("PERFECT")
                         or c
                     )
-                hitfx.append(HitFX_cls(x, y, t, c, lr))
+                var = "good" if str(grade_h).upper() == "GOOD" else ""
+                hitfx.append(HitFX_cls(x, y, t, c, lr, var))
                 if respack and (not respack.hide_particles):
                     particles.append(ParticleBurst_cls(x, y, int(t * 1000.0), int(respack.hitfx_duration * 1000), c))
                 mark_line_hit_cb(n.line_id, int(t * 1000.0))

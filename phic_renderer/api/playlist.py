@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import importlib.util
 import os
 import random
@@ -23,6 +24,8 @@ class ChartMeta:
     bg_path: Optional[str]
     chart_info: Dict[str, Any]
     bg_dim_alpha: Optional[int]
+    chart_offset: float
+    pack_keepalive: Optional[Any]
     total_notes: int
     seg_notes: int
     seg_end_time: float
@@ -108,17 +111,28 @@ def discover_chart_inputs(charts_dir: str) -> List[str]:
                     sub = os.listdir(p)
                 except Exception:
                     sub = []
-                ok = False
+
+                chart_files: List[str] = []
                 for sf in sub:
                     try:
                         low2 = sf.lower()
-                        if low2.endswith(".json") and low2 not in {"info.json", "meta.json"}:
-                            ok = True
-                            break
+                        if low2 in {"info.json", "meta.json"}:
+                            continue
+                        if low2.endswith((".json", ".pec", ".pe")):
+                            chart_files.append(sf)
                     except Exception:
                         continue
-                if ok:
-                    out.append(p)
+
+                if chart_files:
+                    try:
+                        chart_files.sort(key=lambda x: str(x).lower())
+                    except Exception:
+                        pass
+                    for sf in chart_files:
+                        try:
+                            out.append(os.path.join(p, sf))
+                        except Exception:
+                            pass
             continue
         low = fn.lower()
         if low.endswith((".zip", ".pez")):
@@ -257,7 +271,7 @@ def _bg_dim_alpha_from_info(info: Dict[str, Any]) -> Optional[int]:
         return None
 
 
-def _resolve_pack_or_chart(input_path: str) -> Tuple[str, Optional[str], Optional[str], Dict[str, Any]]:
+def _resolve_pack_or_chart(input_path: str) -> Tuple[str, Optional[str], Optional[str], Dict[str, Any], Optional[Any]]:
     input_path = os.path.abspath(str(input_path))
 
     chart_path = input_path
@@ -265,7 +279,25 @@ def _resolve_pack_or_chart(input_path: str) -> Tuple[str, Optional[str], Optiona
     bg_path = None
     chart_info: Dict[str, Any] = {}
 
-    if os.path.isdir(input_path) and (not os.path.exists(os.path.join(input_path, "info.yml"))):
+    pack_keepalive = None
+
+    if os.path.isfile(input_path) and input_path.lower().endswith(".json"):
+        base_dir = os.path.dirname(os.path.abspath(str(input_path)))
+        folder_name = os.path.basename(os.path.abspath(base_dir))
+        stem = os.path.splitext(os.path.basename(input_path))[0]
+        try:
+            _chart_p, music_p, bg_p, _chosen_diff = _resolve_loose_chart_dir(base_dir, [stem])
+        except Exception:
+            music_p, bg_p = None, None
+        if music_p:
+            music_path = music_p
+        if bg_p:
+            bg_path = bg_p
+        chart_info = {
+            "name": folder_name,
+            "level": str(stem).strip().upper(),
+        }
+    elif os.path.isdir(input_path) and (not os.path.exists(os.path.join(input_path, "info.yml"))):
         prefer = ["IN", "AT", "HD", "EZ"]
         chart_p, music_p, bg_p, chosen_diff = _resolve_loose_chart_dir(input_path, prefer)
         if chart_p:
@@ -284,19 +316,20 @@ def _resolve_pack_or_chart(input_path: str) -> Tuple[str, Optional[str], Optiona
         }
     elif os.path.isdir(input_path) or (os.path.isfile(input_path) and input_path.lower().endswith((".zip", ".pez"))):
         p = load_chart_pack(input_path)
+        pack_keepalive = p
         chart_path = p.chart_path
         music_path = p.music_path
         bg_path = p.bg_path
         chart_info = p.info or {}
 
-    return str(chart_path), (str(music_path) if music_path else None), (str(bg_path) if bg_path else None), chart_info
+    return str(chart_path), (str(music_path) if music_path else None), (str(bg_path) if bg_path else None), chart_info, pack_keepalive
 
 
-def _load_meta(input_path: str, W: int, H: int, *, notes_per_chart: int) -> Optional[ChartMeta]:
+def _load_meta(input_path: str, W: int, H: int, *, notes_per_chart: int, tail_time: float = 0.0) -> Optional[ChartMeta]:
     from ..io.chart_loader_impl import load_chart
 
     try:
-        chart_path, music_path, bg_path, chart_info = _resolve_pack_or_chart(input_path)
+        chart_path, music_path, bg_path, chart_info, pack_keepalive = _resolve_pack_or_chart(input_path)
     except Exception:
         return None
 
@@ -354,10 +387,12 @@ def _load_meta(input_path: str, W: int, H: int, *, notes_per_chart: int) -> Opti
         bg_path=bg_path,
         chart_info=dict(chart_info or {}),
         bg_dim_alpha=_bg_dim_alpha_from_info(chart_info),
+        chart_offset=float(_offset) if _offset is not None else 0.0,
+        pack_keepalive=pack_keepalive,
         total_notes=int(total_notes),
         seg_notes=int(seg_notes),
         seg_end_time=float(seg_end_time),
-        seg_duration=float(seg_end_time),
+        seg_duration=float(seg_end_time) + max(0.0, float(tail_time or 0.0)),
         seg_max_chord=int(seg_max_chord),
         seg_note_hit_times=list(seg_note_hit_times),
     )
@@ -369,6 +404,7 @@ def build_chart_metas(
     W: int,
     H: int,
     notes_per_chart: int = 10,
+    tail_time: float = 0.0,
     seed: Optional[int] = None,
     shuffle: bool = True,
     filter_levels: Optional[List[str]] = None,
@@ -388,7 +424,7 @@ def build_chart_metas(
 
     metas: List[ChartMeta] = []
     for p in inputs:
-        m = _load_meta(p, W, H, notes_per_chart=int(notes_per_chart))
+        m = _load_meta(p, W, H, notes_per_chart=int(notes_per_chart), tail_time=float(tail_time or 0.0))
         if m is None:
             continue
         if int(m.seg_notes) <= 0:
@@ -448,11 +484,6 @@ def run_playlist(
             judge.acc_sum = float(v)
         except Exception:
             pass
-
-    orig_start_time = getattr(args, "start_time", None)
-    orig_end_time = getattr(args, "end_time", None)
-    orig_bg = getattr(args, "bg", None)
-    orig_bgm = getattr(args, "bgm", None)
 
     reuse_pygame = bool(str(getattr(args, "backend", "pygame") or "pygame").strip().lower() == "pygame")
     reuse_audio = False
@@ -550,15 +581,11 @@ def run_playlist(
 
             pending_dec: Optional[JumpDecision] = None
 
+            # NOTE: segment switching is controlled by per-segment end_time (meta.seg_duration).
+            # Using stop_when_hit_total/stop_when_judged_cnt would stop immediately after the Nth
+            # hit/judge and may cut off the last note tail / hitsound.
             stop_hit_total = None
             stop_judged_cnt = None
-            seg_remain = max(0, int(meta.seg_notes) - int(seg_skip))
-            if mode == "hit":
-                stop_hit_total = int(getattr(judge, "hit_total", 0)) + int(seg_remain)
-            elif mode == "judged":
-                stop_judged_cnt = int(getattr(judge, "judged_cnt", 0)) + int(seg_remain)
-            else:
-                stop_hit_total = int(getattr(judge, "hit_total", 0)) + int(seg_remain)
 
             fmt, offset, lines, notes = _load_for_play(meta, W, H)
 
@@ -605,15 +632,30 @@ def run_playlist(
                     pass
                 return False
 
+            seg_args = args
             try:
-                setattr(args, "start_time", float(seg_start_time) if seg_start_time > 1e-9 else 0.0)
-                setattr(args, "end_time", float(meta.seg_end_time))
+                seg_args = copy.copy(args)
+            except Exception:
+                seg_args = args
 
-                # Playlist segments should use per-chart assets by default.
-                # If CLI/config provided a global bg/bgm, it would otherwise override switching.
+            try:
                 try:
-                    setattr(args, "bg", None)
-                    setattr(args, "bgm", None)
+                    setattr(seg_args, "start_time", float(seg_start_time) if seg_start_time > 1e-9 else 0.0)
+                    setattr(seg_args, "end_time", float(getattr(meta, "seg_duration", meta.seg_end_time)))
+                except Exception:
+                    pass
+
+                if bool(getattr(seg_args, "record_enabled", False)):
+                    try:
+                        setattr(seg_args, "record_start_time", float(seg_start_time) if seg_start_time > 1e-9 else 0.0)
+                        setattr(seg_args, "record_end_time", float(getattr(meta, "seg_duration", meta.seg_end_time)))
+                    except Exception:
+                        pass
+
+                # Default to per-chart assets for playlist.
+                try:
+                    setattr(seg_args, "bg", None)
+                    setattr(seg_args, "bgm", None)
                 except Exception:
                     pass
 
@@ -624,7 +666,7 @@ def run_playlist(
                     extra_ctx["audio"] = shared_audio
 
                 run_renderer(
-                    args,
+                    seg_args,
                     W=int(W),
                     H=int(H),
                     expand=float(expand),
@@ -648,21 +690,19 @@ def run_playlist(
                     judge=judge,
                     total_notes_override=int(total_notes),
                     chart_end_override=float(total_duration),
-                    chart_info_override=dict(meta.chart_info or {}),
+                    chart_info_override=(
+                        (lambda _ci: (
+                            (lambda: (_ci.__setitem__("seg_start_time", float(seg_start_time)), _ci.__setitem__("seg_end_time", float(getattr(meta, "seg_duration", meta.seg_end_time))), _ci)[-1])()
+                        ))(dict(meta.chart_info or {}))
+                    ),
                     ui_time_offset=float(time_offset),
-                    stop_when_judged_cnt=stop_judged_cnt,
-                    stop_when_hit_total=stop_hit_total,
+                    stop_when_judged_cnt=None,
+                    stop_when_hit_total=None,
                     should_stop_cb=_stop_cb,
                     **extra_ctx,
                 )
             finally:
-                try:
-                    setattr(args, "start_time", orig_start_time)
-                    setattr(args, "end_time", orig_end_time)
-                    setattr(args, "bg", orig_bg)
-                    setattr(args, "bgm", orig_bgm)
-                except Exception:
-                    pass
+                pass
 
             if int(idx) == int(start_index) and seg_start_time > 1e-9:
                 time_offset += max(0.0, float(meta.seg_duration) - float(seg_start_time))
@@ -875,6 +915,23 @@ def run_playlist_script(args: Any) -> Judge:
         except Exception:
             pass
 
+    metas_cached = getattr(args, "_playlist_metas_cache", None)
+    if isinstance(metas_cached, list) and metas_cached:
+        try:
+            return run_playlist(
+                args,
+                metas=list(metas_cached),
+                switch_mode=str(getattr(args, "playlist_switch_mode", "hit") or "hit"),
+                seed=(int(getattr(args, "playlist_seed", 0)) if getattr(args, "playlist_seed", None) is not None else None),
+                start_index=0,
+                initial_time_offset=0.0,
+                first_seg_start_time=0.0,
+                first_seg_skip_notes=0,
+                initial_combo_total=0,
+            )
+        except Exception:
+            pass
+
     if hasattr(mod, "playlist_should_jump") and callable(getattr(mod, "playlist_should_jump")):
         try:
             setattr(args, "playlist_should_jump", getattr(mod, "playlist_should_jump"))
@@ -911,11 +968,13 @@ def run_playlist_script(args: Any) -> Judge:
     if hasattr(mod, "build_metas") and callable(getattr(mod, "build_metas")):
         metas = list(getattr(mod, "build_metas")(args) or [])
     else:
+        tail_time = float(getattr(args, "playlist_tail_time", 0.0) or 0.0)
         metas = build_chart_metas(
             charts_dir=str(charts_dir),
             W=int(W),
             H=int(H),
             notes_per_chart=int(notes_per_chart),
+            tail_time=float(tail_time),
             seed=seed,
             shuffle=bool(shuffle),
             filter_levels=filter_levels,

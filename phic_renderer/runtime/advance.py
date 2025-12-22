@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import json
+import sys
+import resource
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -202,31 +204,77 @@ def load_from_args(args: Any, W: int, H: int) -> AdvanceLoadResult:
 
     packs_keepalive: List[ChartPack] = []
 
-    auto_advance_base_dir: Optional[str] = None
+    """auto_advance_base_dir: Optional[str] = None
     auto_advance_cfg: Optional[Dict[str, Any]] = None
     if chart_path and os.path.isdir(chart_path) and (not os.path.exists(os.path.join(str(chart_path), "info.yml"))):
         # Loose folder charts are not allowed to be loaded as a single chart.
         # Instead, automatically build an advance config from all json charts in the folder.
         auto_advance_base_dir = os.path.abspath(str(chart_path))
         auto_advance_cfg, music_path, bg_path = _build_advance_cfg_from_dir(str(chart_path))
-        chart_info = {}
+        chart_info = {}"""
 
-    if getattr(args, "advance", None) or auto_advance_cfg is not None:
-        if auto_advance_cfg is not None:
+    if getattr(args, "advance", None): # or auto_advance_cfg is not None:
+        """if auto_advance_cfg is not None:
             advance_cfg = auto_advance_cfg
             advance_base_dir = auto_advance_base_dir
-        else:
-            with open(str(args.advance), "r", encoding="utf-8") as f:
-                advance_cfg = json.load(f) or {}
-            advance_base_dir = os.path.dirname(os.path.abspath(str(args.advance)))
+        else:"""
+        with open(str(args.advance), "r", encoding="utf-8") as f:
+            advance_cfg = json.load(f) or {}
+        advance_base_dir = os.path.dirname(os.path.abspath(str(args.advance)))
         advance_active = True
         advance_mix = bool(advance_cfg.get("mix", False))
         advance_mods = advance_cfg.get("mods") if isinstance(advance_cfg, dict) else None
+
+        def _resolve_asset_path(p: Optional[str], base_dir: str) -> Optional[str]:
+            if not p:
+                return None
+            try:
+                p = str(p)
+            except Exception:
+                return None
+            if os.path.isabs(p):
+                return p if os.path.exists(p) else p
+            # Try as-is (relative to CWD)
+            if os.path.exists(p):
+                return p
+            # Try relative to chart base_dir
+            try:
+                cand = os.path.join(base_dir, p)
+                if os.path.exists(cand):
+                    return cand
+            except Exception:
+                pass
+            # Try relative to advance config base dir
+            if advance_base_dir:
+                try:
+                    cand = os.path.join(str(advance_base_dir), p)
+                    if os.path.exists(cand):
+                        return cand
+                except Exception:
+                    pass
+            # Fallback: keep original
+            return p
 
         mode = str(advance_cfg.get("mode", "sequence"))
         all_lines: List[RuntimeLine] = []
         all_notes: List[RuntimeNote] = []
         lid_base = 0
+
+        def _adv_log(msg: str) -> None:
+            try:
+                sys.stderr.write(str(msg).rstrip() + "\n")
+            except Exception:
+                pass
+
+        def _adv_mem_mb() -> Optional[float]:
+            try:
+                rss = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+                # macOS (darwin): bytes; linux: KiB
+                if sys.platform == "darwin":
+                    return rss / (1024.0 * 1024.0)
+                return rss / 1024.0
+            except Exception:
+                return None
 
         def _load_one_input(inp: str) -> Tuple[str, float, List[RuntimeLine], List[RuntimeNote], Optional[str], Optional[str], Dict[str, Any], str, str]:
             p = None
@@ -248,21 +296,91 @@ def load_from_args(args: Any, W: int, H: int) -> AdvanceLoadResult:
         if mode == "sequence":
             items = list(advance_cfg.get("items", []) or [])
             cur_start = 0.0
-            for it in items:
+            total = int(len(items))
+            show_progress = total >= 200
+            if show_progress:
+                mb = _adv_mem_mb()
+                ms = "" if mb is None else f"  mem={mb:.1f}MB"
+                _adv_log(f"[Advance] Loading sequence items: {total}{ms}")
+
+            if bool(getattr(args, "advance_lazy_load", False)):
+                for idx, it in enumerate(items, start=1):
+                    start_local = float(it.get("start", 0.0))
+                    end_local = it.get("end", None)
+                    end_local = float(end_local) if end_local is not None else 1e18
+                    speed = float(it.get("chart_speed", 1.0))
+                    start_at = float(it.get("start_at", cur_start))
+
+                    seg_dur = max(0.0, (end_local - start_local) / max(1e-9, speed))
+                    seg_end_at = float(start_at) + float(seg_dur)
+
+                    seg_bgm = str(it.get("bgm")) if it.get("bgm") else None
+                    if seg_bgm and (not os.path.isabs(str(seg_bgm))) and advance_base_dir:
+                        cand = os.path.join(str(advance_base_dir), str(seg_bgm))
+                        if os.path.exists(cand):
+                            seg_bgm = cand
+
+                    seg_bg = str(it.get("bg")) if it.get("bg") else None
+                    if seg_bg and (not os.path.isabs(str(seg_bg))) and advance_base_dir:
+                        cand = os.path.join(str(advance_base_dir), str(seg_bg))
+                        if os.path.exists(cand):
+                            seg_bg = cand
+                    if seg_bg and (not bg_path):
+                        bg_path = str(seg_bg)
+
+                    advance_segment_starts.append(float(start_at))
+                    advance_segment_bgm.append(str(seg_bgm) if seg_bgm else None)
+                    cur_start = max(cur_start, float(start_at) + float(seg_dur))
+
+                fmt = "advance"
+                offset = 0.0
+                lines = []
+                notes = []
+                advance_main_bgm = advance_segment_bgm[0] if advance_segment_bgm else None
+
+                return AdvanceLoadResult(
+                    fmt=fmt,
+                    offset=offset,
+                    lines=lines,
+                    notes=notes,
+                    advance_active=True,
+                    advance_cfg=advance_cfg,
+                    advance_mix=advance_mix,
+                    advance_tracks_bgm=advance_tracks_bgm,
+                    advance_main_bgm=advance_main_bgm,
+                    advance_segment_starts=advance_segment_starts,
+                    advance_segment_bgm=advance_segment_bgm,
+                    advance_base_dir=advance_base_dir,
+                    advance_mods=advance_mods,
+                    chart_path=None,
+                    chart_info={},
+                    bg_path=bg_path,
+                    music_path=None,
+                    bg_dim_alpha=bg_dim_alpha,
+                    packs_keepalive=packs_keepalive,
+                )
+
+            for idx, it in enumerate(items, start=1):
                 inp = str(it.get("input"))
                 start_local = float(it.get("start", 0.0))
                 end_local = it.get("end", None)
                 end_local = float(end_local) if end_local is not None else 1e18
                 speed = float(it.get("chart_speed", 1.0))
                 start_at = float(it.get("start_at", cur_start))
+
+                if show_progress and (idx == 1 or idx == total or (idx % 25) == 0):
+                    mb = _adv_mem_mb()
+                    ms = "" if mb is None else f"  mem={mb:.1f}MB"
+                    _adv_log(f"[Advance] [{idx:5d}/{total:5d}] load: {inp}{ms}")
                 fmt_i, off_i, lines_i, notes_i, music_p, bg_p, info, chart_p, base_dir = _load_one_input(inp)
 
+                seg_dur = max(0.0, (end_local - start_local) / max(1e-9, speed))
+                seg_end_at = float(start_at) + float(seg_dur)
+
                 seg_bgm = str(it.get("bgm")) if it.get("bgm") else (music_p if (music_p and os.path.exists(music_p)) else None)
-                if seg_bgm and (not os.path.isabs(seg_bgm)):
-                    seg_bgm = os.path.join(base_dir, seg_bgm)
+                seg_bgm = _resolve_asset_path(seg_bgm, base_dir)
                 seg_bg = str(it.get("bg")) if it.get("bg") else (bg_p if (bg_p and os.path.exists(bg_p)) else None)
-                if seg_bg and (not os.path.isabs(seg_bg)):
-                    seg_bg = os.path.join(base_dir, seg_bg)
+                seg_bg = _resolve_asset_path(seg_bg, base_dir)
                 if seg_bg and (not bg_path):
                     bg_path = seg_bg
                     chart_info = info or {}
@@ -277,7 +395,7 @@ def load_from_args(args: Any, W: int, H: int) -> AdvanceLoadResult:
                     new_lid = lid_base
                     lid_base += 1
                     lid_map[ln.lid] = new_lid
-                    all_lines.append(RuntimeLine(
+                    ln_new = RuntimeLine(
                         lid=new_lid,
                         pos_x=_TimeWarpEval(ln.pos_x, start_at, speed, off_i, time_offset),
                         pos_y=_TimeWarpEval(ln.pos_y, start_at, speed, off_i, time_offset),
@@ -287,7 +405,15 @@ def load_from_args(args: Any, W: int, H: int) -> AdvanceLoadResult:
                         color_rgb=ln.color_rgb,
                         name=ln.name,
                         event_counts=ln.event_counts,
-                    ))
+                    )
+                    try:
+                        setattr(ln_new, "advance_seq_start_at", float(start_at))
+                        setattr(ln_new, "advance_seq_end_at", float(seg_end_at))
+                        setattr(ln_new, "advance_seq_index", int(idx))
+                        setattr(ln_new, "advance_seq_total", int(total))
+                    except Exception:
+                        pass
+                    all_lines.append(ln_new)
 
                 for n in notes_i:
                     if n.fake:
@@ -324,10 +450,14 @@ def load_from_args(args: Any, W: int, H: int) -> AdvanceLoadResult:
                     )
                     all_notes.append(nn)
 
-                seg_dur = max(0.0, (end_local - start_local) / max(1e-9, speed))
                 advance_segment_starts.append(start_at)
                 advance_segment_bgm.append(seg_bgm)
                 cur_start = max(cur_start, start_at + seg_dur)
+
+            if show_progress:
+                mb = _adv_mem_mb()
+                ms = "" if mb is None else f"  mem={mb:.1f}MB"
+                _adv_log(f"[Advance] Sequence load done{ms}")
 
             fmt = "advance"
             offset = 0.0
@@ -338,12 +468,24 @@ def load_from_args(args: Any, W: int, H: int) -> AdvanceLoadResult:
         else:
             tracks = list(advance_cfg.get("tracks", []) or [])
             main_idx = int(advance_cfg.get("main", 0) or 0)
+            total = int(len(tracks))
+            show_progress = total >= 200
+            if show_progress:
+                mb = _adv_mem_mb()
+                ms = "" if mb is None else f"  mem={mb:.1f}MB"
+                _adv_log(f"[Advance] Loading composite tracks: {total}{ms}")
+
             for idx, tr in enumerate(tracks):
                 inp = str(tr.get("input"))
                 start_at = float(tr.get("start_at", 0.0))
                 end_at = tr.get("end_at", None)
                 end_at = float(end_at) if end_at is not None else None
                 speed = float(tr.get("chart_speed", 1.0))
+
+                if show_progress and ((idx + 1) == 1 or (idx + 1) == total or ((idx + 1) % 25) == 0):
+                    mb = _adv_mem_mb()
+                    ms = "" if mb is None else f"  mem={mb:.1f}MB"
+                    _adv_log(f"[Advance] [{(idx + 1):5d}/{total:5d}] load: {inp}{ms}")
                 fmt_i, off_i, lines_i, notes_i, music_p, bg_p, info, chart_p, base_dir = _load_one_input(inp)
 
                 time_offset = float(tr.get("time_offset", 0.0)) + off_i
@@ -416,6 +558,11 @@ def load_from_args(args: Any, W: int, H: int) -> AdvanceLoadResult:
                     bd = chart_info.get("backgroundDim", None)
                     if bd is not None:
                         bg_dim_alpha = int(clamp(float(bd), 0.0, 1.0) * 255)
+
+            if show_progress:
+                mb = _adv_mem_mb()
+                ms = "" if mb is None else f"  mem={mb:.1f}MB"
+                _adv_log(f"[Advance] Composite load done{ms}")
 
             fmt = "advance"
             offset = 0.0

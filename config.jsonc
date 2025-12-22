@@ -39,14 +39,14 @@
   },
   "audio": {
     "audio_backend": "pygame",
-    "bgm": "charts/AbsoluTedisoRdeR.AcuteDisarray/AbsoluTedisoRdeR.AcuteDisarray.ogg",
+    "bgm": "charts/祈-我ら神祖と共に歩む者なり-.光吉猛修VS穴山大輔VSKaiVS水野健治VS大国奏音/祈-我ら神祖と共に歩む者なり-.光吉猛修VS穴山大輔VSKaiVS水野健治VS大国奏音.ogg",
     "force": false,
     "bgm_volume": 0.8,
     "hitsound_min_interval_ms": 30
   },
   "assets": {
     "respack": "./respack.zip",
-    "bg": "charts/AbsoluTedisoRdeR.AcuteDisarray/AbsoluTedisoRdeR.AcuteDisarray.png",
+    "bg": "charts/祈-我ら神祖と共に歩む者なり-.光吉猛修VS穴山大輔VSKaiVS水野健治VS大国奏音/祈-我ら神祖と共に歩む者なり-.光吉猛修VS穴山大輔VSKaiVS水野健治VS大国奏音.png",
     "bg_blur": 10,
     "bg_dim": 120
   },

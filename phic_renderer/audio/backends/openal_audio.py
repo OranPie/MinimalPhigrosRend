@@ -36,6 +36,8 @@ class OpenALAudio:
         self._music_paused_accum: float = 0.0
         self._music_is_paused: bool = False
 
+        self._music_speed: float = 1.0
+
         self._buffer_cache: Dict[str, Any] = {}
 
     def close(self) -> None:
@@ -83,6 +85,10 @@ class OpenALAudio:
 
         ch = self.play_sound(snd, volume=volume)
         self._music = ch
+        try:
+            self.set_channel_speed(ch, float(self._music_speed))
+        except Exception:
+            pass
         self._music_start_monotonic = time.monotonic()
         self._music_start_pos_sec = float(start_pos)
         self._music_pause_monotonic = 0.0
@@ -160,4 +166,31 @@ class OpenALAudio:
         try:
             channel.stop()
         except:
+            pass
+
+    def set_channel_speed(self, channel: Any, speed: float) -> None:
+        if channel is None:
+            return
+        try:
+            sp = float(speed)
+        except Exception:
+            sp = 1.0
+        if sp <= 1e-6:
+            sp = 1.0
+        try:
+            if hasattr(channel, "set_pitch"):
+                channel.set_pitch(float(sp))
+        except Exception:
+            pass
+
+    def set_music_speed(self, speed: float) -> None:
+        try:
+            self._music_speed = float(speed)
+        except Exception:
+            self._music_speed = 1.0
+        if self._music_speed <= 1e-6:
+            self._music_speed = 1.0
+        try:
+            self.set_channel_speed(self._music, float(self._music_speed))
+        except Exception:
             pass

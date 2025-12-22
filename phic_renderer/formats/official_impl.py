@@ -59,20 +59,42 @@ def build_official_pos_tracks(move_events, bpm: float, fmt: int, W: int, H: int)
     if not evs:
         # default center
         return PiecewiseEased([], default=W * 0.5), PiecewiseEased([], default=H * 0.5)
-    if fmt != 3:
-        raise ValueError(f"Minimal renderer supports official formatVersion=3 only (got {fmt}).")
+    if int(fmt) not in (1, 3):
+        raise ValueError(f"Unsupported official formatVersion={fmt} (expected 1 or 3).")
 
     sx: List[EasedSeg] = []
     sy: List[EasedSeg] = []
     for e in evs:
         t0 = u_to_sec(float(e["startTime"]), bpm)
         t1 = u_to_sec(float(e["endTime"]), bpm)
-        x0 = float(e["start"]) * W
-        x1 = float(e["end"]) * W
-        # Official format: bottom-left is (0,0), +Y is upward; pygame: top-left is (0,0), +Y is downward
-        # So we need to flip: y_pygame = H - y_official * H = H * (1 - y_official)
-        y0 = H * (1.0 - float(e["start2"]))
-        y1 = H * (1.0 - float(e["end2"]))
+
+        if int(fmt) == 1:
+            # v1: start/end are packed as (1000*x + y) in a 880x520 space.
+            # origin: bottom-left (0,0), top-right (880,520).
+            # We normalize to 0..1 and then map to screen; also flip Y for pygame.
+            p0 = float(e.get("start", 0.0) or 0.0)
+            p1 = float(e.get("end", 0.0) or 0.0)
+            x0_u = math.floor(p0 / 1000.0)
+            y0_u = p0 - x0_u * 1000.0
+            x1_u = math.floor(p1 / 1000.0)
+            y1_u = p1 - x1_u * 1000.0
+
+            x0n = float(x0_u) / 880.0
+            x1n = float(x1_u) / 880.0
+            y0n = float(y0_u) / 520.0
+            y1n = float(y1_u) / 520.0
+
+            x0 = float(x0n) * W
+            x1 = float(x1n) * W
+            y0 = H * (1.0 - float(y0n))
+            y1 = H * (1.0 - float(y1n))
+        else:
+            x0 = float(e["start"]) * W
+            x1 = float(e["end"]) * W
+            # Official format: bottom-left is (0,0), +Y is upward; pygame: top-left is (0,0), +Y is downward
+            # So we need to flip: y_pygame = H - y_official * H = H * (1 - y_official)
+            y0 = H * (1.0 - float(e["start2"]))
+            y1 = H * (1.0 - float(e["end2"]))
         sx.append(EasedSeg(t0, t1, x0, x1, ease_01))
         sy.append(EasedSeg(t0, t1, y0, y1, ease_01))
 
