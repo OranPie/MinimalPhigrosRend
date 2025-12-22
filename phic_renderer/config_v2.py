@@ -158,6 +158,7 @@ def flatten_config_v2(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[Dic
     pull("hold_fx_interval_ms", gameplay, "hold_fx_interval_ms")
     pull("hold_tail_tol", gameplay, "hold_tail_tol")
     pull("judge_width", gameplay, "judge_width")
+    pull("judge_height", gameplay, "judge_height")
     pull("flick_threshold", gameplay, "flick_threshold")
     pull("start_time", gameplay, "start_time")
     pull("end_time", gameplay, "end_time")
@@ -239,6 +240,7 @@ def dump_config_v2(args: Any, *, mods: Optional[Dict[str, Any]] = None, lang: Op
             "hold_fx_interval_ms": int(getattr(args, "hold_fx_interval_ms", 200) or 200),
             "hold_tail_tol": float(getattr(args, "hold_tail_tol", 0.8) or 0.8),
             "judge_width": float(getattr(args, "judge_width", 0.12) or 0.12),
+            "judge_height": float(getattr(args, "judge_height", 0.06) or 0.06),
             "flick_threshold": float(getattr(args, "flick_threshold", 0.02) or 0.02),
             "start_time": getattr(args, "start_time", None),
             "end_time": getattr(args, "end_time", None),

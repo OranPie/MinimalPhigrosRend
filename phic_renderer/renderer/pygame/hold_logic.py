@@ -9,10 +9,14 @@ from ...types import NoteState, RuntimeLine
 
 def hold_maintenance(
     *,
+    args: Any,
     states: List[NoteState],
     idx_next: int,
     t: float,
     hold_tail_tol: float,
+    W: int,
+    H: int,
+    lines: List[RuntimeLine],
     pointers: Any,
     judge: Any,
 ):
@@ -24,12 +28,59 @@ def hold_maintenance(
             continue
         n = s.note
         if n.kind == 3 and s.holding:
-            pid = getattr(s, "hold_pointer_id", None)
             try:
-                down_now = pointers.is_down(pid if pid is not None else None)
+                judge_w_px = float(getattr(args, "judge_width", 0.12)) * float(W)
             except Exception:
-                down_now = pointers.any_down()
-            if (not down_now) and float(t) < float(n.t_end) - 1e-6:
+                judge_w_px = 0.12 * float(W)
+            if judge_w_px < 1.0:
+                judge_w_px = 1.0
+            try:
+                judge_h_px = float(getattr(args, "judge_height", 0.06)) * float(H)
+            except Exception:
+                judge_h_px = 0.06 * float(H)
+            if judge_h_px < 1.0:
+                judge_h_px = 1.0
+
+            try:
+                ln = lines[int(n.line_id)]
+                lx, ly, lr, _la01, sc_now, _la_raw = eval_line_state(ln, float(t))
+                head_target_scroll = float(n.scroll_hit) if float(sc_now) <= float(n.scroll_hit) else float(sc_now)
+                hx, hy = note_world_pos(float(lx), float(ly), float(lr), float(sc_now), n, float(head_target_scroll), for_tail=False)
+            except Exception:
+                hx, hy = None, None
+
+            any_cover = False
+            try:
+                frames = pointers.frame_pointers()
+            except Exception:
+                frames = []
+            if hx is None or hy is None:
+                try:
+                    any_cover = bool(pointers.any_down())
+                except Exception:
+                    any_cover = False
+            else:
+                half_w = float(judge_w_px) * 0.5
+                half_h = float(judge_h_px) * 0.5
+                for pf in list(frames):
+                    try:
+                        if not bool(getattr(pf, "down", False)):
+                            continue
+                        px = getattr(pf, "x", None)
+                        py = getattr(pf, "y", None)
+                        if px is None or py is None:
+                            continue
+                        if abs(float(px) - float(hx)) <= float(half_w) and abs(float(py) - float(hy)) <= float(half_h):
+                            any_cover = True
+                            try:
+                                setattr(s, "hold_pointer_id", int(getattr(pf, "pointer_id", -999)))
+                            except Exception:
+                                pass
+                            break
+                    except Exception:
+                        continue
+
+            if (not bool(any_cover)) and float(t) < float(n.t_end) - 1e-6:
                 try:
                     dur = max(1e-6, float(n.t_end) - float(n.t_hit))
                     prog_r = clamp((float(t) - float(n.t_hit)) / dur, 0.0, 1.0)

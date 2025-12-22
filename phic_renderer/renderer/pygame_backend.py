@@ -5,7 +5,7 @@ import logging
 import math
 import os
 import time
-from collections import deque
+from collections import OrderedDict, deque
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import pygame
@@ -28,6 +28,8 @@ from ..math.util import (
     rect_corners,
 )
 from ..runtime.visibility import precompute_t_enter
+from ..runtime.timewarp import _TimeWarpEval, _TimeWarpIntegral
+from ..runtime.mods import apply_mods
 from ..types import NoteState, RuntimeLine, RuntimeNote
 from ..audio import create_audio_backend
 from .pygame.draw import draw_line_rgba, draw_poly_outline_rgba, draw_poly_rgba, draw_ring
@@ -283,6 +285,363 @@ def run(
             str(bgm_file) if bgm_file else "(none)",
         )
 
+    advance_lazy_sequence = bool(
+        bool(getattr(args, "advance_lazy_load", False))
+        and bool(advance_active)
+        and isinstance(advance_cfg, dict)
+        and str(advance_cfg.get("mode", "sequence")) == "sequence"
+        and (not lines)
+        and (not notes)
+    )
+
+    adv_lazy_items: List[Dict[str, Any]] = []
+    adv_lazy_cache: "OrderedDict[int, Dict[str, Any]]" = OrderedDict()
+    adv_lazy_cache_max = max(0, int(getattr(args, "advance_lazy_cache", 1) or 0))
+    adv_lazy_preload = bool(getattr(args, "advance_lazy_preload", False))
+    adv_lazy_current_idx: Optional[int] = None
+
+    def _adv_lazy_resolve_asset(p: Optional[str], base_dir_local: str) -> Optional[str]:
+        if not p:
+            return None
+        try:
+            p = str(p)
+        except Exception:
+            return None
+        if os.path.isabs(p):
+            return p
+        if os.path.exists(p):
+            return p
+        try:
+            cand = os.path.join(str(base_dir_local), p)
+            if os.path.exists(cand):
+                return cand
+        except Exception:
+            pass
+        if advance_base_dir:
+            try:
+                cand = os.path.join(str(advance_base_dir), p)
+                if os.path.exists(cand):
+                    return cand
+            except Exception:
+                pass
+        return p
+
+    def _adv_lazy_cleanup_cache_entry(ent: Dict[str, Any]):
+        try:
+            packs = ent.get("packs", None)
+            if isinstance(packs, list):
+                for p in packs:
+                    try:
+                        tmp = getattr(p, "tmpdir", None)
+                        if tmp is not None:
+                            tmp.cleanup()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    def _adv_lazy_build_items() -> None:
+        nonlocal adv_lazy_items
+        if not advance_lazy_sequence:
+            adv_lazy_items = []
+            return
+        items = list((advance_cfg or {}).get("items", []) or [])
+        total = int(len(items))
+        cur_start = 0.0
+        out: List[Dict[str, Any]] = []
+        for idx, it in enumerate(items, start=1):
+            try:
+                inp = str(it.get("input"))
+            except Exception:
+                inp = ""
+            start_local = float(it.get("start", 0.0))
+            end_local = it.get("end", None)
+            end_local = float(end_local) if end_local is not None else 1e18
+            speed = float(it.get("chart_speed", 1.0))
+            start_at = float(it.get("start_at", cur_start))
+            time_offset_extra = float(it.get("time_offset", 0.0))
+            seg_dur = max(0.0, (end_local - start_local) / max(1e-9, speed))
+            seg_end_at = float(start_at) + float(seg_dur)
+
+            out.append(
+                {
+                    "idx": int(idx - 1),
+                    "seq_index": int(idx),
+                    "seq_total": int(total),
+                    "input": inp,
+                    "start_local": float(start_local),
+                    "end_local": float(end_local),
+                    "speed": float(speed),
+                    "start_at": float(start_at),
+                    "end_at": float(seg_end_at),
+                    "time_offset_extra": float(time_offset_extra),
+                }
+            )
+            cur_start = max(cur_start, float(start_at) + float(seg_dur))
+        adv_lazy_items = out
+
+    def _adv_lazy_seg_idx_for_t(t_now: float) -> Optional[int]:
+        if not adv_lazy_items:
+            return None
+        starts = [float(it.get("start_at", 0.0)) for it in adv_lazy_items]
+        i = int(bisect.bisect_right(starts, float(t_now))) - 1
+        if i < 0:
+            i = 0
+        if i >= len(adv_lazy_items):
+            i = len(adv_lazy_items) - 1
+        return int(i)
+
+    def _adv_lazy_load_segment(seg_idx: int) -> Dict[str, Any]:
+        it = adv_lazy_items[int(seg_idx)]
+        inp = str(it.get("input", ""))
+        start_local = float(it.get("start_local", 0.0))
+        end_local = float(it.get("end_local", 1e18))
+        speed = float(it.get("speed", 1.0))
+        start_at = float(it.get("start_at", 0.0))
+        seg_end_at = float(it.get("end_at", start_at))
+        time_offset_extra = float(it.get("time_offset_extra", 0.0))
+
+        packs: List[Any] = []
+        p = None
+        chart_p = inp
+        music_p = None
+        bg_p = None
+        info: Dict[str, Any] = {}
+        if os.path.isdir(inp) or (os.path.isfile(inp) and str(inp).lower().endswith((".zip", ".pez"))):
+            p = load_chart_pack(inp)
+            packs.append(p)
+            chart_p = p.chart_path
+            music_p = p.music_path
+            bg_p = p.bg_path
+            info = p.info
+
+        fmt_i, off_i, lines_i, notes_i = load_chart(str(chart_p), int(W), int(H))
+        base_dir_local = os.path.dirname(os.path.abspath(str(chart_p)))
+
+        seg_bgm = str((advance_cfg or {}).get("items", [])[int(seg_idx)].get("bgm")) if (advance_cfg and isinstance(advance_cfg.get("items", None), list)) else None
+        if not seg_bgm:
+            seg_bgm = music_p if (music_p and os.path.exists(str(music_p))) else None
+        seg_bgm = _adv_lazy_resolve_asset(seg_bgm, base_dir_local)
+
+        seg_bg = str((advance_cfg or {}).get("items", [])[int(seg_idx)].get("bg")) if (advance_cfg and isinstance(advance_cfg.get("items", None), list)) else None
+        if not seg_bg:
+            seg_bg = bg_p if (bg_p and os.path.exists(str(bg_p))) else None
+        seg_bg = _adv_lazy_resolve_asset(seg_bg, base_dir_local)
+
+        time_offset = float(time_offset_extra) + float(start_local) + float(off_i)
+
+        lid_map: Dict[int, int] = {}
+        seg_lines: List[RuntimeLine] = []
+        for ln in lines_i:
+            new_lid = int(len(seg_lines))
+            lid_map[int(ln.lid)] = int(new_lid)
+            ln_new = RuntimeLine(
+                lid=int(new_lid),
+                pos_x=_TimeWarpEval(ln.pos_x, start_at, speed, off_i, time_offset),
+                pos_y=_TimeWarpEval(ln.pos_y, start_at, speed, off_i, time_offset),
+                rot=_TimeWarpEval(ln.rot, start_at, speed, off_i, time_offset),
+                alpha=_TimeWarpEval(ln.alpha, start_at, speed, off_i, time_offset),
+                scroll_px=_TimeWarpIntegral(ln.scroll_px, start_at, speed, off_i, time_offset),
+                color_rgb=ln.color_rgb,
+                name=ln.name,
+                event_counts=ln.event_counts,
+            )
+            try:
+                setattr(ln_new, "advance_seq_start_at", float(start_at))
+                setattr(ln_new, "advance_seq_end_at", float(seg_end_at))
+                setattr(ln_new, "advance_seq_index", int(it.get("seq_index", int(seg_idx) + 1)))
+                setattr(ln_new, "advance_seq_total", int(it.get("seq_total", len(adv_lazy_items))))
+            except Exception:
+                pass
+            seg_lines.append(ln_new)
+
+        seg_notes: List[RuntimeNote] = []
+        for n in notes_i:
+            if n.fake:
+                continue
+            if float(n.t_hit) < float(start_local) or float(n.t_hit) > float(end_local):
+                continue
+            t_hit_m = float(start_at) + (float(n.t_hit) + float(off_i) - float(time_offset)) / max(1e-9, float(speed))
+            t_end_local = min(float(n.t_end), float(end_local))
+            t_end_m = float(start_at) + (float(t_end_local) + float(off_i) - float(time_offset)) / max(1e-9, float(speed))
+            new_line = int(lid_map.get(int(n.line_id), int(n.line_id)))
+
+            hs = n.hitsound_path
+            if hs:
+                try:
+                    hs_abs = os.path.join(str(base_dir_local), str(hs))
+                    if os.path.exists(hs_abs):
+                        hs = hs_abs
+                except Exception:
+                    pass
+
+            nn = RuntimeNote(
+                nid=n.nid,
+                line_id=int(new_line),
+                kind=n.kind,
+                above=n.above,
+                fake=False,
+                t_hit=float(t_hit_m),
+                t_end=float(t_end_m),
+                x_local_px=n.x_local_px,
+                y_offset_px=n.y_offset_px,
+                speed_mul=n.speed_mul,
+                size_px=n.size_px,
+                alpha01=n.alpha01,
+                hitsound_path=hs,
+                t_enter=n.t_enter,
+                mh=n.mh,
+            )
+            seg_notes.append(nn)
+
+        seg_notes.sort(key=lambda x: float(x.t_hit))
+        line_map2 = {ln.lid: ln for ln in seg_lines}
+        for n in seg_notes:
+            ln = line_map2.get(n.line_id)
+            if ln is None:
+                continue
+            n.scroll_hit = ln.scroll_px.integral(n.t_hit)
+            n.scroll_end = ln.scroll_px.integral(n.t_end)
+
+        mods_cfg_local = getattr(args, "_mods_cfg", None)
+        if isinstance(mods_cfg_local, dict) and mods_cfg_local:
+            seg_notes = apply_mods(dict(mods_cfg_local), seg_notes, seg_lines)
+
+        group_simultaneous_notes(seg_notes)
+        precompute_t_enter(seg_lines, seg_notes, int(W), int(H))
+
+        return {
+            "lines": seg_lines,
+            "notes": seg_notes,
+            "packs": packs,
+            "base_dir": str(base_dir_local),
+            "fmt": str(fmt_i),
+            "info": dict(info or {}),
+            "bg": (str(seg_bg) if seg_bg else None),
+            "bgm": (str(seg_bgm) if seg_bgm else None),
+        }
+
+    def _adv_lazy_ensure_loaded_for_t(t_now: float) -> bool:
+        nonlocal lines, notes, states, idx_next, note_times_by_line, note_times_by_line_kind, note_times_by_kind
+        nonlocal judge_plan, judge_plan_err
+        nonlocal adv_lazy_current_idx
+        if not advance_lazy_sequence:
+            return False
+        seg_idx = _adv_lazy_seg_idx_for_t(float(t_now))
+        if seg_idx is None:
+            return False
+        if adv_lazy_current_idx is not None and int(seg_idx) == int(adv_lazy_current_idx):
+            return False
+
+        ent = adv_lazy_cache.get(int(seg_idx))
+        if ent is None:
+            ent = _adv_lazy_load_segment(int(seg_idx))
+            adv_lazy_cache[int(seg_idx)] = ent
+        try:
+            adv_lazy_cache.move_to_end(int(seg_idx), last=True)
+        except Exception:
+            pass
+
+        if adv_lazy_cache_max > 0:
+            while len(adv_lazy_cache) > int(adv_lazy_cache_max):
+                _k, _v = adv_lazy_cache.popitem(last=False)
+                _adv_lazy_cleanup_cache_entry(_v)
+        else:
+            while len(adv_lazy_cache) > 1:
+                _k, _v = adv_lazy_cache.popitem(last=False)
+                _adv_lazy_cleanup_cache_entry(_v)
+
+        lines = list(ent.get("lines", []) or [])
+        notes = list(ent.get("notes", []) or [])
+        states = [NoteState(n) for n in notes]
+        idx_next = 0
+        note_times_by_line = compute_note_times_by_line(notes)
+        note_times_by_line_kind, note_times_by_kind = compute_note_times_by_line_kind(notes)
+
+        judge_script_path_local = getattr(args, "judge_script", None)
+        if judge_script_path_local:
+            try:
+                js_raw = load_judge_script(str(judge_script_path_local))
+                js = parse_judge_script(js_raw)
+                judge_plan = build_judge_plan(js, notes)
+                judge_plan_err = None
+            except Exception as e:
+                judge_plan = None
+                judge_plan_err = str(e)
+
+        adv_lazy_current_idx = int(seg_idx)
+
+        if adv_lazy_preload:
+            try:
+                nxt = int(seg_idx) + 1
+                if 0 <= nxt < len(adv_lazy_items) and (nxt not in adv_lazy_cache):
+                    adv_lazy_cache[nxt] = _adv_lazy_load_segment(int(nxt))
+                    try:
+                        adv_lazy_cache.move_to_end(int(nxt), last=True)
+                    except Exception:
+                        pass
+                    if adv_lazy_cache_max > 0:
+                        while len(adv_lazy_cache) > int(adv_lazy_cache_max):
+                            _k, _v = adv_lazy_cache.popitem(last=False)
+                            _adv_lazy_cleanup_cache_entry(_v)
+            except Exception:
+                pass
+
+        return True
+
+    if advance_lazy_sequence:
+        _adv_lazy_build_items()
+        if adv_lazy_items:
+            try:
+                adv_end = max(float(it.get("end_at", 0.0)) for it in adv_lazy_items)
+                if chart_end_override is None:
+                    chart_end_override = float(adv_end)
+            except Exception:
+                pass
+
+            if total_notes_override is None:
+                tn_cfg = advance_cfg.get("total_notes", None) if isinstance(advance_cfg, dict) else None
+                if tn_cfg is not None:
+                    try:
+                        total_notes_override = int(tn_cfg)
+                    except Exception:
+                        total_notes_override = None
+
+            if bool(getattr(args, "advance_lazy_scan_total_notes", False)) and total_notes_override is None:
+                try:
+                    tn = 0
+                    for it in adv_lazy_items:
+                        inp = str(it.get("input", ""))
+                        start_local = float(it.get("start_local", 0.0))
+                        end_local = float(it.get("end_local", 1e18))
+                        p = None
+                        chart_p = inp
+                        if os.path.isdir(inp) or (os.path.isfile(inp) and str(inp).lower().endswith((".zip", ".pez"))):
+                            p = load_chart_pack(inp)
+                            chart_p = p.chart_path
+                        _fmt_i, _off_i, _lines_i, notes_i = load_chart(str(chart_p), int(W), int(H))
+                        for n in notes_i:
+                            if n.fake:
+                                continue
+                            if float(n.t_hit) < float(start_local) or float(n.t_hit) > float(end_local):
+                                continue
+                            tn += 1
+                        try:
+                            tmp = getattr(p, "tmpdir", None) if p is not None else None
+                            if tmp is not None:
+                                tmp.cleanup()
+                        except Exception:
+                            pass
+                    total_notes_override = int(tn)
+                except Exception:
+                    pass
+
+        t_init = float(record_start_time) if record_enabled else float(start_time_sec)
+        try:
+            _adv_lazy_ensure_loaded_for_t(float(t_init))
+        except Exception:
+            pass
+
     bg_base, bg_blurred = load_background(bg_file, W, H, int(getattr(args, "bg_blur", 10)))
 
     logger.info(
@@ -423,6 +782,37 @@ def run(
                     advance_segment_idx = 0
             except Exception:
                 advance_segment_idx = 0
+
+    def _advance_seq_item_for_t(t_now: float) -> Optional[Dict[str, Any]]:
+        if (not advance_active) or (not isinstance(advance_cfg, dict)):
+            return None
+        if str(advance_cfg.get("mode", "sequence")) != "sequence":
+            return None
+        items = advance_cfg.get("items", None)
+        if not isinstance(items, list) or (not items):
+            return None
+        try:
+            st = list(advance_segment_starts or [])
+        except Exception:
+            st = []
+        if not st:
+            return None
+        try:
+            i = int(bisect.bisect_right([float(x) for x in st], float(t_now))) - 1
+        except Exception:
+            i = 0
+        if i < 0:
+            i = 0
+        if i >= len(items):
+            i = len(items) - 1
+        try:
+            it = items[int(i)]
+        except Exception:
+            it = None
+        return it if isinstance(it, dict) else None
+
+    advance_bg_active = False
+    advance_bg_idx = -1
 
     if getattr(args, "multicolor_lines", False):
         for ln in lines:
@@ -565,7 +955,7 @@ def run(
         g = str(grade).upper()
         k = int(note_kind)
         if k in (2, 4):
-            return "PERFECT" if g == "PERFECT" else None
+            return "PERFECT" if g in ("PERFECT", "GOOD") else None
         if k == 3:
             if g == "PERFECT":
                 return "PERFECT"
@@ -779,10 +1169,33 @@ def run(
         pointers.begin_frame()
 
         for ev in evs:
-            try:
-                pointers.process_event(ev)
-            except Exception:
-                pass
+            # In simulateplay mode, block real pointer input from interfering with simulated pointers.
+            # We still keep non-pointer control keys (quit/pause/restart) functional.
+            if sim_player is not None:
+                try:
+                    et = int(getattr(ev, "type", -1))
+                except Exception:
+                    et = -1
+                if et in {
+                    getattr(pygame, "MOUSEBUTTONDOWN", -2),
+                    getattr(pygame, "MOUSEBUTTONUP", -3),
+                    getattr(pygame, "MOUSEMOTION", -4),
+                    getattr(pygame, "FINGERDOWN", -5),
+                    getattr(pygame, "FINGERUP", -6),
+                    getattr(pygame, "FINGERMOTION", -7),
+                }:
+                    # Ignore real pointer input.
+                    pass
+                else:
+                    try:
+                        pointers.process_event(ev)
+                    except Exception:
+                        pass
+            else:
+                try:
+                    pointers.process_event(ev)
+                except Exception:
+                    pass
             try:
                 if (tui_ok and tui is not None) or (record_use_curses and cui_ok and cui is not None):
                     _push_cui_event(f"pygame ev={getattr(ev, 'type', None)}", t_now=float((now_sec() - t0) * float(getattr(args, 'chart_speed', 1.0))))
@@ -794,7 +1207,8 @@ def run(
                 if ev.key == pygame.K_ESCAPE:
                     running = False
                 elif ev.key == pygame.K_SPACE:
-                    pointers.set_keyboard_down(True)
+                    if sim_player is None:
+                        pointers.set_keyboard_down(True)
                 elif ev.key == pygame.K_p:
                     paused = not paused
                     if paused:
@@ -850,7 +1264,8 @@ def run(
                     hitfx.clear()
             elif ev.type == pygame.KEYUP:
                 if ev.key == pygame.K_SPACE:
-                    pointers.set_keyboard_down(False)
+                    if sim_player is None:
+                        pointers.set_keyboard_down(False)
 
         if paused:
             if pause_frame is not None:
@@ -873,6 +1288,64 @@ def run(
             t = (audio_t - offset) * float(chart_speed)
         else:
             t = ((now_sec() - t0) - offset) * float(chart_speed)
+
+        if advance_lazy_sequence:
+            try:
+                changed = _adv_lazy_ensure_loaded_for_t(float(t))
+                if changed:
+                    try:
+                        _seg_i = int(adv_lazy_current_idx) if adv_lazy_current_idx is not None else None
+                    except Exception:
+                        _seg_i = None
+                    if _seg_i is not None:
+                        try:
+                            ent = adv_lazy_cache.get(int(_seg_i))
+                        except Exception:
+                            ent = None
+                        if isinstance(ent, dict):
+                            try:
+                                chart_dir = str(ent.get("base_dir") or chart_dir)
+                            except Exception:
+                                pass
+                            try:
+                                hitsound = HitsoundPlayer(audio=audio, chart_dir=str(chart_dir), min_interval_ms=hitsound_min_interval_ms)
+                            except Exception:
+                                pass
+            except Exception:
+                pass
+
+        # Advance sequence BG switching (non-mix and lazy both supported)
+        if advance_active and isinstance(advance_cfg, dict) and str(advance_cfg.get("mode", "sequence")) == "sequence":
+            try:
+                st = list(advance_segment_starts or [])
+            except Exception:
+                st = []
+            if st:
+                try:
+                    tgt_bg = int(bisect.bisect_right([float(x) for x in st], float(t))) - 1
+                except Exception:
+                    tgt_bg = 0
+                if tgt_bg < 0:
+                    tgt_bg = 0
+                if tgt_bg != int(advance_bg_idx):
+                    it = _advance_seq_item_for_t(float(t))
+                    pth = None
+                    try:
+                        pth = (it.get("bg") if isinstance(it, dict) else None)
+                    except Exception:
+                        pth = None
+                    if pth:
+                        pth = _adv_lazy_resolve_asset(str(pth), str(advance_base_dir or os.getcwd()))
+                    if pth and os.path.exists(str(pth)):
+                        try:
+                            bg_base_new, bg_blurred_new = load_background(str(pth), int(W), int(H), int(getattr(args, "bg_blur", 10)))
+                            bg_base = bg_base_new
+                            bg_blurred = bg_blurred_new
+                            advance_bg_active = True
+                            advance_bg_idx = int(tgt_bg)
+                        except Exception:
+                            pass
+            
 
         if sim_player is not None:
             try:
@@ -1272,6 +1745,7 @@ def run(
                         args=args,
                         t=float(t),
                         W=int(W),
+                        H=int(H),
                         lines=lines,
                         states=states,
                         idx_next=int(idx_next),
@@ -1288,6 +1762,9 @@ def run(
                         push_hit_debug_cb=_push_hit_debug,
                         pointer_id=int(pf.pointer_id),
                         pointer_x=pf.x,
+                        pointer_y=pf.y,
+                        pointer_start_x=getattr(pf, "start_x", None),
+                        pointer_start_y=getattr(pf, "start_y", None),
                         gesture=pf.gesture,
                         hold_like_down=bool(pf.down),
                         press_edge=bool(pf.press_edge),
@@ -1299,10 +1776,14 @@ def run(
         if not getattr(args, "autoplay", False):
             try:
                 hold_maintenance(
+                    args=args,
                     states=states,
                     idx_next=int(idx_next),
                     t=float(t),
                     hold_tail_tol=float(hold_tail_tol),
+                    W=int(W),
+                    H=int(H),
+                    lines=lines,
                     pointers=pointers,
                     judge=judge,
                 )
@@ -1883,6 +2364,23 @@ def run(
                         _ui_ci["seg_index"] = int(seg_i)
                     if seg_n is not None:
                         _ui_ci["seg_total"] = int(seg_n)
+        except Exception:
+            pass
+
+        # Advance: override name/level/difficulty from current sequence item (for title overlay)
+        try:
+            it = _advance_seq_item_for_t(float(t_ui))
+            if isinstance(it, dict):
+                if _ui_ci is None or (not isinstance(_ui_ci, dict)):
+                    _ui_ci = {}
+                else:
+                    _ui_ci = dict(_ui_ci)
+                if it.get("name") is not None:
+                    _ui_ci["name"] = it.get("name")
+                if it.get("level") is not None:
+                    _ui_ci["level"] = it.get("level")
+                if it.get("difficulty") is not None:
+                    _ui_ci["difficulty"] = it.get("difficulty")
         except Exception:
             pass
 

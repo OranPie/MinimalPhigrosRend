@@ -14,22 +14,36 @@ class ManualJudgementConfig:
     judge_width_ratio: float
 
 
-def _note_x_at_time(lines: List[RuntimeLine], n: RuntimeNote, tt: float) -> float:
+def _note_xy_at_time(lines: List[RuntimeLine], n: RuntimeNote, tt: float) -> Tuple[float, float]:
     ln = lines[int(n.line_id)]
     lx, ly, lr, la01, sc_now, la_raw = eval_line_state(ln, tt)
     scroll_target = float(n.scroll_hit)
     xw, yw = note_world_pos(lx, ly, lr, sc_now, n, scroll_target, for_tail=False)
-    return float(xw)
+    return float(xw), float(yw)
 
 
-def _in_judge_width(lines: List[RuntimeLine], n: RuntimeNote, tt: float, pointer_x: Optional[float], judge_w_px: float) -> bool:
-    if pointer_x is None:
+def _in_judge_rect(
+    lines: List[RuntimeLine],
+    n: RuntimeNote,
+    tt: float,
+    pointer_x: Optional[float],
+    pointer_y: Optional[float],
+    judge_w_px: float,
+    judge_h_px: float,
+) -> bool:
+    if pointer_x is None and pointer_y is None:
         return True
     try:
-        nx = _note_x_at_time(lines, n, tt)
+        nx, ny = _note_xy_at_time(lines, n, tt)
     except Exception:
         return True
-    return abs(float(pointer_x) - float(nx)) <= float(judge_w_px) * 0.5
+    okx = True
+    oky = True
+    if pointer_x is not None:
+        okx = abs(float(pointer_x) - float(nx)) <= float(judge_w_px) * 0.5
+    if pointer_y is not None:
+        oky = abs(float(pointer_y) - float(ny)) <= float(judge_h_px) * 0.5
+    return bool(okx and oky)
 
 
 def _pick_best_candidate(
@@ -39,7 +53,9 @@ def _pick_best_candidate(
     allow_kinds: Set[int],
     t: float,
     pointer_x: Optional[float],
+    pointer_y: Optional[float],
     judge_w_px: float,
+    judge_h_px: float,
     lines: List[RuntimeLine],
 ) -> Optional[NoteState]:
     best_s: Optional[NoteState] = None
@@ -56,7 +72,7 @@ def _pick_best_candidate(
         dt = abs(float(t) - float(n.t_hit))
         if dt > float(Judge.BAD):
             continue
-        if not _in_judge_width(lines, n, float(t), pointer_x, float(judge_w_px)):
+        if not _in_judge_rect(lines, n, float(t), pointer_x, pointer_y, float(judge_w_px), float(judge_h_px)):
             continue
         if dt < best_dt:
             best_dt = dt
@@ -69,6 +85,7 @@ def apply_manual_judgement(
     args: Any,
     t: float,
     W: int,
+    H: int,
     lines: List[RuntimeLine],
     states: List[NoteState],
     idx_next: int,
@@ -85,6 +102,9 @@ def apply_manual_judgement(
     push_hit_debug_cb: Any,
     pointer_id: int,
     pointer_x: Optional[float],
+    pointer_y: Optional[float],
+    pointer_start_x: Optional[float],
+    pointer_start_y: Optional[float],
     gesture: Optional[str],
     hold_like_down: bool,
     press_edge: bool,
@@ -96,6 +116,13 @@ def apply_manual_judgement(
     if judge_w_px < 1.0:
         judge_w_px = 1.0
 
+    try:
+        judge_h_px = float(getattr(args, "judge_height", 0.06)) * float(H)
+    except Exception:
+        judge_h_px = 0.06 * float(H)
+    if judge_h_px < 1.0:
+        judge_h_px = 1.0
+
     # 1) discrete gesture judgement (tap/flick)
     if gesture is not None:
         if gesture == "tap":
@@ -105,17 +132,23 @@ def apply_manual_judgement(
                 allow_kinds={1},
                 t=float(t),
                 pointer_x=pointer_x,
+                pointer_y=pointer_y,
                 judge_w_px=float(judge_w_px),
+                judge_h_px=float(judge_h_px),
                 lines=lines,
             )
         elif gesture == "flick":
+            fx = pointer_start_x if pointer_start_x is not None else pointer_x
+            fy = pointer_start_y if pointer_start_y is not None else pointer_y
             cand = _pick_best_candidate(
                 states=states,
                 idx_next=idx_next,
                 allow_kinds={4},
                 t=float(t),
-                pointer_x=pointer_x,
+                pointer_x=fx,
+                pointer_y=fy,
                 judge_w_px=float(judge_w_px),
+                judge_h_px=float(judge_h_px),
                 lines=lines,
             )
         else:
@@ -125,6 +158,14 @@ def apply_manual_judgement(
             n = cand.note
             grade = judge.grade_window(float(n.t_hit), float(t))
             if grade is not None:
+                if int(getattr(n, "kind", 0) or 0) == 4:
+                    g0 = str(grade).upper()
+                    if g0 in ("PERFECT", "GOOD"):
+                        grade = "PERFECT"
+                    else:
+                        grade = None
+                if grade is None:
+                    return
                 apply_grade(cand, str(grade), judge)
                 ln = lines[n.line_id]
                 lx, ly, lr, la01, sc_now, la_raw = eval_line_state(ln, t)
@@ -166,13 +207,15 @@ def apply_manual_judgement(
             allow_kinds={2},
             t=float(t),
             pointer_x=pointer_x,
+            pointer_y=pointer_y,
             judge_w_px=float(judge_w_px),
+            judge_h_px=float(judge_h_px),
             lines=lines,
         )
         if cand_drag is not None:
             n = cand_drag.note
             dt = abs(float(t) - float(n.t_hit))
-            if dt <= float(Judge.PERFECT):
+            if dt <= float(Judge.GOOD):
                 apply_grade(cand_drag, "PERFECT", judge)
                 ln = lines[n.line_id]
                 lx, ly, lr, la01, sc_now, la_raw = eval_line_state(ln, t)
@@ -208,7 +251,9 @@ def apply_manual_judgement(
             allow_kinds={3},
             t=float(t),
             pointer_x=pointer_x,
+            pointer_y=pointer_y,
             judge_w_px=float(judge_w_px),
+            judge_h_px=float(judge_h_px),
             lines=lines,
         )
         if cand_hold is not None:

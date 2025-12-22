@@ -13,7 +13,7 @@ def sanitize_grade(note_kind: int, grade: Optional[str]) -> Optional[str]:
     g = str(grade).upper()
     k = int(note_kind)
     if k in (2, 4):
-        return "PERFECT" if g == "PERFECT" else None
+        return "PERFECT" if g in ("PERFECT", "GOOD") else None
     if k == 3:
         if g == "PERFECT":
             return "PERFECT"

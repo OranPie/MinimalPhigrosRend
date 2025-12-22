@@ -259,17 +259,26 @@ def render_frame(
             pass
         if n.kind != 3 and s.judged:
             if bool(getattr(s, "miss", False)):
-                mt = getattr(s, "miss_t", None)
-                if mt is None:
-                    continue
-                if float(t_draw) <= float(mt) + float(MISS_FADE_SEC):
-                    pass
-                else:
-                    continue
+                show_miss_for_a_while = True
+                if show_miss_for_a_while:
+                    mt = getattr(s, "miss_t", None)
+                    if mt is None:
+                        continue
+                    if float(t_draw) <= float(mt) + float(MISS_FADE_SEC):
+                        pass
+                    else:
+                        continue
             else:
                 continue
+
         if n.kind == 3 and bool(getattr(s, "hold_finalized", False)):
-            continue
+            if not bool(getattr(s, "miss", False)):
+                continue
+            try:
+                if float(t_draw) > float(getattr(n, "t_end", 0.0) or 0.0) + float(MISS_FADE_SEC):
+                    continue
+            except Exception:
+                pass
         if n.fake:
             continue
         if (not no_cull_all) and (not no_cull_enter_time):
@@ -317,7 +326,19 @@ def render_frame(
                 dtm = float(t_draw) - float(mt)
                 if dtm >= 0.0:
                     miss_dim = clamp(dtm / float(MISS_FADE_SEC), 0.0, 1.0)
-                    note_alpha *= (1.0 - miss_dim) * 0.65
+                    if int(n.kind) == 3:
+                        try:
+                            te = float(getattr(n, "t_end", 0.0) or 0.0)
+                        except Exception:
+                            te = float(t_draw)
+                        if float(t_draw) <= float(te):
+                            base_dim = max((1.0 - float(miss_dim)) * 0.65, 0.18)
+                            note_alpha *= float(base_dim)
+                        else:
+                            fade_after = clamp((float(t_draw) - float(te)) / float(MISS_FADE_SEC), 0.0, 1.0)
+                            note_alpha *= float(0.18) * (1.0 - float(fade_after))
+                    else:
+                        note_alpha *= (1.0 - float(miss_dim)) * 0.65
 
         ws = float(base_note_w) * float(note_scale_x) * float(getattr(n, "size_px", 1.0))
         hs = float(base_note_h) * float(note_scale_y) * float(getattr(n, "size_px", 1.0))

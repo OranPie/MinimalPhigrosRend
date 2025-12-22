@@ -18,6 +18,10 @@ class PointerFrame:
     press_edge: bool
     release_edge: bool
     gesture: Optional[str]
+    start_x: Optional[float] = None
+    start_y: Optional[float] = None
+    moved_px: float = 0.0
+    moved_y: float = 0.0
 
 
 class _PointerState:
@@ -25,9 +29,12 @@ class _PointerState:
         self.down: bool = False
         self.x: Optional[float] = None
         self.y: Optional[float] = None
+        self.start_x: Optional[float] = None
+        self.start_y: Optional[float] = None
         self._last_x: Optional[float] = None
         self._last_y: Optional[float] = None
         self.moved_px: float = 0.0
+        self.moved_y: float = 0.0
         self.press_edge: bool = False
         self.release_edge: bool = False
         self.gesture: Optional[str] = None
@@ -102,6 +109,11 @@ class PointerManager:
                 st.moved_px += float((dx * dx + dy * dy) ** 0.5)
         except Exception:
             pass
+        try:
+            if st.start_y is not None:
+                st.moved_y = max(float(st.moved_y), abs(float(y) - float(st.start_y)))
+        except Exception:
+            pass
         st._last_x = float(x)
         st._last_y = float(y)
         st.x = float(x)
@@ -114,8 +126,11 @@ class PointerManager:
         st.release_edge = False
         st.gesture = None
         st.moved_px = 0.0
+        st.moved_y = 0.0
         st._last_x = float(x) if x is not None else None
         st._last_y = float(y) if y is not None else None
+        st.start_x = float(x) if x is not None else None
+        st.start_y = float(y) if y is not None else None
         st.x = float(x) if x is not None else None
         st.y = float(y) if y is not None else None
 
@@ -138,7 +153,7 @@ class PointerManager:
             st.gesture = str(gesture)
             return
         thr_px = float(self._flick_threshold_px())
-        is_flick = bool(float(st.moved_px) >= float(thr_px))
+        is_flick = bool(float(st.moved_y) >= float(thr_px))
         st.gesture = "flick" if is_flick else "tap"
 
     def sim_gesture(self, pointer_id: int, x: Optional[float], y: Optional[float], *, gesture: str) -> None:
@@ -194,12 +209,15 @@ class PointerManager:
             st.down = True
             st.press_edge = True
             st.moved_px = 0.0
+            st.moved_y = 0.0
             try:
                 x, y = float(ev.pos[0]), float(ev.pos[1])
             except Exception:
                 x = y = None
             st._last_x = x
             st._last_y = y
+            st.start_x = x
+            st.start_y = y
             st.x = x
             st.y = y
             return
@@ -215,7 +233,7 @@ class PointerManager:
                 st.down = False
                 st.release_edge = True
                 thr_px = float(self._flick_threshold_px())
-                is_flick = bool(float(st.moved_px) >= float(thr_px))
+                is_flick = bool(float(st.moved_y) >= float(thr_px))
                 st.gesture = "flick" if is_flick else "tap"
             return
 
@@ -241,8 +259,11 @@ class PointerManager:
             st.down = True
             st.press_edge = True
             st.moved_px = 0.0
+            st.moved_y = 0.0
             st._last_x = float(x)
             st._last_y = float(y)
+            st.start_x = float(x)
+            st.start_y = float(y)
             st.x = float(x)
             st.y = float(y)
             return
@@ -257,7 +278,7 @@ class PointerManager:
                 st.down = False
                 st.release_edge = True
                 thr_px = float(self._flick_threshold_px())
-                is_flick = bool(float(st.moved_px) >= float(thr_px))
+                is_flick = bool(float(st.moved_y) >= float(thr_px))
                 st.gesture = "flick" if is_flick else "tap"
             return
 
@@ -302,6 +323,10 @@ class PointerManager:
                     press_edge=bool(self._kbd.press_edge),
                     release_edge=bool(self._kbd.release_edge),
                     gesture=self._kbd.gesture,
+                    start_x=None,
+                    start_y=None,
+                    moved_px=0.0,
+                    moved_y=0.0,
                 )
             )
         for pid, st in self._p.items():
@@ -316,6 +341,10 @@ class PointerManager:
                     press_edge=bool(st.press_edge),
                     release_edge=bool(st.release_edge),
                     gesture=st.gesture,
+                    start_x=st.start_x,
+                    start_y=st.start_y,
+                    moved_px=float(st.moved_px),
+                    moved_y=float(st.moved_y),
                 )
             )
         return out

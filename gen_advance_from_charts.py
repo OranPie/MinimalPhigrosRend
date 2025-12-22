@@ -211,6 +211,16 @@ def build_advance_sequence(
         kind = "pack" if is_pack else "loose"
         _log(f"[{i:4d}/{n_total:4d}] {kind}: {cp_s}")
 
+        base_dir = os.path.dirname(os.path.abspath(str(cp_s)))
+        folder_name = os.path.basename(os.path.abspath(base_dir))
+        stem = os.path.splitext(os.path.basename(str(cp_s)))[0].strip()
+        diff_lv = str(stem).strip().upper()
+        diff_num = None
+        try:
+            diff_num = float(str(stem))
+        except Exception:
+            diff_num = None
+
         try:
             fmt, offset, lines, notes = load_chart(cp_s, int(W), int(H))
         except Exception as e:
@@ -233,6 +243,20 @@ def build_advance_sequence(
             "time_offset": 0.0,
             "chart_speed": float(chart_speed),
         }
+
+        try:
+            it["name"] = str(folder_name)
+        except Exception:
+            pass
+        try:
+            it["level"] = str(diff_lv)
+        except Exception:
+            pass
+        if diff_num is not None:
+            try:
+                it["difficulty"] = float(diff_num)
+            except Exception:
+                pass
 
         if bool(include_bgm) and bgm:
             it["bgm"] = str(bgm)
