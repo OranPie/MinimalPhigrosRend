@@ -7,8 +7,6 @@ from .visual import apply_visual_mods
 from .full_blue import apply_full_blue_mode
 from .hold_convert import apply_hold_to_tap_drag
 from .rules import apply_note_rules, apply_line_rules
-from .compress_zip import apply_compress_zip
-from .attach import apply_attach
 
 
 def apply_mods(mods_cfg: Dict[str, Any], notes: List[RuntimeNote], lines: List[RuntimeLine]) -> List[RuntimeNote]:
@@ -18,8 +16,6 @@ def apply_mods(mods_cfg: Dict[str, Any], notes: List[RuntimeNote], lines: List[R
     apply_visual_mods(mods_cfg)
     notes = apply_full_blue_mode(mods_cfg, notes)
     notes = apply_hold_to_tap_drag(mods_cfg, notes, lines)
-    notes = apply_compress_zip(mods_cfg, notes, lines)
-    notes = apply_attach(mods_cfg, notes, lines)
     apply_note_rules(mods_cfg, notes)
     apply_line_rules(mods_cfg, lines)
 

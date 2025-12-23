@@ -4,7 +4,7 @@ from typing import Any
 
 from .. import state
 from ..audio import create_audio_backend
-from ..backends.pygame.resources.audio import HitsoundPlayer
+from ..pygame.resources.audio import HitsoundPlayer
 
 
 def run(args: Any, **ctx: Any):

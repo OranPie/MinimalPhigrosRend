@@ -20,7 +20,7 @@ from .recording.audio_mixer import mix_wav
 from .io.respack_impl import load_respack_info
 from .recording.presets import list_presets
 from .logging_setup import setup_logging
-from .renderer.pygame.textual_ui import init_textual_ui
+from .ui.headless.textual import init_textual_ui
 from .api.playlist import load_playlist_script, run_playlist_script, build_chart_metas
 
 

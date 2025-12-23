@@ -32,20 +32,20 @@ from ..runtime.timewarp import _TimeWarpEval, _TimeWarpIntegral
 from ..runtime.mods import apply_mods
 from ..types import NoteState, RuntimeLine, RuntimeNote
 from ..audio import create_audio_backend
-from .pygame.draw import draw_line_rgba, draw_poly_outline_rgba, draw_poly_rgba, draw_ring
-from .pygame.hold import draw_hold_3slice
-from .pygame.respack_loader import load_respack
-from .pygame.fonts import load_fonts
-from .pygame.background import load_background
-from .pygame.particles import draw_particles
-from .pygame.hitsound import HitsoundPlayer
-from .pygame.hitfx import draw_hitfx
-from .pygame.transform_cache import get_global_transform_cache
-from .pygame.texture_atlas import get_global_atlas, get_global_texture_map, set_global_texture_map
-from .pygame.batch_renderer import get_global_batch_renderer
-from .pygame.surface_pool import get_global_pool
+from ..backends.pygame.rendering.draw import draw_line_rgba, draw_poly_outline_rgba, draw_poly_rgba, draw_ring
+from ..backends.pygame.hold.render import draw_hold_3slice
+from ..backends.pygame.resources.respack import load_respack
+from ..backends.pygame.resources.fonts import load_fonts
+from ..backends.pygame.resources.background import load_background
+from ..backends.pygame.effects.particles import draw_particles
+from ..backends.pygame.resources.audio import HitsoundPlayer
+from ..backends.pygame.effects.hitfx import draw_hitfx
+from ..backends.pygame.performance.transform_cache import get_global_transform_cache
+from ..backends.pygame.performance.texture_atlas import get_global_atlas, get_global_texture_map, set_global_texture_map
+from ..backends.pygame.rendering.batch_renderer import get_global_batch_renderer
+from ..backends.pygame.performance.surface_pool import get_global_pool
 
-from .pygame.rendering_helpers import (
+from ..backends.pygame.utils.rendering import (
     pick_note_image,
     compute_note_times_by_line,
     compute_note_times_by_line_kind,
@@ -54,41 +54,41 @@ from .pygame.rendering_helpers import (
     track_seg_state,
     scroll_speed_px_per_sec,
 )
-from .pygame.ui_rendering import render_ui_overlay
-from .pygame.recording_utils import (
+from ..backends.pygame.rendering.ui_rendering import render_ui_overlay
+from ..recording.utils import (
     print_recording_progress,
     print_recording_notes,
     init_curses_ui,
     cleanup_curses_ui,
     handle_curses_input,
 )
-from .pygame.textual_ui import init_textual_ui, RecordUISnapshot
-from .pygame.init_helpers import (
+from ..ui.headless.textual import init_textual_ui, RecordUISnapshot
+from ..engine.chart_init import (
     compute_total_notes,
     compute_chart_end,
     group_simultaneous_notes,
     filter_notes_by_time,
 )
-from .pygame.judge_helpers import (
+from ..engine.judgment_helpers import (
     sanitize_grade,
     apply_grade,
     finalize_hold,
     check_hold_release,
     detect_miss,
 )
-from .pygame.curses_ui import render_curses_ui
-from .pygame.pointer_input import PointerManager
-from .pygame.manual_judgement import apply_manual_judgement
-from .pygame.hold_logic import hold_finalize, hold_maintenance, hold_tick_fx
-from .pygame.miss_logic import detect_misses
-from .pygame.debug_judge_windows import draw_debug_judge_windows
-from .pygame.trail_effect import apply_trail
-from .pygame.frame_renderer import render_frame as render_frame_impl
-from .pygame.record_writer import save_record_png, write_record_frame
-from .pygame.post_ui import post_render_non_headless, post_render_record_headless_overlay
-from .pygame.motion_blur import apply_motion_blur
-from .pygame.simulateplay import SimulatePlayer
-from .pygame.debug_pointer import draw_debug_pointer
+from ..ui.headless.curses import render_curses_ui
+from ..backends.pygame.input.pointer import PointerManager
+from ..engine.manual_judgment import apply_manual_judgement
+from ..backends.pygame.hold.logic import hold_finalize, hold_maintenance, hold_tick_fx
+from ..engine.miss_detection import detect_misses
+from ..backends.pygame.debug.judge_windows import draw_debug_judge_windows
+from ..backends.pygame.effects.trail_effect import apply_trail
+from ..backends.pygame.rendering.frame_renderer import render_frame as render_frame_impl
+from ..backends.pygame.recording.writer import save_record_png, write_record_frame
+from ..backends.pygame.effects.post_ui import post_render_non_headless, post_render_record_headless_overlay
+from ..backends.pygame.effects.motion_blur import apply_motion_blur
+from ..engine.simulateplay import SimulatePlayer
+from ..backends.pygame.debug.pointer import draw_debug_pointer
 
 def run(
     args: Any,
@@ -1768,6 +1768,7 @@ def run(
                         gesture=pf.gesture,
                         hold_like_down=bool(pf.down),
                         press_edge=bool(pf.press_edge),
+                        pointers=pointers,  # NEW: pass pointers for area judgment
                     )
                 except Exception:
                     pass

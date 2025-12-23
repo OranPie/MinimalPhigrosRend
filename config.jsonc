@@ -21,7 +21,7 @@
     "no_cull_screen": false,
     "no_cull_enter_time": true,
     "expand": 1.0,
-    "note_scale_x": 2.0,
+    "note_scale_x": 2.5,
     "note_scale_y": 1.0,
     "note_flow_speed_multiplier": 1.0,
     "overrender": 1.0,
@@ -39,23 +39,27 @@
   },
   "audio": {
     "audio_backend": "pygame",
-    "bgm": "charts/祈-我ら神祖と共に歩む者なり-.光吉猛修VS穴山大輔VSKaiVS水野健治VS大国奏音/祈-我ら神祖と共に歩む者なり-.光吉猛修VS穴山大輔VSKaiVS水野健治VS大国奏音.ogg",
+    "bgm": "charts/インフェルノシティ.Ponchifeatはぁち/インフェルノシティ.Ponchifeatはぁち.ogg",
     "force": false,
     "bgm_volume": 0.8,
     "hitsound_min_interval_ms": 30
   },
   "assets": {
     "respack": "./respack.zip",
-    "bg": "charts/祈-我ら神祖と共に歩む者なり-.光吉猛修VS穴山大輔VSKaiVS水野健治VS大国奏音/祈-我ら神祖と共に歩む者なり-.光吉猛修VS穴山大輔VSKaiVS水野健治VS大国奏音.png",
+    "bg": "charts/インフェルノシティ.Ponchifeatはぁち/インフェルノシティ.Ponchifeatはぁち.png",
     "bg_blur": 10,
     "bg_dim": 120
   },
   "gameplay": {
     "autoplay": true,
+    "simulateplay": false,
+    "simulateplay_mode": "conve",
+    "simulateplay_max_pointers": 10,
     "judge_script": null,
     "hold_fx_interval_ms": 200,
     "hold_tail_tol": 0.8,
     "judge_width": 0.12,
+    "judge_height": 0.06,
     "flick_threshold": 0.02,
     "start_time": null,
     "end_time": null
@@ -64,7 +68,11 @@
     "lang": "en",
     "no_title_overlay": false,
     "font_path": null,
-    "font_size_multiplier": 1.5
+    "font_size_multiplier": 1.5,
+    "advance_lazy_load": false,
+    "advance_lazy_cache": 1,
+    "advance_lazy_preload": false,
+    "advance_lazy_scan_total_notes": false
   },
   "rpe": {
     "rpe_easing_shift": 0
@@ -74,6 +82,7 @@
     "debug_line_label": false,
     "debug_line_stats": false,
     "debug_judge_windows": false,
+    "debug_pointer": true,
     "debug_note_info": false,
     "debug_particles": false
   },
