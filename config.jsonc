@@ -94,6 +94,17 @@
       "remove_hold": true,
       "include_end": true,
       "drag_kind": "tap"
+    },
+    "attach": {
+      "enable": true,
+      "kind": 4,               // Type of attached note (1-4)
+      "x_offset": 20,         // Horizontal offset (px)
+      "y_offset": 0,           // Vertical offset (px)
+      "time_offset": 0.0,      // Time offset (seconds)
+      "above": null,           // Side of attached note (null/true/false/"flip")
+      "filter": {
+        "kinds": [1]
+      }
     }
   }
 }

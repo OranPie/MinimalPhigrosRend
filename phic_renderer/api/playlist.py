@@ -9,9 +9,9 @@ import sys
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from ..io.chart_pack_impl import load_chart_pack
+from ..assets.chartpack import load_chart_pack
 from ..math.util import clamp
-from ..runtime.judge import Judge
+from ..engine.judge import Judge
 from ..renderer import run as run_renderer
 from ..config_v2 import flatten_config_v2, load_config_v2
 
@@ -326,7 +326,7 @@ def _resolve_pack_or_chart(input_path: str) -> Tuple[str, Optional[str], Optiona
 
 
 def _load_meta(input_path: str, W: int, H: int, *, notes_per_chart: int, tail_time: float = 0.0) -> Optional[ChartMeta]:
-    from ..io.chart_loader_impl import load_chart
+    from ..assets.loader import load_chart
 
     try:
         chart_path, music_path, bg_path, chart_info, pack_keepalive = _resolve_pack_or_chart(input_path)
@@ -762,7 +762,7 @@ def run_playlist(
 
 
 def _load_for_play(meta: ChartMeta, W: int, H: int):
-    from ..io.chart_loader_impl import load_chart
+    from ..assets.loader import load_chart
 
     fmt, offset, lines, notes = load_chart(str(meta.chart_path), int(W), int(H))
     return fmt, offset, lines, notes

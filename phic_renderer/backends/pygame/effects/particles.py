@@ -5,7 +5,7 @@ from collections import defaultdict
 
 import pygame
 
-from ....runtime.effects import ParticleBurst
+from ....engine.effects import ParticleBurst
 from ....math.util import apply_expand_xy
 
 

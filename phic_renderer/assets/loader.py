@@ -5,9 +5,9 @@ import os
 from typing import Any, Dict, List, Tuple
 
 from ..types import RuntimeLine, RuntimeNote
-from ..formats.official_impl import load_official
-from ..formats.rpe_impl import load_rpe
-from ..formats.pec_impl import load_pec, load_pec_text
+from ..chart.official import load_official
+from ..chart.rpe import load_rpe
+from ..chart.pec import load_pec, load_pec_text
 
 
 def detect_format(data: Dict[str, Any]) -> str:

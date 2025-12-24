@@ -36,7 +36,7 @@ def run(args: Any, **ctx: Any):
     from .moderngl.loop import run_loop
     from .moderngl.respack_loader import load_respack
     from .moderngl.texture import load_texture_rgba
-    from ..runtime.visibility import precompute_t_enter
+    from ..engine.visibility import precompute_t_enter
 
     audio = create_audio_backend(getattr(args, "audio_backend", "pygame"))
 

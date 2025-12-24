@@ -11,13 +11,13 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import pygame
 
 from .. import state
-from ..io.chart_loader_impl import load_chart
-from ..io.chart_pack_impl import load_chart_pack
-from ..runtime.effects import HitFX, ParticleBurst
+from ..assets.loader import load_chart
+from ..assets.chartpack import load_chart_pack
+from ..engine.effects import HitFX, ParticleBurst
 from ..core.fx import prune_hitfx, prune_particles
-from ..runtime.judge import Judge, JUDGE_WEIGHT
-from ..runtime.kinematics import eval_line_state, note_world_pos
-from ..runtime.judge_script import build_judge_plan, load_judge_script, parse_judge_script
+from ..engine.judge import Judge, JUDGE_WEIGHT
+from ..engine.kinematics import eval_line_state, note_world_pos
+from ..engine.judge_script import build_judge_plan, load_judge_script, parse_judge_script
 from ..core.constants import NOTE_TYPE_COLORS
 from ..core.ui import compute_score, format_title, progress_ratio
 from ..math.util import (
@@ -27,9 +27,9 @@ from ..math.util import (
     now_sec,
     rect_corners,
 )
-from ..runtime.visibility import precompute_t_enter
-from ..runtime.timewarp import _TimeWarpEval, _TimeWarpIntegral
-from ..runtime.mods import apply_mods
+from ..engine.visibility import precompute_t_enter
+from ..engine.timewarp import _TimeWarpEval, _TimeWarpIntegral
+from ..engine.mods import apply_mods
 from ..types import NoteState, RuntimeLine, RuntimeNote
 from ..audio import create_audio_backend
 from ..backends.pygame.rendering.draw import draw_line_rgba, draw_poly_outline_rgba, draw_poly_rgba, draw_ring

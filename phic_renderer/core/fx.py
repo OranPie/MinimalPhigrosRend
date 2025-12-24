@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List
 
-from ..runtime.effects import HitFX, ParticleBurst
+from ..engine.effects import HitFX, ParticleBurst
 
 
 def prune_hitfx(hitfx: List[HitFX], t: float, duration: float) -> List[HitFX]:

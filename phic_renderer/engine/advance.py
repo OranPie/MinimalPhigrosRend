@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..types import RuntimeLine, RuntimeNote
-from ..io.chart_pack_impl import ChartPack, load_chart_pack
-from ..io.chart_loader_impl import load_chart
+from ..assets.chartpack import ChartPack, load_chart_pack
+from ..assets.loader import load_chart
 from .timewarp import _TimeWarpEval, _TimeWarpIntegral
 from ..math.util import clamp
 

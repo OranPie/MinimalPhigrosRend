@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any, List
 
 from ....math.util import apply_expand_xy
-from ....runtime.judge import Judge
-from ....runtime.kinematics import eval_line_state, note_world_pos
+from ....engine.judge import Judge
+from ....engine.kinematics import eval_line_state, note_world_pos
 from ....types import NoteState, RuntimeLine
 from ..rendering.draw import draw_line_rgba, draw_ring
 

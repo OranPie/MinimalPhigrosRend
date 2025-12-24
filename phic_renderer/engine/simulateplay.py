@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 import bisect
 
-from ..runtime.judge import Judge
-from ..runtime.kinematics import eval_line_state, note_world_pos
+from ..engine.judge import Judge
+from ..engine.kinematics import eval_line_state, note_world_pos
 from ..types import NoteState, RuntimeLine, RuntimeNote
 
 

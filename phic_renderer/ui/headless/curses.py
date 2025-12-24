@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from ...math.util import clamp, now_sec
 from ...core.ui import compute_score
-from ...runtime.kinematics import eval_line_state, note_world_pos
+from ...engine.kinematics import eval_line_state, note_world_pos
 from ...backends.pygame.utils.rendering import line_note_counts_kind, track_seg_state
 
 

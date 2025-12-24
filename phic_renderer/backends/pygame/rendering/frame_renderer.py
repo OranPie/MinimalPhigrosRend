@@ -8,7 +8,7 @@ import pygame
 
 from ....core.fx import prune_hitfx
 from ....math.util import apply_expand_xy, clamp, rect_corners
-from ....runtime.kinematics import eval_line_state, note_world_pos
+from ....engine.kinematics import eval_line_state, note_world_pos
 from ....types import NoteState, RuntimeLine
 from .draw import draw_line_rgba, draw_poly_outline_rgba, draw_poly_rgba
 from ..effects.hitfx import draw_hitfx

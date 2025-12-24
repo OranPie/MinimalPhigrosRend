@@ -11,13 +11,13 @@ from typing import Any, Dict, Optional
 
 from . import state
 from .config_v2 import flatten_config_v2, load_config_v2
-from .runtime.advance import load_from_args
-from .runtime.mods import apply_mods
+from .engine.advance import load_from_args
+from .engine.mods import apply_mods
 from .renderer import run as run_renderer
 from .recording.frame_recorder import FrameRecorder
 from .recording.video_recorder import VideoRecorder, check_ffmpeg
 from .recording.audio_mixer import mix_wav
-from .io.respack_impl import load_respack_info
+from .assets.respack import load_respack_info
 from .recording.presets import list_presets
 from .logging_setup import setup_logging
 from .ui.headless.textual import init_textual_ui
@@ -404,7 +404,7 @@ def main():
                 except Exception:
                     pass
 
-                from .io.chart_loader_impl import load_chart
+                from .assets.loader import load_chart
 
                 total_duration = float(sum(float(getattr(m, "seg_duration", 0.0) or 0.0) for m in metas))
                 if total_duration <= 1e-6:

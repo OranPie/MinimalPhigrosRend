@@ -1,18 +1,18 @@
-from __future__ import annotations
+"""Backward compatibility module for renderer -> backends migration.
 
-from typing import Any, Dict
+DEPRECATED: This module is deprecated. Use phic_renderer.backends instead.
+All functionality has been moved to the backends module.
+"""
 
+import warnings
 
-def run(args: Any, **ctx: Any):
-    backend = getattr(args, "backend", None) or ctx.get("backend") or "pygame"
-    backend = str(backend).strip().lower()
+warnings.warn(
+    "phic_renderer.renderer is deprecated. Use phic_renderer.backends instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
-    if backend == "pygame":
-        from .pygame_backend import run as _run
-        return _run(args, **ctx)
+# Re-export main run function for backward compatibility
+from ..backends import run  # noqa: F401
 
-    if backend in {"moderngl", "gl", "opengl"}:
-        from .moderngl_backend import run as _run
-        return _run(args, **ctx)
-
-    raise SystemExit(f"Unknown backend: {backend}")
+__all__ = ["run"]

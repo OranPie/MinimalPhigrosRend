@@ -5,7 +5,7 @@ from typing import Any
 
 import pygame
 
-from ....runtime.effects import HitFX
+from ....engine.effects import HitFX
 from ....math.util import apply_expand_xy, clamp
 from ..rendering.draw import draw_ring
 

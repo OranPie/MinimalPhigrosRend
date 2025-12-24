@@ -11,8 +11,8 @@ from typing import Any, Dict, Optional
 from . import state
 from .math import easing
 
-from .runtime.mods import apply_mods
-from .runtime.advance import load_from_args
+from .engine.mods import apply_mods
+from .engine.advance import load_from_args
 from .renderer import run as run_renderer
 from .config_v2 import dump_config_v2, flatten_config_v2, load_config_v2
 from .i18n import normalize_lang, pick_lang_from_config, tr

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Callable, List, Optional
 
 from ....math.util import clamp
-from ....runtime.kinematics import eval_line_state, note_world_pos
+from ....engine.kinematics import eval_line_state, note_world_pos
 from ....types import NoteState, RuntimeLine
 
 
@@ -141,7 +141,7 @@ def hold_finalize(
                 g = s.hold_grade or "PERFECT"
                 judge.acc_sum += getattr(judge, "JUDGE_WEIGHT", {}).get(g, 0.0) if hasattr(judge, "JUDGE_WEIGHT") else 0.0
                 try:
-                    from ....runtime.judge import JUDGE_WEIGHT
+                    from ....engine.judge import JUDGE_WEIGHT
 
                     judge.acc_sum += JUDGE_WEIGHT.get(g, 0.0)
                 except Exception:
@@ -164,7 +164,7 @@ def hold_finalize(
             if s.hit and (not s.hold_failed):
                 g = s.hold_grade or "PERFECT"
                 try:
-                    from ....runtime.judge import JUDGE_WEIGHT
+                    from ....engine.judge import JUDGE_WEIGHT
 
                     judge.acc_sum += JUDGE_WEIGHT.get(g, 0.0)
                 except Exception:
