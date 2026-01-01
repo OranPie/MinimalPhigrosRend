@@ -133,7 +133,11 @@ def match_note_filter(n: RuntimeNote, flt: dict[str, Any]) -> bool:
     not_kinds = as_list(flt.get("not_kind", flt.get("exclude_kind", flt.get("not_kinds", None))))
     if not_kinds:
         try:
-            nks = set(int(x) for x in not_kinds)
+            nks: set[int] = set()
+            for x in not_kinds:
+                kx = parse_kind(x)
+                if kx is not None:
+                    nks.add(int(kx))
             if int(n.kind) in nks:
                 return False
         except:

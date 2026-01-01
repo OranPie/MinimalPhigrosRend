@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Tuple
 
 from ...types import RuntimeLine, RuntimeNote
-from .base import match_note_filter, parse_rgb
+from .base import match_note_filter, parse_kind, parse_rgb
 
 
 def apply_colorize(mods_cfg: Dict[str, Any], notes: List[RuntimeNote], lines: List[RuntimeLine]) -> List[RuntimeNote]:
@@ -57,10 +57,12 @@ def apply_colorize(mods_cfg: Dict[str, Any], notes: List[RuntimeNote], lines: Li
     if isinstance(by_kind_cfg, dict):
         for k, v in by_kind_cfg.items():
             try:
-                kind_i = int(k)
+                kind_i = parse_kind(k)
+                if kind_i is None:
+                    continue
                 rgb = parse_rgb(v)
                 if rgb is not None:
-                    by_kind_map[kind_i] = rgb
+                    by_kind_map[int(kind_i)] = rgb
             except Exception:
                 pass
 

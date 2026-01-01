@@ -16,6 +16,103 @@ from ..hold.render import draw_hold_3slice
 from ..utils.rendering import pick_note_image
 
 
+def _eval_flow_speed_multiplier(*, t_draw: float, state_mod: Any) -> float:
+    base = 1.0
+    try:
+        base = float(getattr(state_mod, "note_flow_speed_multiplier", 1.0) or 1.0)
+    except Exception:
+        base = 1.0
+
+    cfg = getattr(state_mod, "note_flow_speed_mod", None)
+    if not isinstance(cfg, dict) or not cfg:
+        return base
+
+    try:
+        if not bool(cfg.get("enable", True)):
+            return base
+    except Exception:
+        pass
+
+    try:
+        mode = str(cfg.get("mode", cfg.get("wave", "sin"))).strip().lower()
+    except Exception:
+        mode = "sin"
+
+    try:
+        amp = float(cfg.get("amplitude", cfg.get("amp", 0.0)) or 0.0)
+    except Exception:
+        amp = 0.0
+
+    try:
+        period = float(cfg.get("period", None)) if cfg.get("period", None) is not None else None
+    except Exception:
+        period = None
+
+    try:
+        freq = float(cfg.get("frequency", cfg.get("freq", 1.0)) or 1.0)
+    except Exception:
+        freq = 1.0
+
+    if period is not None and period > 1e-9:
+        freq = 1.0 / float(period)
+
+    try:
+        phase = float(cfg.get("phase", 0.0) or 0.0)
+    except Exception:
+        phase = 0.0
+
+    try:
+        offset = float(cfg.get("offset", 0.0) or 0.0)
+    except Exception:
+        offset = 0.0
+
+    try:
+        t0 = float(cfg.get("t0", cfg.get("start", 0.0)) or 0.0)
+    except Exception:
+        t0 = 0.0
+
+    dt = float(t_draw) - float(t0)
+    if dt < 0.0:
+        dt = 0.0
+
+    u = float(dt) * float(freq) + float(phase)
+    u01 = u - math.floor(u)
+
+    v = 0.0
+    if mode in ("sin", "sine"):
+        v = math.sin(2.0 * math.pi * u)
+    elif mode in ("triangle", "tri"):
+        v = 4.0 * abs(u01 - 0.5) - 1.0
+    elif mode in ("saw", "sawtooth", "ramp"):
+        v = 2.0 * u01 - 1.0
+    elif mode in ("square", "rect"):
+        v = 1.0 if u01 < 0.5 else -1.0
+    elif mode in ("pulse",):
+        try:
+            duty = float(cfg.get("duty", 0.5) or 0.5)
+        except Exception:
+            duty = 0.5
+        duty = clamp(float(duty), 0.0, 1.0)
+        v = 1.0 if u01 < duty else -1.0
+    else:
+        v = math.sin(2.0 * math.pi * u)
+
+    out = float(base) * (float(offset) + 1.0 + float(amp) * float(v))
+    try:
+        mn = cfg.get("min", None)
+        mx = cfg.get("max", None)
+        if mn is not None:
+            out = max(float(mn), float(out))
+        if mx is not None:
+            out = min(float(mx), float(out))
+    except Exception:
+        pass
+
+    if out <= 1e-9:
+        out = 1e-9
+    return float(out)
+
+
 def render_frame(
     *,
     t_draw: float,
@@ -98,10 +195,7 @@ def render_frame(
         line_states.append((lx, ly, lr, la01, sc, la_raw))
         line_trig.append((math.cos(lr), math.sin(lr)))
 
-    try:
-        flow_mul = float(getattr(state_mod, "note_flow_speed_multiplier", 1.0) or 1.0)
-    except Exception:
-        flow_mul = 1.0
+    flow_mul = _eval_flow_speed_multiplier(t_draw=float(t_draw), state_mod=state_mod)
     hold_keep_head = bool(state_mod.respack and getattr(state_mod.respack, "hold_keep_head", False))
     speed_mul_affects_travel = bool(getattr(state_mod, "note_speed_mul_affects_travel", False))
 
@@ -237,320 +331,324 @@ def render_frame(
             lxs, lys = apply_expand_xy(float(lx) * float(overrender), float(ly) * float(overrender), int(RW), int(RH), float(expand))
             line_text_draw_calls.append((pr, txt, (lxs - txt.get_width() / 2) / float(overrender), (lys - txt.get_height() / 2) / float(overrender)))
 
-    # draw notes
+    # draw notes (2-pass: holds first, then other notes)
     note_render_count = 0
     note_dbg_drawn = 0
     no_cull_all = bool(getattr(args, "no_cull", False))
     no_cull_screen = bool(getattr(args, "no_cull_screen", False))
     no_cull_enter_time = bool(getattr(args, "no_cull_enter_time", False))
+    draw_outline = bool(getattr(args, "note_outline", False)) and (not bool(getattr(args, "no_note_outline", False)))
+
     st0 = max(0, int(idx_next) - 400)
     st1 = min(len(states), int(idx_next) + 1200)
-    for si in range(int(st0), int(st1)):
-        s = states[si]
-        n = s.note
-        try:
-            ln0 = lines[int(n.line_id)]
-            seq_st = getattr(ln0, "advance_seq_start_at", None)
-            seq_en = getattr(ln0, "advance_seq_end_at", None)
-            if seq_st is not None and seq_en is not None:
-                if float(t_draw) < float(seq_st) or float(t_draw) >= float(seq_en):
-                    continue
-        except Exception:
-            pass
-        if n.kind != 3 and s.judged:
-            if bool(getattr(s, "miss", False)):
-                show_miss_for_a_while = True
-                if show_miss_for_a_while:
-                    mt = getattr(s, "miss_t", None)
-                    if mt is None:
-                        continue
-                    if float(t_draw) <= float(mt) + float(MISS_FADE_SEC):
-                        pass
-                    else:
-                        continue
-            else:
-                continue
 
-        if n.kind == 3 and bool(getattr(s, "hold_finalized", False)):
-            if not bool(getattr(s, "miss", False)):
-                continue
+    for pass_hold in (True, False):
+        for si in range(int(st0), int(st1)):
+            s = states[si]
+            n = s.note
+
             try:
-                if float(t_draw) > float(getattr(n, "t_end", 0.0) or 0.0) + float(MISS_FADE_SEC):
-                    continue
+                ln0 = lines[int(n.line_id)]
+                seq_st = getattr(ln0, "advance_seq_start_at", None)
+                seq_en = getattr(ln0, "advance_seq_end_at", None)
+                if seq_st is not None and seq_en is not None:
+                    if float(t_draw) < float(seq_st) or float(t_draw) >= float(seq_en):
+                        continue
             except Exception:
                 pass
-        if n.fake:
-            continue
-        if (not no_cull_all) and (not no_cull_enter_time):
-            if float(t_draw) < float(n.t_enter):
+
+            if bool(pass_hold) != (int(n.kind) == 3):
                 continue
-            t_end_for_cull = float(n.t_end) if int(n.kind) == 3 else float(n.t_hit)
-            extra_after = max(0.25, float(getattr(args, "approach", 3.0)) + 0.5)
+
+            if n.fake:
+                continue
+
+            if int(n.kind) != 3 and bool(getattr(s, "judged", False)) and (not bool(getattr(s, "miss", False))):
+                continue
+
+            if int(n.kind) == 3 and bool(getattr(s, "hold_finalized", False)):
+                continue
+
+            if (not no_cull_all) and (not no_cull_enter_time):
+                if float(t_draw) < float(n.t_enter):
+                    continue
+                t_end_for_cull = float(n.t_end) if int(n.kind) == 3 else float(n.t_hit)
+                extra_after = max(0.25, float(getattr(args, "approach", 3.0)) + 0.5)
+                if int(n.kind) == 3:
+                    extra_after = 0.35
+                if float(t_draw) > float(t_end_for_cull) + float(extra_after):
+                    continue
+
+            note_render_count += 1
+
+            lx, ly, lr, la01, sc_now, la_raw = line_states[n.line_id]
+            tx, ty = line_trig[n.line_id]
+            nx, ny = -ty, tx
+
             if int(n.kind) == 3:
-                extra_after = 0.35
-            if float(t_draw) > float(t_end_for_cull) + float(extra_after):
+                try:
+                    if float(t_draw) >= float(getattr(n, "t_end", 0.0)) - 1e-6:
+                        continue
+                except Exception:
+                    pass
+                try:
+                    den = float(getattr(n, "scroll_end", 0.0)) - float(getattr(n, "scroll_hit", 0.0))
+                    if abs(float(den)) > 1e-6:
+                        if (float(sc_now) - float(getattr(n, "scroll_end", 0.0))) * float(den) >= -1e-6:
+                            continue
+                except Exception:
+                    pass
+
+            if getattr(args, "basic_debug", False):
+                now_ms = int(float(t_draw) * 1000.0)
+                if (now_ms - int(last_debug_ms)) >= 500:
+                    try:
+                        dy_dbg = float(n.scroll_hit) - float(sc_now)
+                        print(
+                            f"[dbg] t={float(t_draw):.3f} note={int(n.nid)} line={int(n.line_id)} t_hit={float(n.t_hit):.3f} "
+                            f"sc_now={float(sc_now):.3f} sc_hit={float(n.scroll_hit):.3f} dy={float(dy_dbg):.3f}"
+                        )
+                    except Exception:
+                        pass
+                    last_debug_ms = int(now_ms)
+
+            note_alpha = clamp(float(getattr(n, "alpha01", 1.0)), 0.0, 1.0)
+            if la01 < 0.0:
+                if str(getattr(args, "line_alpha_affects_notes", "negative_only")) != "never":
+                    note_alpha *= clamp(1.0 + la01, 0.0, 1.0)
+            elif str(getattr(args, "line_alpha_affects_notes", "negative_only")) == "always":
+                note_alpha *= clamp(la01, 0.0, 1.0)
+            if note_alpha <= 1e-6:
                 continue
 
-        note_render_count += 1
-
-        lx, ly, lr, la01, sc_now, la_raw = line_states[n.line_id]
-        tx, ty = line_trig[n.line_id]
-        nx, ny = -ty, tx
-
-        if getattr(args, "basic_debug", False):
-            now_ms = int(float(t_draw) * 1000.0)
-            if (now_ms - int(last_debug_ms)) >= 500:
-                try:
-                    dy_dbg = float(n.scroll_hit) - float(sc_now)
-                    print(
-                        f"[dbg] t={float(t_draw):.3f} note={int(n.nid)} line={int(n.line_id)} t_hit={float(n.t_hit):.3f} "
-                        f"sc_now={float(sc_now):.3f} sc_hit={float(n.scroll_hit):.3f} dy={float(dy_dbg):.3f}"
-                    )
-                except Exception:
-                    pass
-                last_debug_ms = int(now_ms)
-
-        note_alpha = clamp(float(getattr(n, "alpha01", 1.0)), 0.0, 1.0)
-        if la01 < 0.0:
-            if str(getattr(args, "line_alpha_affects_notes", "negative_only")) != "never":
-                note_alpha *= clamp(1.0 + la01, 0.0, 1.0)
-        elif str(getattr(args, "line_alpha_affects_notes", "negative_only")) == "always":
-            note_alpha *= clamp(la01, 0.0, 1.0)
-        if note_alpha <= 1e-6:
-            continue
-
-        miss_dim = 0.0
-        if bool(getattr(s, "miss", False)):
-            mt = getattr(s, "miss_t", None)
-            if mt is not None:
-                dtm = float(t_draw) - float(mt)
-                if dtm >= 0.0:
-                    miss_dim = clamp(dtm / float(MISS_FADE_SEC), 0.0, 1.0)
-                    if int(n.kind) == 3:
-                        try:
-                            te = float(getattr(n, "t_end", 0.0) or 0.0)
-                        except Exception:
-                            te = float(t_draw)
-                        if float(t_draw) <= float(te):
-                            base_dim = max((1.0 - float(miss_dim)) * 0.65, 0.18)
-                            note_alpha *= float(base_dim)
+            miss_dim = 0.0
+            if bool(getattr(s, "miss", False)):
+                mt = getattr(s, "miss_t", None)
+                if mt is not None:
+                    dtm = float(t_draw) - float(mt)
+                    if dtm >= 0.0:
+                        miss_dim = clamp(dtm / float(MISS_FADE_SEC), 0.0, 1.0)
+                        if int(n.kind) == 3:
+                            try:
+                                te = float(getattr(n, "t_end", 0.0) or 0.0)
+                            except Exception:
+                                te = float(t_draw)
+                            if float(t_draw) <= float(te):
+                                base_dim = max((1.0 - float(miss_dim)) * 0.65, 0.18)
+                                note_alpha *= float(base_dim)
+                            else:
+                                fade_after = clamp((float(t_draw) - float(te)) / float(MISS_FADE_SEC), 0.0, 1.0)
+                                note_alpha *= float(0.18) * (1.0 - float(fade_after))
                         else:
-                            fade_after = clamp((float(t_draw) - float(te)) / float(MISS_FADE_SEC), 0.0, 1.0)
-                            note_alpha *= float(0.18) * (1.0 - float(fade_after))
-                    else:
-                        note_alpha *= (1.0 - float(miss_dim)) * 0.65
+                            note_alpha *= (1.0 - float(miss_dim)) * 0.65
 
-        ws = float(base_note_w) * float(note_scale_x) * float(getattr(n, "size_px", 1.0))
-        hs = float(base_note_h) * float(note_scale_y) * float(getattr(n, "size_px", 1.0))
-        rgba_fill = (255, 255, 255, int(255 * note_alpha))
-        rgba_outline = (0, 0, 0, int(220 * note_alpha))
+            ws = float(base_note_w) * float(note_scale_x) * float(getattr(n, "size_px", 1.0))
+            hs = float(base_note_h) * float(note_scale_y) * float(getattr(n, "size_px", 1.0))
+            rgba_fill = (255, 255, 255, int(255 * note_alpha))
+            rgba_outline = (0, 0, 0, int(220 * note_alpha))
 
-        if n.kind == 3:
-            hit_for_draw = bool(s.hit) and (not bool(getattr(n, "fake", False)))
-            if hit_for_draw and respack and bool(getattr(respack, "hold_keep_head", False)):
-                dy = (float(sc_now) - float(sc_now)) * float(flow_mul)
-                if hold_keep_head and dy < 0.0:
-                    dy = 0.0
-                y_local = (1.0 if bool(getattr(n, "above", True)) else -1.0) * dy + float(getattr(n, "y_offset_px", 0.0))
-                x_local = float(getattr(n, "x_local_px", 0.0))
-                head = (
-                    float(lx) + float(tx) * x_local + float(nx) * y_local,
-                    float(ly) + float(ty) * x_local + float(ny) * y_local,
-                )
-            else:
-                if bool(getattr(s, "hit", False)) or bool(getattr(s, "holding", False)) or (float(t_draw) >= float(n.t_hit)):
-                    head_target_scroll = n.scroll_hit if float(sc_now) <= float(n.scroll_hit) else float(sc_now)
+            if n.kind == 3:
+                hit_for_draw = bool(s.hit) and (not bool(getattr(n, "fake", False)))
+                if hit_for_draw and respack and bool(getattr(respack, "hold_keep_head", False)):
+                    dy = (float(sc_now) - float(sc_now)) * float(flow_mul)
+                    if hold_keep_head and dy < 0.0:
+                        dy = 0.0
+                    y_local = (1.0 if bool(getattr(n, "above", True)) else -1.0) * dy + float(getattr(n, "y_offset_px", 0.0))
+                    x_local = float(getattr(n, "x_local_px", 0.0))
+                    head = (
+                        float(lx) + float(tx) * x_local + float(nx) * y_local,
+                        float(ly) + float(ty) * x_local + float(ny) * y_local,
+                    )
                 else:
-                    head_target_scroll = n.scroll_hit
-                dy = (float(head_target_scroll) - float(sc_now)) * float(flow_mul)
-                if hold_keep_head and dy < 0.0:
-                    dy = 0.0
-                y_local = (1.0 if bool(getattr(n, "above", True)) else -1.0) * dy + float(getattr(n, "y_offset_px", 0.0))
-                x_local = float(getattr(n, "x_local_px", 0.0))
-                head = (
-                    float(lx) + float(tx) * x_local + float(nx) * y_local,
-                    float(ly) + float(ty) * x_local + float(ny) * y_local,
-                )
-
-            dy = (float(getattr(n, "scroll_end", 0.0)) - float(sc_now)) * float(flow_mul)
-            mult = max(0.0, float(getattr(n, "speed_mul", 1.0)))
-            y_local = (1.0 if bool(getattr(n, "above", True)) else -1.0) * dy * mult + float(getattr(n, "y_offset_px", 0.0))
-            x_local = float(getattr(n, "x_local_px", 0.0))
-            tail = (
-                float(lx) + float(tx) * x_local + float(nx) * y_local,
-                float(ly) + float(ty) * x_local + float(ny) * y_local,
-            )
-            head_s = apply_expand_xy(head[0] * float(overrender), head[1] * float(overrender), int(RW), int(RH), float(expand))
-            tail_s = apply_expand_xy(tail[0] * float(overrender), tail[1] * float(overrender), int(RW), int(RH), float(expand))
-
-            if (not no_cull_all) and (not no_cull_screen):
-                m = int(120 * float(overrender))
-                minx = min(float(head_s[0]), float(tail_s[0]))
-                maxx = max(float(head_s[0]), float(tail_s[0]))
-                miny = min(float(head_s[1]), float(tail_s[1]))
-                maxy = max(float(head_s[1]), float(tail_s[1]))
-                if maxx < -m or minx > float(RW + m) or maxy < -m or miny > float(RH + m):
-                    continue
-
-            hold_alpha = float(note_alpha)
-            if s.hold_failed:
-                hold_alpha *= 0.35
-            mh = bool(getattr(n, "mh", False))
-            size_scale = float(getattr(n, "size_px", 1.0) or 1.0)
-            note_rgb = getattr(n, "tint_rgb", (255, 255, 255))
-            line_rgb = lines[n.line_id].color_rgb
-            prog = None
-            try:
-                if bool(getattr(s, "hit", False)) or bool(getattr(s, "holding", False)) or (float(t_draw) >= float(n.t_hit)):
-                    den = float(n.scroll_end) - float(n.scroll_hit)
-                    num = float(sc_now) - float(n.scroll_hit)
-                    if abs(den) > 1e-6:
-                        prog = clamp(num / den, 0.0, 1.0)
+                    if bool(getattr(s, "hit", False)) or bool(getattr(s, "holding", False)) or (float(t_draw) >= float(n.t_hit)):
+                        head_target_scroll = n.scroll_hit if float(sc_now) <= float(n.scroll_hit) else float(sc_now)
                     else:
-                        dur_t = float(n.t_end) - float(n.t_hit)
-                        if dur_t > 1e-6:
-                            prog = clamp((float(t_draw) - float(n.t_hit)) / dur_t, 0.0, 1.0)
-            except Exception:
-                prog = None
+                        head_target_scroll = n.scroll_hit
+                    dy = (float(head_target_scroll) - float(sc_now)) * float(flow_mul)
+                    if hold_keep_head and dy < 0.0:
+                        dy = 0.0
+                    y_local = (1.0 if bool(getattr(n, "above", True)) else -1.0) * dy + float(getattr(n, "y_offset_px", 0.0))
+                    x_local = float(getattr(n, "x_local_px", 0.0))
+                    head = (
+                        float(lx) + float(tx) * x_local + float(nx) * y_local,
+                        float(ly) + float(ty) * x_local + float(ny) * y_local,
+                    )
 
-            draw_hold_3slice(
-                overlay=overlay,
-                head_xy=head_s,
-                tail_xy=tail_s,
-                line_rot=float(lr),
-                alpha01=float(hold_alpha),
-                line_rgb=(int(line_rgb[0]), int(line_rgb[1]), int(line_rgb[2])),
-                note_rgb=(int(note_rgb[0]), int(note_rgb[1]), int(note_rgb[2])),
-                size_scale=float(size_scale),
-                mh=bool(mh),
-                hold_body_w=max(1, int(float(hold_body_w) * float(overrender))),
-                progress=prog,
-                draw_outline=(not getattr(args, "no_note_outline", False)),
-                outline_width=max(1, int(float(outline_w) * float(overrender))),
-            )
-
-            if getattr(args, "debug_note_info", False):
-                if int(note_dbg_drawn) >= 80:
-                    pass
-                else:
-                    try:
-                        dy_dbg = float(n.scroll_hit) - float(sc_now)
-                        dt_ms = (float(t_draw) - float(n.t_hit)) * 1000.0
-                        side_ch = "A" if bool(getattr(n, "above", True)) else "B"
-                        label_key = f"{int(n.nid)}:{int(n.kind)} L{int(n.line_id)}{side_ch}"
-                        surf = note_dbg_cache.get(label_key)
-                        if surf is None:
-                            surf = small.render(label_key, True, (240, 240, 240))
-                            note_dbg_cache[label_key] = surf
-                        extra = f"dt={dt_ms:+.0f}ms dy={float(dy_dbg):.1f}"
-                        if prog is not None:
-                            extra += f" p={float(prog)*100.0:4.1f}%"
-                        surf2 = small.render(extra, True, (200, 200, 200))
-                        nxv = -math.sin(float(lr))
-                        nyv = math.cos(float(lr))
-                        side = 1.0 if bool(getattr(n, "above", True)) else -1.0
-                        off = (float(hs) * float(overrender) * 0.8 + 14.0 * float(overrender))
-                        tx0 = float(head_s[0]) + nxv * off * side
-                        ty0 = float(head_s[1]) + nyv * off * side
-                        overlay.blit(surf, (int(tx0 - surf.get_width() / 2), int(ty0 - surf.get_height() / 2)))
-                        overlay.blit(
-                            surf2,
-                            (int(tx0 - surf2.get_width() / 2), int(ty0 - surf2.get_height() / 2 + surf.get_height())),
-                        )
-                        note_dbg_drawn += 1
-                    except Exception:
-                        pass
-        else:
-            dy = (float(getattr(n, "scroll_hit", 0.0)) - float(sc_now)) * float(flow_mul)
-            mult = 1.0
-            if speed_mul_affects_travel:
+                dy = (float(getattr(n, "scroll_end", 0.0)) - float(sc_now)) * float(flow_mul)
                 mult = max(0.0, float(getattr(n, "speed_mul", 1.0)))
-            y_local = (1.0 if bool(getattr(n, "above", True)) else -1.0) * dy * float(mult) + float(getattr(n, "y_offset_px", 0.0))
-            x_local = float(getattr(n, "x_local_px", 0.0))
-            p = (
-                float(lx) + float(tx) * x_local + float(nx) * y_local,
-                float(ly) + float(ty) * x_local + float(ny) * y_local,
-            )
-            ps = apply_expand_xy(p[0] * float(overrender), p[1] * float(overrender), int(RW), int(RH), float(expand))
+                y_local = (1.0 if bool(getattr(n, "above", True)) else -1.0) * dy * mult + float(getattr(n, "y_offset_px", 0.0))
+                x_local = float(getattr(n, "x_local_px", 0.0))
+                tail = (
+                    float(lx) + float(tx) * x_local + float(nx) * y_local,
+                    float(ly) + float(ty) * x_local + float(ny) * y_local,
+                )
+                head_s = apply_expand_xy(head[0] * float(overrender), head[1] * float(overrender), int(RW), int(RH), float(expand))
+                tail_s = apply_expand_xy(tail[0] * float(overrender), tail[1] * float(overrender), int(RW), int(RH), float(expand))
 
-            if (not no_cull_all) and (not no_cull_screen):
-                m = int(120 * float(overrender))
-                if (float(ps[0]) < -m) or (float(ps[0]) > float(RW + m)) or (float(ps[1]) < -m) or (float(ps[1]) > float(RH + m)):
-                    continue
+                if (not no_cull_all) and (not no_cull_screen):
+                    m = int(120 * float(overrender))
+                    minx = min(float(head_s[0]), float(tail_s[0]))
+                    maxx = max(float(head_s[0]), float(tail_s[0]))
+                    miny = min(float(head_s[1]), float(tail_s[1]))
+                    maxy = max(float(head_s[1]), float(tail_s[1]))
+                    if maxx < -m or minx > float(RW + m) or maxy < -m or miny > float(RH + m):
+                        continue
 
-            img = pick_note_image(n, respack)
-            if img is None:
-                if miss_dim > 1e-6:
-                    g = int(255 * (1.0 - 0.6 * float(miss_dim)))
-                    rgba_fill = (g, g, g, int(255 * note_alpha))
-                    rgba_outline = (0, 0, 0, int(220 * note_alpha))
-                pts = rect_corners(ps[0], ps[1], ws * float(overrender), hs * float(overrender), float(lr))
-                draw_poly_rgba(overlay, pts, rgba_fill)
-                if not getattr(args, "no_note_outline", False):
-                    draw_poly_outline_rgba(overlay, pts, rgba_outline, width=int(outline_w))
-            else:
-                iw, ih = img.get_width(), img.get_height()
-                target_w = max(1, int(ws * float(overrender)))
-                target_h = max(1, int(target_w * ih / max(1, iw) * float(note_scale_y)))
-
-                img_id = id(img)
-                scaled = transform_cache.get_scaled(img, target_w, target_h, img_id)
-                if scaled is None:
-                    scaled = pygame.transform.smoothscale(img, (target_w, target_h))
-                    transform_cache.put_scaled(img, target_w, target_h, img_id, scaled)
-
-                angle_deg = -float(lr) * 180.0 / math.pi
-                scaled_key_id = (int(img_id), int(target_w), int(target_h))
-                rotated = transform_cache.get_rotated(scaled, angle_deg, scaled_key_id)
-                if rotated is None:
-                    rotated = pygame.transform.rotate(scaled, angle_deg)
-                    transform_cache.put_rotated(scaled, angle_deg, scaled_key_id, rotated)
-
+                hold_alpha = float(note_alpha)
+                if s.hold_failed:
+                    hold_alpha *= 0.35
+                mh = bool(getattr(n, "mh", False))
+                size_scale = float(getattr(n, "size_px", 1.0) or 1.0)
+                note_rgb = getattr(n, "tint_rgb", (255, 255, 255))
+                line_rgb = lines[n.line_id].color_rgb
+                prog = None
                 try:
-                    trc, tgc, tbc = getattr(n, "tint_rgb", (255, 255, 255))
-                    if miss_dim > 1e-6:
-                        g = int(220 * (1.0 - 0.7 * float(miss_dim)))
-                        trc = int(trc * (1.0 - 0.8 * float(miss_dim)) + g * (0.8 * float(miss_dim)))
-                        tgc = int(tgc * (1.0 - 0.8 * float(miss_dim)) + g * (0.8 * float(miss_dim)))
-                        tbc = int(tbc * (1.0 - 0.8 * float(miss_dim)) + g * (0.8 * float(miss_dim)))
-                    rotated.fill((int(trc), int(tgc), int(tbc), 255), special_flags=pygame.BLEND_RGBA_MULT)
+                    if bool(getattr(s, "hit", False)) or bool(getattr(s, "holding", False)) or (float(t_draw) >= float(n.t_hit)):
+                        den = float(n.scroll_end) - float(n.scroll_hit)
+                        num = float(sc_now) - float(n.scroll_hit)
+                        if abs(den) > 1e-6:
+                            prog = clamp(num / den, 0.0, 1.0)
+                        else:
+                            dur_t = float(n.t_end) - float(n.t_hit)
+                            if dur_t > 1e-6:
+                                prog = clamp((float(t_draw) - float(n.t_hit)) / dur_t, 0.0, 1.0)
                 except Exception:
-                    pass
-                rotated.set_alpha(int(255 * note_alpha))
-                overlay.blit(rotated, (ps[0] - rotated.get_width() / 2, ps[1] - rotated.get_height() / 2))
-                pts = rect_corners(ps[0], ps[1], float(target_w), float(target_h), float(lr))
-                if not getattr(args, "no_note_outline", False):
-                    draw_poly_outline_rgba(overlay, pts, rgba_outline, width=int(outline_w))
+                    prog = None
 
-            if getattr(args, "debug_note_info", False):
-                if int(note_dbg_drawn) >= 80:
-                    pass
+                draw_hold_3slice(
+                    overlay=overlay,
+                    head_xy=head_s,
+                    tail_xy=tail_s,
+                    line_rot=float(lr),
+                    alpha01=float(hold_alpha),
+                    line_rgb=(int(line_rgb[0]), int(line_rgb[1]), int(line_rgb[2])),
+                    note_rgb=(int(note_rgb[0]), int(note_rgb[1]), int(note_rgb[2])),
+                    size_scale=float(size_scale),
+                    mh=bool(mh),
+                    hold_body_w=max(1, int(float(hold_body_w) * float(overrender))),
+                    progress=prog,
+                    draw_outline=bool(draw_outline),
+                    outline_width=max(1, int(float(outline_w) * float(overrender))),
+                )
+
+                if getattr(args, "debug_note_info", False):
+                    if int(note_dbg_drawn) < 80:
+                        try:
+                            dy_dbg = float(n.scroll_hit) - float(sc_now)
+                            dt_ms = (float(t_draw) - float(n.t_hit)) * 1000.0
+                            side_ch = "A" if bool(getattr(n, "above", True)) else "B"
+                            label_key = f"{int(n.nid)}:{int(n.kind)} L{int(n.line_id)}{side_ch}"
+                            surf = note_dbg_cache.get(label_key)
+                            if surf is None:
+                                surf = small.render(label_key, True, (240, 240, 240))
+                                note_dbg_cache[label_key] = surf
+                            extra = f"dt={dt_ms:+.0f}ms dy={float(dy_dbg):.1f}"
+                            if prog is not None:
+                                extra += f" p={float(prog)*100.0:4.1f}%"
+                            surf2 = small.render(extra, True, (200, 200, 200))
+                            nxv = -math.sin(float(lr))
+                            nyv = math.cos(float(lr))
+                            side = 1.0 if bool(getattr(n, "above", True)) else -1.0
+                            off = (float(hs) * float(overrender) * 0.8 + 14.0 * float(overrender))
+                            tx0 = float(head_s[0]) + nxv * off * side
+                            ty0 = float(head_s[1]) + nyv * off * side
+                            overlay.blit(surf, (int(tx0 - surf.get_width() / 2), int(ty0 - surf.get_height() / 2)))
+                            overlay.blit(
+                                surf2,
+                                (int(tx0 - surf2.get_width() / 2), int(ty0 - surf2.get_height() / 2 + surf.get_height())),
+                            )
+                            note_dbg_drawn += 1
+                        except Exception:
+                            pass
+            else:
+                dy = (float(getattr(n, "scroll_hit", 0.0)) - float(sc_now)) * float(flow_mul)
+                mult = 1.0
+                if speed_mul_affects_travel:
+                    mult = max(0.0, float(getattr(n, "speed_mul", 1.0)))
+                y_local = (1.0 if bool(getattr(n, "above", True)) else -1.0) * dy * float(mult) + float(getattr(n, "y_offset_px", 0.0))
+                x_local = float(getattr(n, "x_local_px", 0.0))
+                p = (
+                    float(lx) + float(tx) * x_local + float(nx) * y_local,
+                    float(ly) + float(ty) * x_local + float(ny) * y_local,
+                )
+                ps = apply_expand_xy(p[0] * float(overrender), p[1] * float(overrender), int(RW), int(RH), float(expand))
+
+                if (not no_cull_all) and (not no_cull_screen):
+                    m = int(120 * float(overrender))
+                    if (float(ps[0]) < -m) or (float(ps[0]) > float(RW + m)) or (float(ps[1]) < -m) or (float(ps[1]) > float(RH + m)):
+                        continue
+
+                img = pick_note_image(n, respack)
+                if img is None:
+                    if miss_dim > 1e-6:
+                        g = int(255 * (1.0 - 0.6 * float(miss_dim)))
+                        rgba_fill = (g, g, g, int(255 * note_alpha))
+                        rgba_outline = (0, 0, 0, int(220 * note_alpha))
+                    pts = rect_corners(ps[0], ps[1], ws * float(overrender), hs * float(overrender), float(lr))
+                    draw_poly_rgba(overlay, pts, rgba_fill)
+                    if bool(draw_outline):
+                        draw_poly_outline_rgba(overlay, pts, rgba_outline, width=int(outline_w))
                 else:
+                    iw, ih = img.get_width(), img.get_height()
+                    target_w = max(1, int(ws * float(overrender)))
+                    target_h = max(1, int(target_w * ih / max(1, iw) * float(note_scale_y)))
+
+                    img_id = id(img)
+                    scaled = transform_cache.get_scaled(img, target_w, target_h, img_id)
+                    if scaled is None:
+                        scaled = pygame.transform.smoothscale(img, (target_w, target_h))
+                        transform_cache.put_scaled(img, target_w, target_h, img_id, scaled)
+
+                    angle_deg = -float(lr) * 180.0 / math.pi
+                    scaled_key_id = (int(img_id), int(target_w), int(target_h))
+                    rotated = transform_cache.get_rotated(scaled, angle_deg, scaled_key_id)
+                    if rotated is None:
+                        rotated = pygame.transform.rotate(scaled, angle_deg)
+                        transform_cache.put_rotated(scaled, angle_deg, scaled_key_id, rotated)
+
                     try:
-                        dy_dbg = float(n.scroll_hit) - float(sc_now)
-                        dt_ms = (float(t_draw) - float(n.t_hit)) * 1000.0
-                        side_ch = "A" if bool(getattr(n, "above", True)) else "B"
-                        label_key = f"{int(n.nid)}:{int(n.kind)} L{int(n.line_id)}{side_ch}"
-                        surf = note_dbg_cache.get(label_key)
-                        if surf is None:
-                            surf = small.render(label_key, True, (240, 240, 240))
-                            note_dbg_cache[label_key] = surf
-                        extra = f"dt={dt_ms:+.0f}ms dy={float(dy_dbg):.1f}"
-                        surf2 = small.render(extra, True, (200, 200, 200))
-                        nxv = -math.sin(float(lr))
-                        nyv = math.cos(float(lr))
-                        side = 1.0 if bool(getattr(n, "above", True)) else -1.0
-                        off = (float(hs) * float(overrender) * 0.8 + 14.0 * float(overrender))
-                        tx0 = float(ps[0]) + nxv * off * side
-                        ty0 = float(ps[1]) + nyv * off * side
-                        overlay.blit(surf, (int(tx0 - surf.get_width() / 2), int(ty0 - surf.get_height() / 2)))
-                        overlay.blit(
-                            surf2,
-                            (int(tx0 - surf2.get_width() / 2), int(ty0 - surf2.get_height() / 2 + surf.get_height())),
-                        )
-                        note_dbg_drawn += 1
+                        trc, tgc, tbc = getattr(n, "tint_rgb", (255, 255, 255))
+                        if miss_dim > 1e-6:
+                            g = int(220 * (1.0 - 0.7 * float(miss_dim)))
+                            trc = int(trc * (1.0 - 0.8 * float(miss_dim)) + g * (0.8 * float(miss_dim)))
+                            tgc = int(tgc * (1.0 - 0.8 * float(miss_dim)) + g * (0.8 * float(miss_dim)))
+                            tbc = int(tbc * (1.0 - 0.8 * float(miss_dim)) + g * (0.8 * float(miss_dim)))
+                        rotated.fill((int(trc), int(tgc), int(tbc), 255), special_flags=pygame.BLEND_RGBA_MULT)
                     except Exception:
                         pass
+                    rotated.set_alpha(int(255 * note_alpha))
+                    overlay.blit(rotated, (ps[0] - rotated.get_width() / 2, ps[1] - rotated.get_height() / 2))
+                    pts = rect_corners(ps[0], ps[1], float(target_w), float(target_h), float(lr))
+                    if bool(draw_outline):
+                        draw_poly_outline_rgba(overlay, pts, rgba_outline, width=int(outline_w))
+
+                if getattr(args, "debug_note_info", False):
+                    if int(note_dbg_drawn) < 80:
+                        try:
+                            dy_dbg = float(n.scroll_hit) - float(sc_now)
+                            dt_ms = (float(t_draw) - float(n.t_hit)) * 1000.0
+                            side_ch = "A" if bool(getattr(n, "above", True)) else "B"
+                            label_key = f"{int(n.nid)}:{int(n.kind)} L{int(n.line_id)}{side_ch}"
+                            surf = note_dbg_cache.get(label_key)
+                            if surf is None:
+                                surf = small.render(label_key, True, (240, 240, 240))
+                                note_dbg_cache[label_key] = surf
+                            extra = f"dt={dt_ms:+.0f}ms dy={float(dy_dbg):.1f}"
+                            surf2 = small.render(extra, True, (200, 200, 200))
+                            nxv = -math.sin(float(lr))
+                            nyv = math.cos(float(lr))
+                            side = 1.0 if bool(getattr(n, "above", True)) else -1.0
+                            off = (float(hs) * float(overrender) * 0.8 + 14.0 * float(overrender))
+                            tx0 = float(ps[0]) + nxv * off * side
+                            ty0 = float(ps[1]) + nyv * off * side
+                            overlay.blit(surf, (int(tx0 - surf.get_width() / 2), int(ty0 - surf.get_height() / 2)))
+                            overlay.blit(
+                                surf2,
+                                (int(tx0 - surf2.get_width() / 2), int(ty0 - surf2.get_height() / 2 + surf.get_height())),
+                            )
+                            note_dbg_drawn += 1
+                        except Exception:
+                            pass
 
     # hitfx
     hitfx[:] = prune_hitfx(hitfx, float(t_draw), (respack.hitfx_duration if respack else 0.18))
@@ -589,7 +687,7 @@ def render_frame(
                 if img is None:
                     pts = rect_corners(ps[0], ps[1], ws * float(overrender), hs * float(overrender), float(nr))
                     draw_poly_rgba(overlay, pts, (255, 80, 80, int(180 * a01)))
-                    if not getattr(args, "no_note_outline", False):
+                    if bool(draw_outline):
                         draw_poly_outline_rgba(overlay, pts, (0, 0, 0, int(160 * a01)), width=int(outline_w))
                 else:
                     iw, ih = img.get_width(), img.get_height()

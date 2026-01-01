@@ -33,7 +33,7 @@ class ParticleBurst:
         tick = (now_ms - self.start) / self.duration
         tick = 0.0 if tick < 0 else 1.0 if tick > 1 else tick
         alpha = int(255 * (1 - tick))
-        size = 30 * (((0.2078 * tick - 1.6524) * tick + 1.6399) * tick + 0.4988)
+        size = 20 * (((0.2078 * tick - 1.6524) * tick + 1.6399) * tick + 0.4988)
         size = max(2, int(size))
         r, g, b, _ = self.rgba
 

@@ -22,11 +22,7 @@ from .api.playlist import run_playlist_script
 # Global respack instance (kept for backward-compat with the original single-file code)
 respack: Optional[Any] = None
 
-def main():
-    global respack  # Declare we're using the global variable
-
-    logger = logging.getLogger(__name__)
-
+def build_arg_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="phic_renderer")
     g_in = ap.add_argument_group("Input")
     g_in.add_argument("--input", required=False, default=None, help="chart.json OR chart pack folder OR .zip/.pez pack")
@@ -78,7 +74,8 @@ def main():
     g_render.add_argument("--trail_dim", type=int, default=0)
     g_render.add_argument("--hitfx_scale_mul", type=float, default=1.0)
     g_render.add_argument("--multicolor_lines", action="store_true")
-    g_render.add_argument("--no_note_outline", action="store_true")
+    g_render.add_argument("--note_outline", action="store_true", help="Enable note outline")
+    g_render.add_argument("--no_note_outline", action="store_true", help="(legacy) Disable note outline")
     g_render.add_argument("--line_alpha_affects_notes", type=str, default="negative_only", choices=["never", "negative_only", "always"])
     g_render.add_argument(
         "--backend",
@@ -112,6 +109,22 @@ def main():
     g_game.add_argument("--simulateplay", action="store_true")
     g_game.add_argument("--simulateplay_mode", type=str, default="conservative", choices=["conservative", "aggressive", "extreme"])
     g_game.add_argument("--simulateplay_max_pointers", type=int, default=2)
+    g_game.add_argument("--simulateplay_ipad", action="store_true", help="Route simulateplay gestures to a real iPad via Appium (preview window shows iPad screen)")
+    g_game.add_argument("--ipad_bundle_id", type=str, default=None, help="iOS app bundleId to control (required for --simulateplay_ipad)")
+    g_game.add_argument("--ipad_udid", type=str, default=None, help="Target device UDID (optional if Appium can pick one)")
+    g_game.add_argument("--ipad_device_name", type=str, default="iPad")
+    g_game.add_argument("--ipad_appium_server", type=str, default="http://127.0.0.1:4723")
+    g_game.add_argument("--ipad_mjpeg_url", type=str, default=None, help="Optional MJPEG stream URL for low-latency preview")
+    g_game.add_argument("--ipad_move_hz", type=float, default=25.0, help="Max move events per second sent to iPad")
+    g_game.add_argument("--ipad_preview_fps", type=float, default=15.0, help="iPad screenshot preview FPS (0 disables)")
+    g_game.add_argument("--ipad_max_retries", type=int, default=2)
+    g_game.add_argument("--ipad_retry_backoff_s", type=float, default=0.35)
+    g_game.add_argument("--ipad_reconnect", action="store_true", help="Reconnect Appium session on failure")
+    g_game.add_argument("--ipad_activate_app", action="store_true", help="Activate app on connect (disabled by default to avoid forcing reopen)")
+    g_game.add_argument("--ipad_viewport_x0", type=float, default=0.0, help="Viewport mapping x0 (normalized 0..1 in device screen)")
+    g_game.add_argument("--ipad_viewport_y0", type=float, default=0.0, help="Viewport mapping y0 (normalized 0..1 in device screen)")
+    g_game.add_argument("--ipad_viewport_x1", type=float, default=1.0, help="Viewport mapping x1 (normalized 0..1 in device screen)")
+    g_game.add_argument("--ipad_viewport_y1", type=float, default=1.0, help="Viewport mapping y1 (normalized 0..1 in device screen)")
     g_game.add_argument("--judge_script", type=str, default=None, help="Optional judge script JSON to simulate non-perfect autoplay")
     g_game.add_argument("--hold_fx_interval_ms", type=int, default=200)
     g_game.add_argument("--hold_tail_tol", type=float, default=0.8)
@@ -145,7 +158,37 @@ def main():
     g_dbg.add_argument("--debug_particles", action="store_true")
     g_dbg.add_argument("--hit_debug", action="store_true")
 
-    args = ap.parse_args()
+    g_gui = ap.add_argument_group("GUI")
+    g_gui.add_argument("--gui", action="store_true", help="Open Qt launcher UI (optional; requires PySide6 or PyQt6)")
+
+    g_pcc = ap.add_argument_group("PCC")
+    g_pcc.add_argument("--export_pcc", type=str, default=None, help="Export input chart/pack to PCC file and exit")
+    g_pcc.add_argument("--export_pcc_password", type=str, default=None, help="Optional password to encrypt exported PCC")
+    g_pcc.add_argument("--export_pcc_no_compress", action="store_true", help="Disable compression when exporting PCC")
+
+    return ap
+
+
+def run_from_args(args: Any, *, argv_tokens: Optional[list[str]] = None) -> None:
+    global respack  # Declare we're using the global variable
+
+    logger = logging.getLogger(__name__)
+
+    if argv_tokens is None:
+        try:
+            argv_tokens = list(sys.argv[1:])
+        except Exception:
+            argv_tokens = []
+
+    if bool(getattr(args, "gui", False)):
+        try:
+            from .gui.qt_launcher import run_gui  # type: ignore
+
+            run_gui()
+            return
+        except Exception as e:
+            raise SystemExit(f"Failed to start GUI launcher: {e}")
+
 
     if getattr(args, "playlist_script", None):
         raise SystemExit("playlist mode is preparing; please use --advance with a generated advance JSON for now")
@@ -182,7 +225,7 @@ def main():
             for k, v in (flat_cfg or {}).items():
                 if not hasattr(args, k):
                     continue
-                if ("--" + k) in sys.argv:
+                if ("--" + k) in argv_tokens:
                     continue
                 setattr(args, k, v)
         except:
@@ -203,10 +246,16 @@ def main():
             for k, v in (cfg_old or {}).items():
                 if not hasattr(args, k):
                     continue
-                if ("--" + k) in sys.argv:
+                if ("--" + k) in argv_tokens:
                     continue
                 setattr(args, k, v)
         except:
+            pass
+
+    if bool(getattr(args, "no_note_outline", False)):
+        try:
+            setattr(args, "note_outline", False)
+        except Exception:
             pass
 
     if bool(getattr(args, "simulateplay", False)):
@@ -214,6 +263,15 @@ def main():
             setattr(args, "autoplay", False)
         except Exception:
             pass
+
+    if bool(getattr(args, "simulateplay_ipad", False)):
+        if not bool(getattr(args, "simulateplay", False)):
+            try:
+                setattr(args, "simulateplay", True)
+            except Exception:
+                pass
+        if not getattr(args, "ipad_bundle_id", None):
+            raise SystemExit("--simulateplay_ipad requires --ipad_bundle_id")
 
     if args.save_config:
         try:
@@ -253,6 +311,31 @@ def main():
     expand = float(args.expand) if args.expand is not None else 1.0
     if expand <= 1.000001:
         expand = 1.0
+
+    # PCC export mode: resolve input and export, then exit.
+    if getattr(args, "export_pcc", None):
+        if not getattr(args, "input", None):
+            raise SystemExit("--export_pcc requires --input")
+        if getattr(args, "advance", None):
+            raise SystemExit("--export_pcc does not support --advance")
+        try:
+            from .pcc.exporter import export_input_to_pcc
+
+            out_path = str(getattr(args, "export_pcc"))
+            pw = getattr(args, "export_pcc_password", None)
+            compress = (not bool(getattr(args, "export_pcc_no_compress", False)))
+            fmt_i, off_i, lc, nc = export_input_to_pcc(
+                str(getattr(args, "input")),
+                out_path,
+                W=int(W),
+                H=int(H),
+                password=str(pw) if pw else None,
+                compress=bool(compress),
+            )
+            logger.info("[PCC] Exported fmt=%s offset=%.4f lines=%d notes=%d -> %s", str(fmt_i), float(off_i), int(lc), int(nc), str(out_path))
+            return
+        except Exception as e:
+            raise SystemExit(f"PCC export failed: {e}")
 
     # Visibility checks (shared across modules)
     state.expand_factor = expand
@@ -345,3 +428,10 @@ def main():
                 signal.signal(signal.SIGINT, _old_sigint)
             except:
                 pass
+
+
+def main(argv: Optional[list[str]] = None) -> None:
+    ap = build_arg_parser()
+    argv_tokens = list(sys.argv[1:]) if argv is None else list(argv)
+    args = ap.parse_args(argv_tokens)
+    run_from_args(args, argv_tokens=argv_tokens)

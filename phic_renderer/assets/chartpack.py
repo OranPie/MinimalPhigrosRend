@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 import zipfile
@@ -25,10 +26,12 @@ def _read_text(path: str) -> str:
 
 
 def load_chart_pack(path: str) -> ChartPack:
+    logger = logging.getLogger(__name__)
     tmp = None
     root = path
 
     if os.path.isfile(path) and path.lower().endswith((".zip", ".pez")):
+        logger.info("[ChartPack] Extract: %s", path)
         tmp = tempfile.TemporaryDirectory()
         with zipfile.ZipFile(path, "r") as z:
             z.extractall(tmp.name)
@@ -42,11 +45,22 @@ def load_chart_pack(path: str) -> ChartPack:
     if not os.path.exists(info_path):
         raise ValueError("info.yml not found in chart pack root")
 
+    logger.info("[ChartPack] Parse info.yml: %s", info_path)
     info = _parse_info_yml_minimal(_read_text(info_path))
 
     chart_fn = info.get("chart", "chart.json")
     music_fn = info.get("music", "song.mp3")
     bg_fn = info.get("illustration", "background.png")
+
+    try:
+        logger.info(
+            "[ChartPack] Resolved chart=%s music=%s bg=%s",
+            str(chart_fn),
+            str(music_fn),
+            str(bg_fn),
+        )
+    except Exception:
+        pass
 
     return ChartPack(
         root=root,

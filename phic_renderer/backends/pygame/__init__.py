@@ -13,4 +13,6 @@ from __future__ import annotations
 # The run function is available from phic_renderer.renderer.pygame_backend
 # or will be available from phic_renderer.backends.pygame.session in the future.
 
-__all__ = []
+from ...renderer.pygame_backend import run
+
+__all__ = ["run"]

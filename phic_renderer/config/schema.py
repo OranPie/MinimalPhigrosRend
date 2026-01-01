@@ -32,6 +32,8 @@ class RenderConfig:
     # Rendering settings
     render_overrender: Optional[float] = None
 
+    note_outline: bool = False
+
     # Trail effect settings
     trail_alpha: Optional[float] = None
     trail_frames: Optional[int] = None
@@ -66,6 +68,7 @@ class RenderConfig:
             force_line_alpha01=state.force_line_alpha01,
             force_line_alpha01_by_lid=state.force_line_alpha01_by_lid,
             render_overrender=state.render_overrender,
+            note_outline=bool(getattr(state, "note_outline", False)) and (not bool(getattr(state, "no_note_outline", False))),
             trail_alpha=state.trail_alpha,
             trail_frames=state.trail_frames,
             trail_decay=state.trail_decay,
@@ -93,6 +96,7 @@ class RenderConfig:
         state.force_line_alpha01 = self.force_line_alpha01
         state.force_line_alpha01_by_lid = self.force_line_alpha01_by_lid
         state.render_overrender = self.render_overrender
+        state.note_outline = bool(self.note_outline)
         state.trail_alpha = self.trail_alpha
         state.trail_frames = self.trail_frames
         state.trail_decay = self.trail_decay

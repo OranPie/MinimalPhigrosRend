@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
-from ...io.respack import Respack, load_respack_info
-from ...renderer.moderngl.texture import load_texture_rgba
+from ...assets.respack import Respack, load_respack_info
+from .texture import load_texture_rgba
 
 
 def _parse_hex_rgba(v: Any, default: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
@@ -32,6 +33,8 @@ def _parse_hex_rgba(v: Any, default: tuple[int, int, int, int]) -> tuple[int, in
 
 
 def load_respack(zip_path: str, *, glctx: Any, audio: Any = None) -> Respack:
+    logger = logging.getLogger(__name__)
+    logger.info("[RespackGL] Load: %s", str(zip_path))
     tmpdir, info = load_respack_info(zip_path)
 
     def p(name: str) -> str:
@@ -51,6 +54,10 @@ def load_respack(zip_path: str, *, glctx: Any, audio: Any = None) -> Respack:
 
     img: dict[str, Any] = {}
     for fn in required_imgs:
+        try:
+            logger.info("[RespackGL] Texture: %s", str(fn))
+        except Exception:
+            pass
         img[fn] = load_texture_rgba(glctx, p(fn), flip_y=True)
 
     # Optional: GOOD hitfx atlas
@@ -68,6 +75,7 @@ def load_respack(zip_path: str, *, glctx: Any, audio: Any = None) -> Respack:
             fp = p(fn)
             if os.path.exists(fp):
                 try:
+                    logger.info("[RespackGL] SFX: %s", str(fn))
                     sfx[key] = audio.load_sound(fp)
                 except:
                     pass
@@ -92,6 +100,18 @@ def load_respack(zip_path: str, *, glctx: Any, audio: Any = None) -> Respack:
     hold_tail_no_scale = bool(info.get("holdTailNoScale", False))
 
     hide_particles = bool(info.get("hideParticles", False))
+
+    try:
+        logger.info(
+            "[RespackGL] hitfx=%sx%s dur=%.3f holdAtlas=%s holdAtlasMH=%s",
+            int(hitfx_frames[0]),
+            int(hitfx_frames[1]),
+            float(hitfx_duration),
+            str(info.get("holdAtlas", [50, 50])),
+            str(info.get("holdAtlasMH", info.get("holdAtlas", [50, 50]))),
+        )
+    except Exception:
+        pass
 
     judge_colors = {
         "PERFECT": _parse_hex_rgba(info.get("colorPerfect", None), (255, 255, 255, 255)),

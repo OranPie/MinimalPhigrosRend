@@ -50,6 +50,7 @@ def args_to_render_config(args: Any, **extra: Any) -> RenderConfig:
         force_line_alpha01=get("force_line_alpha01", None),
         force_line_alpha01_by_lid=get("force_line_alpha01_by_lid", None),
         render_overrender=get("overrender", None),
+        note_outline=bool(get("note_outline", False)) and (not bool(get("no_note_outline", False))),
         trail_alpha=get("trail_alpha", None),
         trail_frames=get("trail_frames", None),
         trail_decay=get("trail_decay", None),

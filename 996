@@ -1,0 +1,105 @@
+// MinimalPhigrosRend 配置 v2（支持注释的 JSON）
+//
+// 基本用法：
+//   python3 -m phic_renderer --input <chart_or_pack> --config <this_file>
+//   python3 -m phic_renderer --input <chart_or_pack> --save_config config.jsonc
+//
+// 说明：
+// - 以 // 或 # 开头的行会被当作注释忽略。
+// - 命令行参数优先级高于配置文件。
+{
+  "version": 2,
+  "window": {
+    "w": 1280,
+    "h": 720
+  },
+  "render": {
+    "backend": "pygame",
+    "approach": 6.0,
+    "chart_speed": 1.0,
+    "no_cull": false,
+    "no_cull_screen": false,
+    "no_cull_enter_time": true,
+    "expand": 1.0,
+    "note_scale_x": 2.000000000000001,
+    "note_scale_y": 1.0,
+    "note_flow_speed_multiplier": 2.000000000000001,
+    "overrender": 0.9999999999999992,
+    "trail_alpha": 0.0,
+    "trail_blur": 0,
+    "trail_dim": 0,
+    "trail_frames": 1,
+    "trail_decay": 0.85,
+    "trail_blend": "normal",
+    "trail_blur_ramp": false,
+    "hitfx_scale_mul": 1.0,
+    "multicolor_lines": false,
+    "no_note_outline": false,
+    "line_alpha_affects_notes": "negative_only"
+  },
+  "audio": {
+    "audio_backend": "pygame",
+    "bgm": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/996.李化禹/996.李化禹.ogg",
+    "force": false,
+    "bgm_volume": 0.8,
+    "hitsound_min_interval_ms": 30
+  },
+  "assets": {
+    "respack": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/respack.zip",
+    "bg": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/charts/996.李化禹/996.李化禹.png",
+    "bg_blur": 10,
+    "bg_dim": 120
+  },
+  "gameplay": {
+    "autoplay": true,
+    "simulateplay": false,
+    "simulateplay_mode": "conservative",
+    "simulateplay_max_pointers": 2,
+    "simulateplay_ipad": false,
+    "ipad_bundle_id": null,
+    "ipad_udid": null,
+    "ipad_device_name": "iPad",
+    "ipad_appium_server": "http://127.0.0.1:4723",
+    "ipad_mjpeg_url": null,
+    "ipad_move_hz": 25.0,
+    "ipad_preview_fps": 15.0,
+    "ipad_max_retries": 2,
+    "ipad_retry_backoff_s": 0.35,
+    "ipad_reconnect": true,
+    "ipad_activate_app": false,
+    "ipad_viewport_x0": 0.0,
+    "ipad_viewport_y0": 0.0,
+    "ipad_viewport_x1": 1.0,
+    "ipad_viewport_y1": 1.0,
+    "judge_script": null,
+    "hold_fx_interval_ms": 200,
+    "hold_tail_tol": 0.8,
+    "judge_width": 0.12,
+    "judge_height": 0.06,
+    "flick_threshold": 0.02,
+    "start_time": null,
+    "end_time": null
+  },
+  "ui": {
+    "lang": "zh-CN",
+    "no_title_overlay": false,
+    "font_path": "/Users/yanyige/PycharmProjects/MinimalPhigrosRend/cmdysj.ttf",
+    "font_size_multiplier": 2.0,
+    "advance_lazy_load": false,
+    "advance_lazy_cache": 1,
+    "advance_lazy_preload": false,
+    "advance_lazy_scan_total_notes": false
+  },
+  "rpe": {
+    "rpe_easing_shift": 0
+  },
+  "debug": {
+    "basic_debug": false,
+    "debug_line_label": false,
+    "debug_line_stats": false,
+    "debug_judge_windows": false,
+    "debug_pointer": false,
+    "debug_note_info": false,
+    "debug_particles": false
+  }
+}

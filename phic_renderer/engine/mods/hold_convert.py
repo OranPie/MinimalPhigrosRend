@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from ...types import RuntimeLine, RuntimeNote
+from ...types import NOTE_KIND_TAP, RuntimeLine, RuntimeNote
 from .base import parse_kind
 
 
@@ -58,7 +58,7 @@ def apply_hold_to_tap_drag(mods_cfg: Dict[str, Any], notes: List[RuntimeNote], l
             tap = RuntimeNote(
                 nid=tap_nid,
                 line_id=int(n.line_id),
-                kind=1,
+                kind=NOTE_KIND_TAP,
                 above=bool(n.above),
                 fake=False,
                 t_hit=float(n.t_hit),

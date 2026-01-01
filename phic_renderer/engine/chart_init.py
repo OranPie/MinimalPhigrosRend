@@ -96,3 +96,37 @@ def compute_chart_end(
         return min(float(end_time), max((n.t_end for n in notes if not n.fake), default=float(end_time)))
     else:
         return max((n.t_end for n in notes if not n.fake), default=0.0)
+
+
+def compute_chart_end_policy(
+    notes: List[RuntimeNote],
+    advance_active: bool,
+    end_time: Optional[float],
+    *,
+    bgm_duration_sec: Optional[float],
+    offset: float,
+    chart_speed: float,
+    no_bgm_tail_sec: float = 2.0,
+) -> float:
+    if advance_active:
+        return compute_chart_end(notes, advance_active, end_time)
+
+    if bgm_duration_sec is not None and float(bgm_duration_sec) > 1e-6:
+        try:
+            t_end = (float(bgm_duration_sec) - float(offset)) * float(chart_speed)
+        except Exception:
+            t_end = 0.0
+        if t_end < 0.0:
+            t_end = 0.0
+        if end_time is not None:
+            try:
+                t_end = min(float(t_end), float(end_time))
+            except Exception:
+                pass
+        return float(t_end)
+
+    try:
+        tail = float(no_bgm_tail_sec)
+    except Exception:
+        tail = 0.0
+    return float(compute_chart_end(notes, advance_active, end_time)) + tail

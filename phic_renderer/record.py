@@ -153,8 +153,6 @@ def main():
     argv_l = list(getattr(sys, "argv", []) or [])
     for k, v in (flat_cfg or {}).items():
         try:
-            if not hasattr(args, k):
-                continue
             if ("--" + str(k)) in argv_l:
                 continue
             setattr(args, k, v)

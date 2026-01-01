@@ -136,8 +136,15 @@ def flatten_config_v2(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[Dic
 
     pull("hitfx_scale_mul", render, "hitfx_scale_mul")
     pull("multicolor_lines", render, "multicolor_lines")
+    pull("note_outline", render, "note_outline")
     pull("no_note_outline", render, "no_note_outline")
     pull("line_alpha_affects_notes", render, "line_alpha_affects_notes")
+
+    try:
+        if ("note_outline" not in flat) and bool(render.get("no_note_outline", False)):
+            flat["note_outline"] = False
+    except Exception:
+        pass
 
     pull("audio_backend", audio, "audio_backend")
     pull("bgm", audio, "bgm")
@@ -154,6 +161,22 @@ def flatten_config_v2(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[Dic
     pull("simulateplay", gameplay, "simulateplay")
     pull("simulateplay_mode", gameplay, "simulateplay_mode")
     pull("simulateplay_max_pointers", gameplay, "simulateplay_max_pointers")
+    pull("simulateplay_ipad", gameplay, "simulateplay_ipad")
+    pull("ipad_bundle_id", gameplay, "ipad_bundle_id")
+    pull("ipad_udid", gameplay, "ipad_udid")
+    pull("ipad_device_name", gameplay, "ipad_device_name")
+    pull("ipad_appium_server", gameplay, "ipad_appium_server")
+    pull("ipad_mjpeg_url", gameplay, "ipad_mjpeg_url")
+    pull("ipad_move_hz", gameplay, "ipad_move_hz")
+    pull("ipad_preview_fps", gameplay, "ipad_preview_fps")
+    pull("ipad_max_retries", gameplay, "ipad_max_retries")
+    pull("ipad_retry_backoff_s", gameplay, "ipad_retry_backoff_s")
+    pull("ipad_reconnect", gameplay, "ipad_reconnect")
+    pull("ipad_activate_app", gameplay, "ipad_activate_app")
+    pull("ipad_viewport_x0", gameplay, "ipad_viewport_x0")
+    pull("ipad_viewport_y0", gameplay, "ipad_viewport_y0")
+    pull("ipad_viewport_x1", gameplay, "ipad_viewport_x1")
+    pull("ipad_viewport_y1", gameplay, "ipad_viewport_y1")
     pull("judge_script", gameplay, "judge_script")
     pull("hold_fx_interval_ms", gameplay, "hold_fx_interval_ms")
     pull("hold_tail_tol", gameplay, "hold_tail_tol")
@@ -215,7 +238,7 @@ def dump_config_v2(args: Any, *, mods: Optional[Dict[str, Any]] = None, lang: Op
             "trail_blur_ramp": bool(getattr(args, "trail_blur_ramp", False)),
             "hitfx_scale_mul": float(getattr(args, "hitfx_scale_mul", 1.0)),
             "multicolor_lines": bool(getattr(args, "multicolor_lines", False)),
-            "no_note_outline": bool(getattr(args, "no_note_outline", False)),
+            "note_outline": bool(getattr(args, "note_outline", False)),
             "line_alpha_affects_notes": getattr(args, "line_alpha_affects_notes", "negative_only"),
         },
         "audio": {
@@ -236,6 +259,22 @@ def dump_config_v2(args: Any, *, mods: Optional[Dict[str, Any]] = None, lang: Op
             "simulateplay": bool(getattr(args, "simulateplay", False)),
             "simulateplay_mode": str(getattr(args, "simulateplay_mode", "conservative")),
             "simulateplay_max_pointers": int(getattr(args, "simulateplay_max_pointers", 2) or 2),
+            "simulateplay_ipad": bool(getattr(args, "simulateplay_ipad", False)),
+            "ipad_bundle_id": getattr(args, "ipad_bundle_id", None),
+            "ipad_udid": getattr(args, "ipad_udid", None),
+            "ipad_device_name": str(getattr(args, "ipad_device_name", "iPad")),
+            "ipad_appium_server": str(getattr(args, "ipad_appium_server", "http://127.0.0.1:4723")),
+            "ipad_mjpeg_url": getattr(args, "ipad_mjpeg_url", None),
+            "ipad_move_hz": float(getattr(args, "ipad_move_hz", 25.0) or 25.0),
+            "ipad_preview_fps": float(getattr(args, "ipad_preview_fps", 15.0) or 15.0),
+            "ipad_max_retries": int(getattr(args, "ipad_max_retries", 2) or 2),
+            "ipad_retry_backoff_s": float(getattr(args, "ipad_retry_backoff_s", 0.35) or 0.35),
+            "ipad_reconnect": bool(getattr(args, "ipad_reconnect", True)),
+            "ipad_activate_app": bool(getattr(args, "ipad_activate_app", False)),
+            "ipad_viewport_x0": float(getattr(args, "ipad_viewport_x0", 0.0) or 0.0),
+            "ipad_viewport_y0": float(getattr(args, "ipad_viewport_y0", 0.0) or 0.0),
+            "ipad_viewport_x1": float(getattr(args, "ipad_viewport_x1", 1.0) or 1.0),
+            "ipad_viewport_y1": float(getattr(args, "ipad_viewport_y1", 1.0) or 1.0),
             "judge_script": getattr(args, "judge_script", None),
             "hold_fx_interval_ms": int(getattr(args, "hold_fx_interval_ms", 200) or 200),
             "hold_tail_tol": float(getattr(args, "hold_tail_tol", 0.8) or 0.8),

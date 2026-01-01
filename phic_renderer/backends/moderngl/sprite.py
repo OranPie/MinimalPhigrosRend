@@ -13,6 +13,8 @@ class SpriteProgram:
     vbo: Any
     vao: Any
     _vertex_capacity: int
+    _draw_calls: int = 0
+    _vertices_rendered: int = 0
 
 
 def create_sprite_program(ctx: Any) -> SpriteProgram:
@@ -102,6 +104,18 @@ def draw_textured_quad(
         pass
     sp.vao.render(mode=ctx.TRIANGLES, vertices=6)
 
+    try:
+        sp._draw_calls = int(getattr(sp, "_draw_calls", 0)) + 1
+        sp._vertices_rendered = int(getattr(sp, "_vertices_rendered", 0)) + 6
+    except Exception:
+        pass
+
+    try:
+        sp._draw_calls = int(getattr(sp, "_draw_calls", 0)) + 1
+        sp._vertices_rendered = int(getattr(sp, "_vertices_rendered", 0)) + 6
+    except Exception:
+        pass
+
 
 def draw_textured_quad_pts_uv(
     *,
@@ -147,6 +161,11 @@ def draw_textured_quad_pts_uv(
     except:
         pass
     sp.vao.render(mode=ctx.TRIANGLES, vertices=6)
+    try:
+        sp._draw_calls = int(getattr(sp, "_draw_calls", 0)) + 1
+        sp._vertices_rendered = int(getattr(sp, "_vertices_rendered", 0)) + 6
+    except Exception:
+        pass
 
 
 def draw_textured_quad_pts(

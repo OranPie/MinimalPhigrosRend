@@ -34,19 +34,19 @@
     "trail_blur_ramp": false,
     "hitfx_scale_mul": 0.75,
     "multicolor_lines": false,
-    "no_note_outline": true,
+    "note_outline": false,
     "line_alpha_affects_notes": "negative_only"
   },
   "audio": {
     "audio_backend": "pygame",
-    "bgm": "charts/インフェルノシティ.Ponchifeatはぁち/インフェルノシティ.Ponchifeatはぁち.ogg",
+    "bgm": "charts/ERABYECONNEC10N.かめりあ/ERABYECONNEC10N.かめりあ.ogg",
     "force": false,
     "bgm_volume": 0.8,
     "hitsound_min_interval_ms": 30
   },
   "assets": {
     "respack": "./respack.zip",
-    "bg": "charts/インフェルノシティ.Ponchifeatはぁち/インフェルノシティ.Ponchifeatはぁち.png",
+    "bg": "charts/ERABYECONNEC10N.かめりあ/ERABYECONNEC10N.かめりあ.png",
     "bg_blur": 10,
     "bg_dim": 120
   },
@@ -55,6 +55,22 @@
     "simulateplay": false,
     "simulateplay_mode": "conve",
     "simulateplay_max_pointers": 10,
+    "simulateplay_ipad": false,
+    "ipad_bundle_id": null,
+    "ipad_udid": null,
+    "ipad_device_name": "iPad",
+    "ipad_appium_server": "http://127.0.0.1:4723",
+    "ipad_mjpeg_url": null,
+    "ipad_move_hz": 25.0,
+    "ipad_preview_fps": 15.0,
+    "ipad_max_retries": 2,
+    "ipad_retry_backoff_s": 0.35,
+    "ipad_reconnect": false,
+    "ipad_activate_app": false,
+    "ipad_viewport_x0": 0.0,
+    "ipad_viewport_y0": 0.0,
+    "ipad_viewport_x1": 1.0,
+    "ipad_viewport_y1": 1.0,
     "judge_script": null,
     "hold_fx_interval_ms": 200,
     "hold_tail_tol": 0.8,
@@ -96,15 +112,21 @@
       "drag_kind": "tap"
     },
     "attach": {
-      "enable": true,
-      "kind": 4,               // Type of attached note (1-4)
-      "x_offset": 20,         // Horizontal offset (px)
-      "y_offset": 0,           // Vertical offset (px)
-      "time_offset": 0.0,      // Time offset (seconds)
-      "above": null,           // Side of attached note (null/true/false/"flip")
+      "enable": false,
+      "kind": 4,
+      "x_offset": 80,
+      "y_offset": 0,
+      "time_offset": 0.0,
+      "above": null,
       "filter": {
-        "kinds": [1]
+        "kinds": [
+          1,
+          2
+        ]
       }
+    },
+    "full_blue": {
+      "enable": true
     }
   }
 }

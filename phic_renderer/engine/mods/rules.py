@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from ...types import RuntimeLine, RuntimeNote
+from ...types import NOTE_KIND_HOLD, RuntimeLine, RuntimeNote
 from .base import match_note_filter, apply_note_set, match_line_filter, apply_line_set
 
 
@@ -18,7 +18,7 @@ def apply_note_rules(mods_cfg: Dict[str, Any], notes: List[RuntimeNote]):
                 continue
             apply_to_hold = bool(rule.get("apply_to_hold", True))
             for n in notes:
-                if (not apply_to_hold) and n.kind == 3:
+                if (not apply_to_hold) and n.kind == NOTE_KIND_HOLD:
                     continue
                 if match_note_filter(n, flt):
                     apply_note_set(n, st)
@@ -28,7 +28,7 @@ def apply_note_rules(mods_cfg: Dict[str, Any], notes: List[RuntimeNote]):
         apply_to_hold = bool(glob_no.get("apply_to_hold", True))
         st = dict(glob_no.get("set", glob_no))
         for n in notes:
-            if (not apply_to_hold) and n.kind == 3:
+            if (not apply_to_hold) and n.kind == NOTE_KIND_HOLD:
                 continue
             apply_note_set(n, st)
 

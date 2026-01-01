@@ -107,6 +107,7 @@ class PygameSession(GameSession):
                 self.force_line_alpha01 = config.force_line_alpha01
                 self.force_line_alpha01_by_lid = config.force_line_alpha01_by_lid
                 self.overrender = config.render_overrender
+                self.note_outline = bool(getattr(config, "note_outline", False))
                 self.trail_alpha = config.trail_alpha
                 self.trail_frames = config.trail_frames
                 self.trail_decay = config.trail_decay

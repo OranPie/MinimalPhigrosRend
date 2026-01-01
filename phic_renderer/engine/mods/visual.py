@@ -17,6 +17,20 @@ def apply_visual_mods(mods_cfg: Dict[str, Any]):
     if bool(mods_cfg.get("note_speed_mul_affects_travel", False)):
         state.note_speed_mul_affects_travel = True
 
+    flow_cfg = None
+    for k in ("flow_speed", "note_flow_speed", "flow", "speed_flow"):
+        if k in mods_cfg and isinstance(mods_cfg.get(k), dict):
+            flow_cfg = mods_cfg.get(k)
+            break
+    if isinstance(flow_cfg, dict):
+        try:
+            if not flow_cfg:
+                state.note_flow_speed_mod = None
+            else:
+                state.note_flow_speed_mod = dict(flow_cfg)
+        except Exception:
+            pass
+
     visual_cfg = None
     for k in ("visual", "render", "renderer"):
         if k in mods_cfg and isinstance(mods_cfg.get(k), dict):

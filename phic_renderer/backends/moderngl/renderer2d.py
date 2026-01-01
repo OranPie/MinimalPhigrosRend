@@ -15,6 +15,8 @@ class Renderer2D:
     vbo: any
     vao: any
     _vertex_capacity: int
+    _draw_calls: int = 0
+    _vertices_rendered: int = 0
 
     def begin_frame(self) -> None:
         w, h = self.size
@@ -29,6 +31,11 @@ class Renderer2D:
             self._realloc(cap)
         self.vbo.write(vertices)
         self.vao.render(mode=self.ctx.TRIANGLES, vertices=vertex_count)
+        try:
+            self._draw_calls = int(getattr(self, "_draw_calls", 0)) + 1
+            self._vertices_rendered = int(getattr(self, "_vertices_rendered", 0)) + int(vertex_count)
+        except Exception:
+            pass
 
     def _realloc(self, vertex_capacity: int) -> None:
         # Each vertex: vec2 pos (2f) + vec4 color (4f) => 6 floats => 24 bytes

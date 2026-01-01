@@ -39,6 +39,8 @@ note_speed_mul_affects_travel: bool = False
 
 note_flow_speed_multiplier: float = 1.0
 
+note_flow_speed_mod: Optional[Dict[str, Any]] = None
+
 note_scale_x: float = 1.0
 
 note_scale_y: float = 1.0

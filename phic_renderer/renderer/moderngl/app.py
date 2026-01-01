@@ -14,7 +14,7 @@ from ...engine.effects import HitFX, ParticleBurst
 from ...core.fx import prune_particles
 from ...engine.judge import Judge
 from ...engine.judge import JUDGE_WEIGHT
-from ...types import NoteState
+from ...types import NOTE_KIND_HOLD, NoteState
 from ... import state
 
 
@@ -261,7 +261,7 @@ class GLApp:
                     best_dt = dt_hit
             if best is not None:
                 n = best.note
-                if n.kind == 3:
+                if n.kind == NOTE_KIND_HOLD:
                     grade = self._judge.grade_window(n.t_hit, t)
                     if grade is not None:
                         if grade == "BAD":
@@ -953,6 +953,10 @@ class GLApp:
                             prog = clamp((float(sc_now) - float(n.scroll_hit)) / max(1e-6, den), 0.0, 1.0)
                 except:
                     prog = None
+                _draw_outline = bool(getattr(self.args, "note_outline", False))
+                if bool(getattr(self.args, "no_note_outline", False)):
+                    _draw_outline = False
+
                 draw_hold_3slice(
                     head_xy=(float(head_s[0]), float(head_s[1])),
                     tail_xy=(float(tail_s[0]), float(tail_s[1])),
@@ -963,7 +967,7 @@ class GLApp:
                     size_scale=float(size_scale),
                     mh=bool(mh),
                     progress=prog,
-                    draw_outline=(not bool(getattr(self.args, "no_note_outline", True))),
+                    draw_outline=bool(_draw_outline),
                     outline_width=float(outline_w),
                 )
                 note_render_count += 1

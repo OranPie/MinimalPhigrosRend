@@ -97,6 +97,8 @@ def precompute_t_enter(lines: List[RuntimeLine], notes: List[RuntimeNote], W: in
     max_expand_iters = 32
 
     for n in notes:
+        if not hasattr(n, "t_hit"):
+            continue
         if getattr(n, "fake", False):
             n.t_enter = -1e9
             continue

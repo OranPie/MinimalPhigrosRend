@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from ... import state
-from ...types import RuntimeNote
+from ...types import NOTE_KIND_HOLD, RuntimeNote
 from .base import parse_alpha01, apply_note_side
 
 
@@ -49,7 +49,7 @@ def apply_full_blue_mode(mods_cfg: Dict[str, Any], notes: List[RuntimeNote]) -> 
             size_force = None
 
         for n in notes:
-            if (not apply_to_hold) and n.kind == 3:
+            if (not apply_to_hold) and n.kind == NOTE_KIND_HOLD:
                 continue
             if speed_force is not None:
                 n.speed_mul = speed_force

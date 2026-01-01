@@ -5,20 +5,20 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pygame
 
-from ....types import RuntimeNote
+from ....types import NOTE_KIND_DRAG, NOTE_KIND_FLICK, NOTE_KIND_HOLD, NOTE_KIND_TAP, RuntimeNote
 
 
 def pick_note_image(note: RuntimeNote, respack: Any) -> Optional[pygame.Surface]:
     """Select the appropriate note texture from respack based on note type and mh flag."""
     if not respack:
         return None
-    if note.kind == 1:
+    if note.kind == NOTE_KIND_TAP:
         return respack.img["click_mh.png"] if note.mh else respack.img["click.png"]
-    if note.kind == 2:
+    if note.kind == NOTE_KIND_DRAG:
         return respack.img["drag_mh.png"] if note.mh else respack.img["drag.png"]
-    if note.kind == 3:
+    if note.kind == NOTE_KIND_HOLD:
         return respack.img["hold_mh.png"] if note.mh else respack.img["hold.png"]
-    if note.kind == 4:
+    if note.kind == NOTE_KIND_FLICK:
         return respack.img["flick_mh.png"] if note.mh else respack.img["flick.png"]
     return respack.img["click_mh.png"] if note.mh else respack.img["click.png"]
 

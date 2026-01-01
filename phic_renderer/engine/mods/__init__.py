@@ -46,82 +46,43 @@ def apply_mods(mods_cfg: Dict[str, Any], notes: List[RuntimeNote], lines: List[R
     17. wave - Apply wave effect to notes
     18. stutter - Add stutter effect
     """
+    if not isinstance(mods_cfg, dict) or not mods_cfg:
+        return notes
+
     notes_out = notes
 
-    # Visual mods (don't modify notes)
-    if mods_cfg.get("visual"):
-        apply_visual_mods(mods_cfg["visual"], notes_out, lines)
+    # Visual-only mods (no note/line modification)
+    apply_visual_mods(mods_cfg)
 
-    # Full blue mode
-    if mods_cfg.get("full_blue"):
-        from .full_blue import apply_full_blue_mode
-        notes_out = apply_full_blue_mode(notes_out)
+    # Note transformation mods (order matters)
+    notes_out = apply_full_blue_mode(mods_cfg, notes_out)
+    notes_out = apply_hold_to_tap_drag(mods_cfg, notes_out, lines)
 
-    # Hold conversion
-    if mods_cfg.get("hold_convert"):
-        notes_out = apply_hold_to_tap_drag(notes_out, mods_cfg["hold_convert"])
+    # Timing transformations
+    notes_out = apply_transpose(mods_cfg, notes_out, lines)
+    notes_out = apply_stretch(mods_cfg, notes_out, lines)
+    notes_out = apply_reverse(mods_cfg, notes_out, lines)
 
-    # Note/Line rules
-    if mods_cfg.get("note_rules"):
-        notes_out = apply_note_rules(notes_out, mods_cfg["note_rules"])
-    if mods_cfg.get("line_rules"):
-        apply_line_rules(lines, mods_cfg["line_rules"])
+    # Position/property transformations
+    notes_out = apply_quantize(mods_cfg, notes_out, lines)
+    notes_out = apply_mirror(mods_cfg, notes_out, lines)
+    notes_out = apply_scale(mods_cfg, notes_out, lines)
+    notes_out = apply_wave(mods_cfg, notes_out, lines)
+    notes_out = apply_randomize(mods_cfg, notes_out, lines)
+    notes_out = apply_fade(mods_cfg, notes_out, lines)
 
-    # Compress zip
-    if mods_cfg.get("compress_zip"):
-        notes_out = apply_compress_zip(notes_out, lines, mods_cfg["compress_zip"])
+    # Note generation/removal mods
+    notes_out = apply_thin_out(mods_cfg, notes_out, lines)
+    notes_out = apply_stutter(mods_cfg, notes_out, lines)
+    notes_out = apply_compress_zip(mods_cfg, notes_out, lines)
+    notes_out = apply_attach(mods_cfg, notes_out, lines)
 
-    # Attach
-    if mods_cfg.get("attach"):
-        notes_out = apply_attach(notes_out, lines, mods_cfg["attach"])
+    # Visual effects
+    notes_out = apply_colorize(mods_cfg, notes_out, lines)
 
-    # Mirror
-    if mods_cfg.get("mirror"):
-        notes_out = apply_mirror(notes_out, mods_cfg["mirror"])
-
-    # Randomize
-    if mods_cfg.get("randomize"):
-        notes_out = apply_randomize(notes_out, mods_cfg["randomize"])
-
-    # Scale
-    if mods_cfg.get("scale"):
-        notes_out = apply_scale(notes_out, mods_cfg["scale"])
-
-    # Fade
-    if mods_cfg.get("fade"):
-        notes_out = apply_fade(notes_out, mods_cfg["fade"])
-
-    # Thin out
-    if mods_cfg.get("thin_out"):
-        notes_out = apply_thin_out(notes_out, mods_cfg["thin_out"])
-
-    # Quantize
-    if mods_cfg.get("quantize"):
-        notes_out = apply_quantize(notes_out, mods_cfg["quantize"])
-
-    # Transpose
-    if mods_cfg.get("transpose"):
-        notes_out = apply_transpose(notes_out, mods_cfg["transpose"])
-
-    # Stretch
-    if mods_cfg.get("stretch"):
-        notes_out = apply_stretch(notes_out, mods_cfg["stretch"])
-
-    # Reverse
-    if mods_cfg.get("reverse"):
-        notes_out = apply_reverse(notes_out, mods_cfg["reverse"])
-
-    # Colorize
-    if mods_cfg.get("colorize"):
-        notes_out = apply_colorize(notes_out, mods_cfg["colorize"])
-
-    # Wave
-    if mods_cfg.get("wave"):
-        notes_out = apply_wave(notes_out, mods_cfg["wave"])
-
-    # Stutter
-    if mods_cfg.get("stutter"):
-        notes_out = apply_stutter(notes_out, mods_cfg["stutter"])
+    # Rule-based mods
+    apply_note_rules(mods_cfg, notes_out)
+    apply_line_rules(mods_cfg, lines)
 
     return notes_out
 

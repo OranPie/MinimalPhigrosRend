@@ -3,6 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 
+NOTE_KIND_TAP = 1
+NOTE_KIND_DRAG = 2
+NOTE_KIND_HOLD = 3
+NOTE_KIND_FLICK = 4
+
 @dataclass
 class RuntimeNote:
     nid: int

@@ -4,7 +4,7 @@ from typing import Any, Callable, List, Optional
 
 from ....math.util import clamp
 from ....engine.kinematics import eval_line_state, note_world_pos
-from ....types import NoteState, RuntimeLine
+from ....types import NOTE_KIND_HOLD, NoteState, RuntimeLine
 
 
 def hold_maintenance(
@@ -27,7 +27,7 @@ def hold_maintenance(
         if s.judged or s.note.fake:
             continue
         n = s.note
-        if n.kind == 3 and s.holding:
+        if n.kind == NOTE_KIND_HOLD and s.holding:
             try:
                 judge_w_px = float(getattr(args, "judge_width", 0.12)) * float(W)
             except Exception:
@@ -139,7 +139,6 @@ def hold_finalize(
                 judge.break_combo()
             else:
                 g = s.hold_grade or "PERFECT"
-                judge.acc_sum += getattr(judge, "JUDGE_WEIGHT", {}).get(g, 0.0) if hasattr(judge, "JUDGE_WEIGHT") else 0.0
                 try:
                     from ....engine.judge import JUDGE_WEIGHT
 

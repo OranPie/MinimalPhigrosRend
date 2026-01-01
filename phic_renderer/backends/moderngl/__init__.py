@@ -8,5 +8,6 @@ from typing import Any
 
 # Re-export the run function from backend.py
 from .backend import run
+from .session import ModernGLSession
 
-__all__ = ["run"]
+__all__ = ["run", "ModernGLSession"]

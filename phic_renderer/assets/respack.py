@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
 import zipfile
@@ -116,10 +117,13 @@ def _parse_info_yml_minimal(text: str) -> Dict[str, Any]:
 
 
 def load_respack_info(zip_path: str) -> Tuple[tempfile.TemporaryDirectory, Dict[str, Any]]:
+    logger = logging.getLogger(__name__)
     tmpdir = tempfile.TemporaryDirectory()
+    logger.info("[Respack] Extract: %s", str(zip_path))
     with zipfile.ZipFile(zip_path, "r") as z:
         z.extractall(tmpdir.name)
     info_path = os.path.join(tmpdir.name, "info.yml")
+    logger.info("[Respack] Parse info.yml: %s", str(info_path))
     with open(info_path, "r", encoding="utf-8") as f:
         info = _parse_info_yml_minimal(f.read())
     return tmpdir, info

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..types import RuntimeLine, RuntimeNote
 from ..chart.official import load_official
 from ..chart.rpe import load_rpe
 from ..chart.pec import load_pec, load_pec_text
+from ..chart.pcc import load_pcc
 
 
 def detect_format(data: Dict[str, Any]) -> str:
@@ -20,7 +21,11 @@ def detect_format(data: Dict[str, Any]) -> str:
     return "official"
 
 
-def load_chart(path: str, W: int, H: int) -> Tuple[str, float, List[RuntimeLine], List[RuntimeNote]]:
+def load_chart(path: str, W: int, H: int, password: Optional[str] = None) -> Tuple[str, float, List[RuntimeLine], List[RuntimeNote]]:
+    if str(path).lower().endswith('.pcc'):
+        offset, lines, notes = load_pcc(path, W, H, password=password)
+        return 'pcc', offset, lines, notes
+
     if str(path).lower().endswith((".pec", ".pe")):
         offset, lines, notes = load_pec(path, W, H)
         return "pec", offset, lines, notes

@@ -118,7 +118,7 @@ def discover_chart_inputs(charts_dir: str) -> List[str]:
                         low2 = sf.lower()
                         if low2 in {"info.json", "meta.json"}:
                             continue
-                        if low2.endswith((".json", ".pec", ".pe")):
+                        if low2.endswith((".json", ".pec", ".pe", ".pcc")):
                             chart_files.append(sf)
                     except Exception:
                         continue
@@ -138,7 +138,7 @@ def discover_chart_inputs(charts_dir: str) -> List[str]:
         if low.endswith((".zip", ".pez")):
             out.append(p)
             continue
-        if low.endswith((".json", ".pec", ".pe")):
+        if low.endswith((".json", ".pec", ".pe", ".pcc")):
             out.append(p)
             continue
 

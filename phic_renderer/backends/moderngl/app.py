@@ -10,12 +10,14 @@ from .texture import load_texture_rgba, texture_from_pil_image
 from ...engine.kinematics import eval_line_state, note_world_pos
 from ...math.util import apply_expand_xy, now_sec, rect_corners, clamp
 from ...core.constants import NOTE_TYPE_COLORS
+from ...core.ui import compute_score, format_title, progress_ratio
 from ...engine.effects import HitFX, ParticleBurst
 from ...core.fx import prune_particles
 from ...engine.judge import Judge
 from ...engine.judge import JUDGE_WEIGHT
-from ...types import NoteState
+from ...types import NOTE_KIND_HOLD, NoteState
 from ... import state
+from ...ui.transitions import TransitionController, TransitionDurations, TransitionPhase
 
 
 @dataclass
@@ -45,11 +47,28 @@ class GLApp:
     _last_tick_ms: int = 0
     _fps_smooth: float = 0.0
     _note_render_count_last: int = 0
+    _total_notes: int = 0
+    _transition: Optional[TransitionController] = None
+    _transition_durations: TransitionDurations = field(default_factory=TransitionDurations)
+    _transition_started: bool = False
+    _transition_last_phase: TransitionPhase = TransitionPhase.INTRO_LOADING
 
     def _set_weight(self, w: float) -> None:
         try:
             self.r2d.prog["u_weight"].value = float(w)
         except:
+            pass
+
+        try:
+            self.sprite.prog["u_weight"].value = float(w)
+        except:
+            pass
+
+        try:
+            br = self.render_ctx.get("gl_batch_renderer", None)
+            if br is not None and hasattr(br, "set_weight"):
+                br.set_weight(float(w))
+        except Exception:
             pass
 
     def set_input(self, *, down: bool, press_edge: bool) -> None:
@@ -77,6 +96,10 @@ class GLApp:
             notes = self.render_ctx.get("notes") or []
             self._states = [NoteState(n) for n in notes]
             self._idx_next = 0
+            try:
+                self._total_notes = sum(1 for n in notes if not bool(getattr(n, "fake", False)))
+            except Exception:
+                self._total_notes = int(len(notes))
 
     def _get_text_texture(self, text: str, *, font_path: Optional[str], font_size: int):
         if not text:
@@ -261,7 +284,7 @@ class GLApp:
                     best_dt = dt_hit
             if best is not None:
                 n = best.note
-                if n.kind == 3:
+                if n.kind == NOTE_KIND_HOLD:
                     grade = self._judge.grade_window(n.t_hit, t)
                     if grade is not None:
                         if grade == "BAD":
@@ -439,8 +462,15 @@ class GLApp:
 
         W, H = self.window_size
 
-        # Background (align with pygame: background image + dim overlay)
+        # Background (align with pygame: blurred background + dim overlay)
         bg_tex = self.render_ctx.get("bg_tex", None)
+        bg_blur_tex = self.render_ctx.get("bg_blur_tex", None)
+        try:
+            blur_factor = int(self.render_ctx.get("bg_blur_factor", getattr(self.args, "bg_blur", 10)))
+        except Exception:
+            blur_factor = int(getattr(self.args, "bg_blur", 10) or 0)
+        if blur_factor > 0 and bg_blur_tex is not None:
+            bg_tex = bg_blur_tex
         if bg_tex is not None:
             try:
                 draw_textured_quad(
@@ -488,24 +518,7 @@ class GLApp:
             # Fallback: if no audio clock, keep legacy behavior (shift chart time only).
             t += float(self.args.start_time)
 
-        if (not advance_active) and getattr(self.args, "end_time", None) is not None:
-            try:
-                if float(t) > float(self.args.end_time):
-                    try:
-                        audio = self.render_ctx.get("audio", None)
-                        if audio:
-                            audio.stop_music()
-                    except:
-                        pass
-                    try:
-                        import pygame  # type: ignore
-
-                        pygame.event.post(pygame.event.Event(pygame.QUIT))
-                    except:
-                        pass
-                    return
-            except:
-                pass
+        # NOTE: do not auto-quit at chart_end here; outro animations need to render.
 
         lines = self.render_ctx.get("lines") or []
         notes = self.render_ctx.get("notes") or []
@@ -618,6 +631,23 @@ class GLApp:
             draw_quad_pts(q, (int(rr), int(gg), int(bb), int(255 * la01)))
 
         respack = self.render_ctx.get("respack", None)
+        gl_batch_renderer = self.render_ctx.get("gl_batch_renderer", None)
+        use_gl_batch = bool(gl_batch_renderer is not None and respack is not None)
+
+        def pick_note_tex_name(note: Any) -> Optional[str]:
+            if not respack:
+                return None
+            try:
+                mh = bool(getattr(note, "mh", False))
+                if int(note.kind) == 1:
+                    return "click_mh.png" if mh else "click.png"
+                if int(note.kind) == 2:
+                    return "drag_mh.png" if mh else "drag.png"
+                if int(note.kind) == 4:
+                    return "flick_mh.png" if mh else "flick.png"
+            except Exception:
+                return None
+            return None
 
         def pick_note_tex(note: Any):
             if not respack:
@@ -649,6 +679,12 @@ class GLApp:
 
         hold_body_w = float(0.035 * W * note_scale_x)
         outline_w = max(1.0, 2.0 / float(expand))
+
+        if use_gl_batch:
+            try:
+                gl_batch_renderer.clear()
+            except Exception:
+                pass
 
         def draw_hold_3slice(
             *,
@@ -945,6 +981,10 @@ class GLApp:
                 note_rgb = getattr(n, "tint_rgb", (255, 255, 255))
                 line_rgb = ln.color_rgb
 
+                draw_outline = bool(getattr(self.args, "note_outline", False))
+                if bool(getattr(self.args, "no_note_outline", False)):
+                    draw_outline = False
+
                 prog = None
                 try:
                     if bool(getattr(s, "hit", False)) or bool(getattr(s, "holding", False)):
@@ -963,7 +1003,7 @@ class GLApp:
                     size_scale=float(size_scale),
                     mh=bool(mh),
                     progress=prog,
-                    draw_outline=(not bool(getattr(self.args, "no_note_outline", True))),
+                    draw_outline=bool(draw_outline),
                     outline_width=float(outline_w),
                 )
                 note_render_count += 1
@@ -980,9 +1020,9 @@ class GLApp:
                 except:
                     pass
 
-            w = base_note_w * note_scale_x * float(getattr(n, "size_px", 1.0) or 1.0)
-            h = base_note_h * note_scale_y * float(getattr(n, "size_px", 1.0) or 1.0)
-            pts = rect_corners(float(xw), float(yw), float(w), float(h), float(lr))
+            size_scale = float(getattr(n, "size_px", 1.0) or 1.0)
+            w = base_note_w * note_scale_x * float(size_scale)
+            h = base_note_h * note_scale_y * float(size_scale)
 
             a_note = int(255 * float(note_alpha))
             tr, tg, tb = (255, 255, 255)
@@ -991,6 +1031,33 @@ class GLApp:
             except:
                 tr, tg, tb = (255, 255, 255)
             tex = pick_note_tex(n)
+            if tex is not None:
+                try:
+                    tw, th = tex.size
+                    if int(tw) > 0 and int(th) > 0:
+                        h = float(w) * float(th) / float(tw) * float(note_scale_y)
+                except Exception:
+                    pass
+            pts = rect_corners(float(xw), float(yw), float(w), float(h), float(lr))
+            if use_gl_batch:
+                try:
+                    tex_name = pick_note_tex_name(n)
+                except Exception:
+                    tex_name = None
+                if tex_name is not None:
+                    try:
+                        gl_batch_renderer.add_sprite(
+                            tex_name,
+                            pos=(float(xw), float(yw)),
+                            rotation=float(lr),
+                            scale=(float(w), float(h)),
+                            color=(float(tr) / 255.0, float(tg) / 255.0, float(tb) / 255.0, float(a_note) / 255.0),
+                        )
+                        note_render_count += 1
+                        continue
+                    except Exception:
+                        pass
+
             if tex is not None:
                 draw_textured_quad_pts(
                     ctx=self.ctx,
@@ -1004,6 +1071,12 @@ class GLApp:
                 r0, g0, b0 = NOTE_TYPE_COLORS.get(int(n.kind), (255, 255, 255))
                 draw_quad_pts(pts, (int(r0 * tr / 255), int(g0 * tg / 255), int(b0 * tb / 255), int(a_note)))
             note_render_count += 1
+
+        if use_gl_batch:
+            try:
+                gl_batch_renderer.flush()
+            except Exception:
+                pass
 
         self._note_render_count_last = int(note_render_count)
 
@@ -1098,7 +1171,102 @@ class GLApp:
         chart_speed = float(getattr(self.args, "chart_speed", 1.0) or 1.0)
         t_base = ((now_sec() - self.t0) - offset) * chart_speed
 
-        self._update_hitfx(t_base, float(dt))
+        enable_transitions = (not bool(self.render_ctx.get("advance_active", False))) and bool(getattr(self.args, "enable_transitions", True))
+        if enable_transitions and (self._transition is None):
+            intro_freeze_time = float(self.render_ctx.get("start_time_sec", 0.0) or 0.0)
+            self._transition = TransitionController(
+                durations=self._transition_durations,
+                intro_freeze_time=float(intro_freeze_time),
+            )
+
+        # Apply transition time mapping for interactive rendering.
+        trans_phase = TransitionPhase.GAMEPLAY
+        trans_prog = 0.0
+        trans_freeze = False
+        t_draw = float(t_base)
+
+        if enable_transitions and self._transition is not None:
+            end_for_outro = self.render_ctx.get("chart_end", None)
+            try:
+                end_for_outro_f = float(end_for_outro) if end_for_outro is not None else None
+            except Exception:
+                end_for_outro_f = None
+
+            request_outro = False
+            if end_for_outro_f is not None:
+                request_outro = bool(float(t_draw) >= float(end_for_outro_f))
+
+            fr = self._transition.update(
+                dt_present=float(dt),
+                chart_time=float(t_draw),
+                chart_end=end_for_outro_f,
+                request_outro=bool(request_outro),
+            )
+            t_draw = float(fr.chart_time)
+            trans_phase = fr.phase
+            trans_prog = float(fr.phase_progress)
+            trans_freeze = bool(fr.chart_time_frozen)
+
+            # Start BGM when intro completes.
+            if fr.should_start_audio:
+                try:
+                    audio = self.render_ctx.get("audio", None)
+                    bgm_file = self.render_ctx.get("bgm_file", None)
+                    want_bgm_clock = bool(self.render_ctx.get("want_bgm_clock", False))
+                    music_start_pos_sec = float(self.render_ctx.get("music_start_pos_sec", 0.0) or 0.0)
+                    if want_bgm_clock and audio and bgm_file:
+                        audio.play_music_file(
+                            str(bgm_file),
+                            volume=float(getattr(self.args, "bgm_volume", 0.8) or 0.8),
+                            start_pos_sec=float(music_start_pos_sec),
+                        )
+                        self.render_ctx["use_bgm_clock"] = True
+                        self.render_ctx["want_bgm_clock"] = False
+                    else:
+                        # Wallclock mode: shift base so intro doesn't consume chart time.
+                        try:
+                            self.t0 += float(self._transition_durations.intro_total_sec) / max(1e-6, float(chart_speed))
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+            if fr.should_stop_audio:
+                try:
+                    audio = self.render_ctx.get("audio", None)
+                    if audio:
+                        audio.stop_music()
+                    try:
+                        self.render_ctx["use_bgm_clock"] = False
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+
+            # Quit after outro is done.
+            if fr.phase == TransitionPhase.DONE:
+                try:
+                    import pygame  # type: ignore
+
+                    pygame.event.post(pygame.event.Event(pygame.QUIT))
+                except Exception:
+                    pass
+
+        try:
+            if self.sprite is not None:
+                setattr(self.sprite, "_draw_calls", 0)
+                setattr(self.sprite, "_vertices_rendered", 0)
+        except Exception:
+            pass
+        try:
+            if self.r2d is not None:
+                setattr(self.r2d, "_draw_calls", 0)
+                setattr(self.r2d, "_vertices_rendered", 0)
+        except Exception:
+            pass
+
+        if (not enable_transitions) or (not trans_freeze):
+            self._update_hitfx(t_draw, float(dt))
 
         samples = 1
         shutter = 0.0
@@ -1127,11 +1295,21 @@ class GLApp:
 
         if samples <= 1 or shutter <= 1e-6:
             self._set_weight(1.0)
-            self._render_scene(t_base)
+            self._render_scene(t_draw)
             self._draw_particles()
+            self._draw_ui_overlay(t_draw)
             if getattr(self.args, "basic_debug", False):
                 self._draw_basic_debug()
-            self._draw_debug_overlays(t_base)
+            self._draw_debug_overlays(t_draw)
+
+            if enable_transitions:
+                try:
+                    self._draw_transition_overlay(
+                        phase=TransitionPhase(str(trans_phase)),
+                        progress=float(trans_prog),
+                    )
+                except Exception:
+                    pass
             return
 
         try:
@@ -1149,12 +1327,22 @@ class GLApp:
             frac = 0.0 if samples <= 1 else (float(i) / float(samples - 1))
             t_s = t_base - shutter * dt_chart * (1.0 - frac)
             self._set_weight(w)
-            self._render_scene(t_s)
+            self._render_scene(t_s if (not enable_transitions) else float(t_draw))
 
         self._draw_particles()
+        self._draw_ui_overlay(t_draw)
         if getattr(self.args, "basic_debug", False):
             self._draw_basic_debug()
-        self._draw_debug_overlays(t_base)
+        self._draw_debug_overlays(t_draw)
+
+        if enable_transitions:
+            try:
+                self._draw_transition_overlay(
+                    phase=TransitionPhase(str(trans_phase)),
+                    progress=float(trans_prog),
+                )
+            except Exception:
+                pass
 
         if old is not None:
             try:
@@ -1172,7 +1360,14 @@ class GLApp:
         if font_mul <= 1e-9:
             font_mul = 1.0
         font_size = max(1, int(round(14 * float(font_mul))))
-        text = f"FPS {self._fps_smooth:6.1f}  NOTE_RENDER {int(self._note_render_count_last)}"
+        spr_dc = int(getattr(self.sprite, "_draw_calls", 0) or 0)
+        spr_v = int(getattr(self.sprite, "_vertices_rendered", 0) or 0)
+        r2d_dc = int(getattr(self.r2d, "_draw_calls", 0) or 0)
+        r2d_v = int(getattr(self.r2d, "_vertices_rendered", 0) or 0)
+        text = (
+            f"FPS {self._fps_smooth:6.1f}  NOTE_RENDER {int(self._note_render_count_last)}  "
+            f"SPR {spr_dc}/{spr_v}  R2D {r2d_dc}/{r2d_v}"
+        )
         tex = self._get_text_texture(text, font_path=getattr(self.args, "font_path", None), font_size=font_size)
         if tex is None:
             return
@@ -1187,6 +1382,256 @@ class GLApp:
             x1=16.0 + float(tw),
             y1=float(H - 16),
             rgba=(230, 230, 230, 230),
+        )
+
+    def _draw_ui_overlay(self, t: float) -> None:
+        self._ensure_judge_state()
+        if self._judge is None:
+            return
+
+        W, H = self.window_size
+        try:
+            self.r2d.begin_frame()
+        except Exception:
+            pass
+
+        try:
+            font_mul = float(getattr(self.args, "font_size_multiplier", 1.0) or 1.0)
+        except Exception:
+            font_mul = 1.0
+        if font_mul <= 1e-9:
+            font_mul = 1.0
+        font_size = max(1, int(round(22 * float(font_mul))))
+        small_size = max(1, int(round(16 * float(font_mul))))
+
+        ui_pad = max(4, int(small_size * 0.25))
+        ui_x = 16.0
+        ui_y0 = 14.0
+        ui_combo_y = ui_y0
+        ui_score_y = ui_combo_y + float(font_size) + float(ui_pad)
+
+        def draw_text(text: str, *, x: float, y: float, size: int, rgba: tuple[int, int, int, int]) -> Optional[tuple[int, int]]:
+            tex = self._get_text_texture(text, font_path=getattr(self.args, "font_path", None), font_size=int(size))
+            if tex is None:
+                return None
+            tw, th = tex.size
+            draw_textured_quad(
+                ctx=self.ctx,
+                sp=self.sprite,
+                tex=tex,
+                window_size=self.window_size,
+                x0=float(x),
+                y0=float(y),
+                x1=float(x) + float(tw),
+                y1=float(y) + float(th),
+                rgba=rgba,
+            )
+            return int(tw), int(th)
+
+        def draw_rect(x0: float, y0: float, x1: float, y1: float, rgba: tuple[int, int, int, int]) -> None:
+            r, g, b, a = rgba
+            cf = (r / 255.0, g / 255.0, b / 255.0, a / 255.0)
+            verts = [
+                (x0, y0, *cf),
+                (x1, y0, *cf),
+                (x1, y1, *cf),
+                (x0, y0, *cf),
+                (x1, y1, *cf),
+                (x0, y1, *cf),
+            ]
+            data = b"".join(struct.pack("6f", *v) for v in verts)
+            self.r2d.draw_triangles(data, 6)
+
+        chart_end = self.render_ctx.get("chart_end", None)
+        if chart_end is not None:
+            try:
+                chart_end = float(chart_end)
+            except Exception:
+                chart_end = None
+
+        if chart_end is not None and chart_end > 1e-6:
+            start_time = self.render_ctx.get("start_time_sec", None)
+            try:
+                start_time = float(start_time) if start_time is not None else None
+            except Exception:
+                start_time = None
+            try:
+                pbar = progress_ratio(float(t), float(chart_end), advance_active=bool(self.render_ctx.get("advance_active", False)), start_time=start_time)
+            except Exception:
+                pbar = 0.0
+            draw_rect(0.0, 0.0, float(W), 6.0, (40, 40, 40, 255))
+            draw_rect(0.0, 0.0, float(W) * float(pbar), 6.0, (230, 230, 230, 255))
+
+        combo_text = f"COMBO {int(getattr(self._judge, 'combo', 0))}"
+        draw_text(combo_text, x=ui_x, y=ui_combo_y, size=font_size, rgba=(240, 240, 240, 255))
+
+        total_notes = int(self._total_notes or 0)
+        try:
+            score, acc_ratio, _combo_ratio = compute_score(
+                float(getattr(self._judge, "acc_sum", 0.0)),
+                int(getattr(self._judge, "judged_cnt", 0)),
+                int(getattr(self._judge, "combo", 0)),
+                int(getattr(self._judge, "max_combo", 0)),
+                int(total_notes),
+            )
+        except Exception:
+            score, acc_ratio = 0, 0.0
+
+        score_text = f"SCORE {int(score):07d}   HIT {float(acc_ratio) * 100.0:6.2f}%   MAX {int(getattr(self._judge, 'max_combo', 0))}/{int(total_notes)}"
+        draw_text(score_text, x=ui_x, y=ui_score_y, size=small_size, rgba=(200, 200, 200, 255))
+
+        if self.render_ctx.get("chart_info") and (not getattr(self.args, "no_title_overlay", False)):
+            title, sub = format_title(self.render_ctx.get("chart_info") or {})
+            if title:
+                tex = self._get_text_texture(title, font_path=getattr(self.args, "font_path", None), font_size=int(small_size))
+                if tex is not None:
+                    tw, th = tex.size
+                    draw_textured_quad(
+                        ctx=self.ctx,
+                        sp=self.sprite,
+                        tex=tex,
+                        window_size=self.window_size,
+                        x0=float(W) - 16.0 - float(tw),
+                        y0=14.0,
+                        x1=float(W) - 16.0,
+                        y1=14.0 + float(th),
+                        rgba=(230, 230, 230, 255),
+                    )
+            if sub:
+                tex = self._get_text_texture(sub, font_path=getattr(self.args, "font_path", None), font_size=int(small_size))
+                if tex is not None:
+                    tw, th = tex.size
+                    draw_textured_quad(
+                        ctx=self.ctx,
+                        sp=self.sprite,
+                        tex=tex,
+                        window_size=self.window_size,
+                        x0=float(W) - 16.0 - float(tw),
+                        y0=14.0 + float(small_size),
+                        x1=float(W) - 16.0,
+                        y1=14.0 + float(small_size) + float(th),
+                        rgba=(180, 180, 180, 255),
+                    )
+
+        hint = "LMB/SPACE: hit   hold: keep pressed   P: pause   R: restart   ESC: quit"
+        draw_text(hint, x=ui_x, y=float(H) - float(small_size) - float(ui_pad), size=small_size, rgba=(160, 160, 160, 255))
+
+    def _draw_transition_overlay(self, *, phase: TransitionPhase, progress: float) -> None:
+        if phase == TransitionPhase.GAMEPLAY:
+            return
+
+        W, H = self.window_size
+        p = float(progress)
+        if p < 0.0:
+            p = 0.0
+        if p > 1.0:
+            p = 1.0
+
+        alpha = 200
+        if phase in (TransitionPhase.OUTRO_SETTLEMENT, TransitionPhase.OUTRO_LINE_CLOSE):
+            alpha = 220
+        if phase in (TransitionPhase.DONE,):
+            alpha = 240
+
+        try:
+            self.r2d.begin_frame()
+        except Exception:
+            pass
+
+        def pack_tri(verts: List[tuple[float, float, float, float, float, float]]) -> bytes:
+            return b"".join(struct.pack("6f", *v) for v in verts)
+
+        def draw_quad_pts(pts, rgba):
+            r, g, b, a = rgba
+            cf = (r / 255.0, g / 255.0, b / 255.0, a / 255.0)
+            (x0, y0), (x1, y1), (x2, y2), (x3, y3) = pts
+            verts = [
+                (x0, y0, *cf),
+                (x1, y1, *cf),
+                (x2, y2, *cf),
+                (x0, y0, *cf),
+                (x2, y2, *cf),
+                (x3, y3, *cf),
+            ]
+            self.r2d.draw_triangles(pack_tri(verts), 6)
+
+        # Background overlay
+        draw_quad_pts(
+            [(0.0, 0.0), (float(W), 0.0), (float(W), float(H)), (0.0, float(H))],
+            (0, 0, 0, int(alpha)),
+        )
+
+        title = ""
+        subtitle = ""
+        if phase == TransitionPhase.INTRO_LOADING:
+            title = "LOADING"
+            subtitle = "Preparing resources"
+        elif phase == TransitionPhase.INTRO_LINE_OPEN:
+            title = "READY"
+            subtitle = "Get set"
+        elif phase == TransitionPhase.OUTRO_SETTLEMENT:
+            title = "RESULT"
+        elif phase == TransitionPhase.OUTRO_LINE_CLOSE:
+            title = "FINISH"
+            subtitle = "Thanks for playing"
+
+        try:
+            font_mul = float(getattr(self.args, "font_size_multiplier", 1.0) or 1.0)
+        except Exception:
+            font_mul = 1.0
+        if font_mul <= 1e-9:
+            font_mul = 1.0
+        font_big = max(1, int(round(44 * float(font_mul))))
+        font_small = max(1, int(round(18 * float(font_mul))))
+
+        cx = float(W) * 0.5
+        cy = float(H) * 0.5
+
+        if title:
+            tex = self._get_text_texture(title, font_path=getattr(self.args, "font_path", None), font_size=int(font_big))
+            if tex is not None:
+                tw, th = tex.size
+                draw_textured_quad(
+                    ctx=self.ctx,
+                    sp=self.sprite,
+                    tex=tex,
+                    window_size=self.window_size,
+                    x0=float(cx - tw * 0.5),
+                    y0=float(cy - th - 12.0),
+                    x1=float(cx - tw * 0.5 + tw),
+                    y1=float(cy - 12.0),
+                    rgba=(240, 240, 240, 255),
+                )
+
+        if subtitle:
+            tex2 = self._get_text_texture(subtitle, font_path=getattr(self.args, "font_path", None), font_size=int(font_small))
+            if tex2 is not None:
+                tw, th = tex2.size
+                draw_textured_quad(
+                    ctx=self.ctx,
+                    sp=self.sprite,
+                    tex=tex2,
+                    window_size=self.window_size,
+                    x0=float(cx - tw * 0.5),
+                    y0=float(cy + 6.0),
+                    x1=float(cx - tw * 0.5 + tw),
+                    y1=float(cy + 6.0 + th),
+                    rgba=(200, 200, 200, 255),
+                )
+
+        # Progress bar
+        bar_w = float(min(float(W) * 0.55, float(W) - 80.0))
+        bar_h = float(max(6.0, float(font_small) * 0.35))
+        x0 = float(cx - bar_w * 0.5)
+        y0 = float(cy + float(font_small) * 2.0)
+
+        draw_quad_pts(
+            [(x0, y0), (x0 + bar_w, y0), (x0 + bar_w, y0 + bar_h), (x0, y0 + bar_h)],
+            (70, 70, 70, 220),
+        )
+        draw_quad_pts(
+            [(x0, y0), (x0 + bar_w * p, y0), (x0 + bar_w * p, y0 + bar_h), (x0, y0 + bar_h)],
+            (235, 235, 235, 235),
         )
 
     def _draw_particles(self) -> None:

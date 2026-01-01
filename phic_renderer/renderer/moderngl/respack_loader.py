@@ -4,7 +4,7 @@ import os
 from typing import Any
 
 from ...io.respack import Respack, load_respack_info
-from ...renderer.moderngl.texture import load_texture_rgba
+from .texture import load_texture_rgba
 
 
 def _parse_hex_rgba(v: Any, default: tuple[int, int, int, int]) -> tuple[int, int, int, int]:

@@ -69,6 +69,8 @@ class ResourceContext:
         if self.audio_backend is not None:
             if hasattr(self.audio_backend, "cleanup"):
                 self.audio_backend.cleanup()
+            if hasattr(self.audio_backend, "close"):
+                self.audio_backend.close()
 
     @classmethod
     def from_state_module(cls, state: Any) -> ResourceContext:

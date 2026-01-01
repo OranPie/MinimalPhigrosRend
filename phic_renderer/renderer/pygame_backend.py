@@ -66,6 +66,7 @@ from ..ui.headless.textual import init_textual_ui, RecordUISnapshot
 from ..engine.chart_init import (
     compute_total_notes,
     compute_chart_end,
+    compute_chart_end_policy,
     group_simultaneous_notes,
     filter_notes_by_time,
 )
@@ -89,6 +90,293 @@ from ..backends.pygame.effects.post_ui import post_render_non_headless, post_ren
 from ..backends.pygame.effects.motion_blur import apply_motion_blur
 from ..engine.simulateplay import SimulatePlayer
 from ..backends.pygame.debug.pointer import draw_debug_pointer
+from ..ui.transitions import (
+    TransitionController,
+    TransitionDurations,
+    TransitionPhase,
+    map_presentation_time_to_chart_time,
+)
+from ..backends.pygame.rendering.transitions import render_transition_overlay
+
+def _coerce_transition_phase(v: Any) -> TransitionPhase:
+    if isinstance(v, TransitionPhase):
+        return v
+    if v is None:
+        return TransitionPhase.GAMEPLAY
+    try:
+        s = str(v)
+    except Exception:
+        return TransitionPhase.GAMEPLAY
+
+    if s.startswith("TransitionPhase."):
+        name = s.split(".", 1)[1]
+        try:
+            return TransitionPhase[name]
+        except Exception:
+            pass
+
+    try:
+        return TransitionPhase[s]
+    except Exception:
+        pass
+
+    try:
+        return TransitionPhase(s)
+    except Exception:
+        return TransitionPhase.GAMEPLAY
+
+def _collect_track_boundaries(obj: Any, *, _seen: Optional[set] = None) -> List[float]:
+    if _seen is None:
+        _seen = set()
+    try:
+        oid = id(obj)
+    except Exception:
+        oid = None
+    if oid is not None:
+        if oid in _seen:
+            return []
+        _seen.add(oid)
+
+    if obj is None:
+        return []
+
+    out: List[float] = []
+    try:
+        segs = getattr(obj, "segs", None)
+        if isinstance(segs, list):
+            for s in segs:
+                try:
+                    t0 = float(getattr(s, "t0"))
+                    t1 = float(getattr(s, "t1"))
+                    out.append(t0)
+                    out.append(t1)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    try:
+        tracks = getattr(obj, "tracks", None)
+        if isinstance(tracks, list):
+            for tr in tracks:
+                out.extend(_collect_track_boundaries(tr, _seen=_seen))
+    except Exception:
+        pass
+
+    try:
+        base = getattr(obj, "base", None)
+        if base is not None:
+            out.extend(_collect_track_boundaries(base, _seen=_seen))
+    except Exception:
+        pass
+
+    try:
+        if callable(obj):
+            try:
+                for d in (getattr(obj, "__defaults__", None) or ()):
+                    out.extend(_collect_track_boundaries(d, _seen=_seen))
+            except Exception:
+                pass
+            try:
+                for c in (getattr(obj, "__closure__", None) or ()):
+                    try:
+                        out.extend(_collect_track_boundaries(c.cell_contents, _seen=_seen))
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    return out
+
+def _find_track_with_segs(obj: Any, *, _seen: Optional[set] = None) -> Any:
+    if _seen is None:
+        _seen = set()
+    try:
+        oid = id(obj)
+    except Exception:
+        oid = None
+    if oid is not None:
+        if oid in _seen:
+            return None
+        _seen.add(oid)
+
+    if obj is None:
+        return None
+
+    try:
+        segs = getattr(obj, "segs", None)
+        if isinstance(segs, list):
+            return obj
+    except Exception:
+        pass
+
+    try:
+        tracks = getattr(obj, "tracks", None)
+        if isinstance(tracks, list):
+            for tr in tracks:
+                hit = _find_track_with_segs(tr, _seen=_seen)
+                if hit is not None:
+                    return hit
+    except Exception:
+        pass
+
+    try:
+        base = getattr(obj, "base", None)
+        if base is not None:
+            hit = _find_track_with_segs(base, _seen=_seen)
+            if hit is not None:
+                return hit
+    except Exception:
+        pass
+
+    try:
+        if callable(obj):
+            try:
+                for d in (getattr(obj, "__defaults__", None) or ()):
+                    hit = _find_track_with_segs(d, _seen=_seen)
+                    if hit is not None:
+                        return hit
+            except Exception:
+                pass
+            try:
+                for c in (getattr(obj, "__closure__", None) or ()):
+                    try:
+                        hit = _find_track_with_segs(c.cell_contents, _seen=_seen)
+                        if hit is not None:
+                            return hit
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    return None
+
+def _track_progress_str(obj: Any) -> str:
+    tr = _find_track_with_segs(obj)
+    if tr is None:
+        return "-"
+    try:
+        segs = getattr(tr, "segs", None)
+        total = len(segs) if isinstance(segs, list) else 0
+    except Exception:
+        total = 0
+    try:
+        idx = int(getattr(tr, "i", 0) or 0)
+    except Exception:
+        idx = 0
+    return f"#{idx}({idx}/{int(total)})"
+
+def _line_track_progress_summary(line: Any, *, lid: int) -> str:
+    try:
+        x = _track_progress_str(getattr(line, "pos_x", None))
+    except Exception:
+        x = "-"
+    try:
+        y = _track_progress_str(getattr(line, "pos_y", None))
+    except Exception:
+        y = "-"
+    try:
+        rot = _track_progress_str(getattr(line, "rot", None))
+    except Exception:
+        rot = "-"
+    try:
+        a = _track_progress_str(getattr(line, "alpha", None))
+    except Exception:
+        a = "-"
+    try:
+        scr = _track_progress_str(getattr(line, "scroll_px", None))
+    except Exception:
+        scr = "-"
+
+    parts = [f"L{int(lid):02d},", f"x {x}", f"y {y}", f"rot {rot}", f"a {a}", f"scr {scr}"]
+    try:
+        if getattr(line, "color", None) is not None:
+            parts.append(f"color {_track_progress_str(getattr(line, 'color', None))}")
+    except Exception:
+        pass
+    try:
+        if getattr(line, "scale_x", None) is not None:
+            parts.append(f"sx {_track_progress_str(getattr(line, 'scale_x', None))}")
+    except Exception:
+        pass
+    try:
+        if getattr(line, "scale_y", None) is not None:
+            parts.append(f"sy {_track_progress_str(getattr(line, 'scale_y', None))}")
+    except Exception:
+        pass
+    try:
+        if getattr(line, "text", None) is not None:
+            parts.append(f"text {_track_progress_str(getattr(line, 'text', None))}")
+    except Exception:
+        pass
+    try:
+        if getattr(line, "gif_progress", None) is not None:
+            parts.append(f"gif {_track_progress_str(getattr(line, 'gif_progress', None))}")
+    except Exception:
+        pass
+
+    return " ".join(parts)
+
+def _line_event_windows(
+    line: Any,
+    *,
+    t: float,
+    lid: int,
+    past_window: float = 2.0,
+    future_window: float = 2.0,
+    max_past: int = 200,
+    max_incoming: int = 80,
+) -> Tuple[List[str], List[str]]:
+    props = [
+        ("MOVE_X", "pos_x"),
+        ("MOVE_Y", "pos_y"),
+        ("ROT", "rot"),
+        ("ALPHA", "alpha"),
+        ("SPEED", "scroll_px"),
+        ("COLOR", "color"),
+        ("SCALE_X", "scale_x"),
+        ("SCALE_Y", "scale_y"),
+        ("TEXT", "text"),
+        ("GIF", "gif_progress"),
+    ]
+
+    incoming_items: List[Tuple[float, str]] = []
+    past_items: List[Tuple[float, str]] = []
+
+    t_now = float(t)
+    t_p0 = t_now - float(past_window)
+    t_i1 = t_now + float(future_window)
+
+    for label, attr in props:
+        try:
+            tr = getattr(line, attr, None)
+        except Exception:
+            tr = None
+        bounds = _collect_track_boundaries(tr)
+        if not bounds:
+            continue
+        try:
+            bounds_u = sorted({float(x) for x in bounds})
+        except Exception:
+            continue
+        for tb in bounds_u:
+            if tb <= t_now and tb >= t_p0:
+                past_items.append((tb, label))
+            elif tb > t_now and tb <= t_i1:
+                incoming_items.append((tb, label))
+
+    past_items.sort(key=lambda x: x[0], reverse=True)
+    incoming_items.sort(key=lambda x: x[0])
+
+    past_lines = [f"{float(tb):9.3f}s  L{int(lid):02d} {str(label)}" for (tb, label) in past_items[: int(max_past)]]
+    inc_lines = [
+        f"{float(tb):9.3f}s  L{int(lid):02d} {str(label)}" for (tb, label) in incoming_items[: int(max_incoming)]
+    ]
+    return inc_lines, past_lines
 
 def run(
     args: Any,
@@ -185,6 +473,14 @@ def run(
     record_render_particles = bool(getattr(args, "record_render_particles", True))
     record_render_text = bool(getattr(args, "record_render_text", True))
     record_preview_audio = bool(getattr(args, "record_preview_audio", False))
+
+    export_dsl_path = getattr(args, "simulateplay_export_dsl", None)
+    export_dsl = bool(export_dsl_path)
+    export_fps = float(getattr(args, "simulateplay_export_fps", 120.0) or 120.0)
+    if export_fps <= 1e-6:
+        export_fps = 120.0
+    export_frame_idx = 0
+    headless_mode = bool(record_headless) or bool(export_dsl)
 
     last_judge_event = None
     last_judge_events_frame: List[Dict[str, Any]] = []
@@ -652,6 +948,7 @@ def run(
 
     # BGM
     use_bgm_clock = False
+    want_bgm_clock = False
     advance_mix_failed = False
     advance_bgm_active = False
     advance_segment_idx = 0
@@ -679,23 +976,10 @@ def run(
 
     if not advance_active:
         if (not record_enabled) and bgm_file:
-            audio.play_music_file(
-                str(bgm_file),
-                volume=clamp(getattr(args, "bgm_volume", 0.8), 0.0, 1.0),
-                start_pos_sec=float(music_start_pos_sec),
-            )
-            try:
-                if hasattr(audio, "set_music_speed"):
-                    audio.set_music_speed(float(chart_speed))
-            except Exception:
-                pass
-            use_bgm_clock = True
-            logger.info(
-                "[pygame] bgm play (file=%s, volume=%s, start_pos=%s)",
-                str(bgm_file),
-                clamp(getattr(args, "bgm_volume", 0.8), 0.0, 1.0),
-                float(music_start_pos_sec),
-            )
+            # Transition intro should not consume chart time.
+            # Defer starting BGM until intro completes.
+            want_bgm_clock = True
+            use_bgm_clock = False
         elif record_enabled and bgm_file:
             logger.info("[pygame] bgm suppressed due to recording (file=%s)", str(bgm_file))
     else:
@@ -831,7 +1115,9 @@ def run(
     # Precompute first entry time for each note before creating a window (temporary).
     precompute_t_enter(lines, notes, W, H)
 
-    if record_headless:
+    if getattr(args, "export_mode", False):
+        headless_mode = True
+    if headless_mode:
         screen = pygame.Surface((W, H), pygame.SRCALPHA)
     else:
         if bool(reuse_pygame):
@@ -907,7 +1193,23 @@ def run(
             pass
 
     # chart end
-    chart_end = compute_chart_end(notes, advance_active, getattr(args, "end_time", None) if (not advance_active) else None)
+    bgm_duration_sec = None
+    if (not advance_active) and bgm_file:
+        try:
+            snd = pygame.mixer.Sound(str(bgm_file))
+            bgm_duration_sec = float(snd.get_length())
+        except Exception:
+            bgm_duration_sec = None
+
+    chart_end = compute_chart_end_policy(
+        notes,
+        advance_active,
+        (getattr(args, "end_time", None) if (not advance_active) else None),
+        bgm_duration_sec=bgm_duration_sec,
+        offset=float(offset),
+        chart_speed=float(chart_speed),
+        no_bgm_tail_sec=2.0,
+    )
     if chart_end_override is not None:
         try:
             chart_end = float(chart_end_override)
@@ -1041,6 +1343,22 @@ def run(
         _flick_thr_ratio = 0.02
     pointers = PointerManager(int(W), int(H), float(_flick_thr_ratio))
 
+    dsl_exporter = None
+    if export_dsl:
+        try:
+            dsl_exporter = SimulateplayDSLExporter(
+                W=int(W),
+                H=int(H),
+                export_path=str(export_dsl_path),
+                default_steps=int(getattr(args, "simulateplay_export_steps", 24) or 24),
+                down_pause_s=float(getattr(args, "simulateplay_export_down", 0.03) or 0.03),
+            )
+            pointers = SimulateplayDSLPointerProxy(inner=pointers, exporter=dsl_exporter)
+            logger.info("[pygame] simulateplay DSL export enabled path=%s", str(export_dsl_path))
+        except Exception as e:
+            dsl_exporter = None
+            logger.exception("[pygame] simulateplay DSL export init failed: %s", str(e))
+
     sim_player = None
     if bool(getattr(args, "simulateplay", False)) and (not bool(getattr(args, "autoplay", False))):
         try:
@@ -1121,6 +1439,8 @@ def run(
 
         if record_enabled and record_fps > 1e-6:
             _dt_frame = 1.0 / float(record_fps)
+        elif export_dsl:
+            _dt_frame = 1.0 / float(export_fps)
         else:
             _dt_frame = clock.tick(120) / 1000.0
 
@@ -1143,7 +1463,7 @@ def run(
                     audio.stop_channel(tr.get("channel"))
                     tr["stopped"] = True
 
-        if record_headless:
+        if headless_mode:
             evs = []
         else:
             evs = ([] if skip_pygame_events else pygame.event.get())
@@ -1281,13 +1601,109 @@ def run(
             else:
                 continue
 
-        if record_enabled and record_fps > 1e-6:
-            t = float(record_start_time) + float(record_frame_idx) / float(record_fps)
-        elif use_bgm_clock:
-            audio_t = audio.music_pos_sec() or 0.0
-            t = (audio_t - offset) * float(chart_speed)
+        enable_transitions = (not bool(advance_active)) and bool(getattr(args, "enable_transitions", True))
+        trans_dur = TransitionDurations()
+
+        end_for_outro = float(record_end_time) if (record_enabled and record_end_time is not None) else float(chart_end)
+
+        if enable_transitions and (record_enabled or export_dsl):
+            # Recording/export: drive the whole timeline by frame index so intro/outro are included.
+            if record_enabled and record_fps > 1e-6:
+                t_present = float(record_frame_idx) / float(record_fps)
+            elif export_dsl:
+                t_present = float(export_frame_idx) / float(export_fps)
+            else:
+                t_present = 0.0
+
+            t, trans_phase, trans_prog = map_presentation_time_to_chart_time(
+                t_present=float(t_present),
+                durations=trans_dur,
+                chart_end=float(end_for_outro),
+                intro_freeze_time=float(record_start_time),
+            )
+            trans_freeze = trans_phase != TransitionPhase.GAMEPLAY
+
         else:
-            t = ((now_sec() - t0) - offset) * float(chart_speed)
+            # Interactive: keep legacy timebase, but freeze chart time during intro/outro.
+            if record_enabled and record_fps > 1e-6:
+                t = float(record_start_time) + float(record_frame_idx) / float(record_fps)
+            elif export_dsl:
+                t = float(record_start_time) + float(export_frame_idx) / float(export_fps)
+            elif use_bgm_clock:
+                audio_t = audio.music_pos_sec() or 0.0
+                t = (audio_t - offset) * float(chart_speed)
+            else:
+                t = ((now_sec() - t0) - offset) * float(chart_speed)
+
+            trans_phase = TransitionPhase.GAMEPLAY
+            trans_prog = 0.0
+            trans_freeze = False
+
+            if enable_transitions:
+                if "_transition_controller" not in locals():
+                    _transition_controller = TransitionController(
+                        durations=trans_dur,
+                        intro_freeze_time=float(start_time_sec),
+                    )
+
+                request_outro = bool(float(t) >= float(end_for_outro))
+                fr = _transition_controller.update(
+                    dt_present=float(_dt_frame),
+                    chart_time=float(t),
+                    chart_end=float(end_for_outro),
+                    request_outro=bool(request_outro),
+                )
+                t = float(fr.chart_time)
+                trans_phase = fr.phase
+                trans_prog = float(fr.phase_progress)
+                trans_freeze = bool(fr.chart_time_frozen)
+
+                if fr.should_start_audio:
+                    if want_bgm_clock and (not record_enabled) and bgm_file:
+                        try:
+                            audio.play_music_file(
+                                str(bgm_file),
+                                volume=clamp(getattr(args, "bgm_volume", 0.8), 0.0, 1.0),
+                                start_pos_sec=float(music_start_pos_sec),
+                            )
+                            try:
+                                if hasattr(audio, "set_music_speed"):
+                                    audio.set_music_speed(float(chart_speed))
+                            except Exception:
+                                pass
+                            use_bgm_clock = True
+                            logger.info(
+                                "[pygame] bgm play (deferred) (file=%s, volume=%s, start_pos=%s)",
+                                str(bgm_file),
+                                clamp(getattr(args, "bgm_volume", 0.8), 0.0, 1.0),
+                                float(music_start_pos_sec),
+                            )
+                        except Exception:
+                            use_bgm_clock = False
+                    else:
+                        # Wallclock timebase: shift start so intro doesn't consume chart time.
+                        if (not use_bgm_clock) and (not record_enabled) and (not export_dsl):
+                            try:
+                                t0 += float(trans_dur.intro_total_sec)
+                            except Exception:
+                                pass
+
+                if fr.should_stop_audio:
+                    try:
+                        audio.stop_music()
+                    except Exception:
+                        pass
+
+        if export_dsl:
+            export_frame_idx += 1
+            if enable_transitions and _coerce_transition_phase(trans_phase) == TransitionPhase.DONE:
+                running = False
+
+        if dsl_exporter is not None:
+            try:
+                dsl_exporter.set_time(float(t))
+            except Exception:
+                pass
 
         if advance_lazy_sequence:
             try:
@@ -1391,7 +1807,7 @@ def run(
             except Exception:
                 pass
 
-        if record_enabled:
+        if record_enabled and (not enable_transitions):
             if record_end_time is not None and float(t) > float(record_end_time):
                 running = False
                 break
@@ -1399,7 +1815,7 @@ def run(
                 running = False
                 break
 
-        if (not advance_active) and end_time_sec is not None and float(t) > float(end_time_sec):
+        if (not enable_transitions) and (not advance_active) and end_time_sec is not None and float(t) > float(end_time_sec):
             try:
                 audio.stop_music()
             except:
@@ -1551,293 +1967,323 @@ def run(
             except:
                 pass
 
-        # Autoplay
-        if getattr(args, "autoplay", False):
-            if "prev_autoplay_t" not in locals():
-                prev_autoplay_t = float(t) - 1e-6
-            _st0 = max(0, idx_next - 20)
-            _st1 = min(len(states), idx_next + 300)
-            for _si in range(int(_st0), int(_st1)):
-                s = states[_si]
-                if s.judged or s.note.fake:
-                    continue
-                n = s.note
-                if n.kind != 3:
-                    act = None
-                    if judge_plan is not None:
-                        try:
-                            act = judge_plan.action_for(n)
-                        except:
-                            act = None
-                    dt_ms = float(getattr(act, "dt_ms", 0.0) if act is not None else 0.0)
-                    grade0 = getattr(act, "grade", None) if act is not None else "PERFECT"
-                    if (grade0 is not None) and str(grade0).upper() == "MISS":
-                        grade = "MISS"
-                    else:
-                        grade = _sanitize_grade(int(n.kind), grade0)
-                    t_hit = float(n.t_hit) + dt_ms / 1000.0
+        # Gameplay update should not run during transition intro/outro.
+        if not bool(trans_freeze):
+            # Autoplay
+            if getattr(args, "autoplay", False):
+                if "prev_autoplay_t" not in locals():
+                    prev_autoplay_t = float(t) - 1e-6
+                _st0 = max(0, idx_next - 20)
+                _st1 = min(len(states), idx_next + 300)
+                for _si in range(int(_st0), int(_st1)):
+                    s = states[_si]
+                    if s.judged or s.note.fake:
+                        continue
+                    n = s.note
+                    if n.kind != 3:
+                        act = None
+                        if judge_plan is not None:
+                            try:
+                                act = judge_plan.action_for(n)
+                            except:
+                                act = None
+                        dt_ms = float(getattr(act, "dt_ms", 0.0) if act is not None else 0.0)
+                        grade0 = getattr(act, "grade", None) if act is not None else "PERFECT"
+                        if (grade0 is not None) and str(grade0).upper() == "MISS":
+                            grade = "MISS"
+                        else:
+                            grade = _sanitize_grade(int(n.kind), grade0)
+                        t_hit = float(n.t_hit) + dt_ms / 1000.0
 
-                    if (grade is not None) and float(prev_autoplay_t) < float(t_hit) <= float(t):
-                        if str(grade).upper() == "MISS":
+                        if (grade is not None) and float(prev_autoplay_t) < float(t_hit) <= float(t):
+                            if str(grade).upper() == "MISS":
+                                try:
+                                    setattr(s, "miss_t", float(t_hit))
+                                except:
+                                    pass
+                                s.miss = True
+                                s.judged = True
+                                judge.mark_miss(s)
+                                _push_hit_debug(
+                                    t_now=float(t_hit),
+                                    t_hit=float(n.t_hit),
+                                    note_id=int(getattr(n, "nid", -1)),
+                                    judgement="MISS",
+                                    note_kind=int(getattr(n, "kind", 0) or 0),
+                                    mh=bool(getattr(n, "mh", False)),
+                                    line_id=int(getattr(n, "line_id", -1)),
+                                    source="autoplay",
+                                )
+                                continue
+                            _apply_grade(s, str(grade))
+                            s.judged = True
+                            s.hit = True
+                            ln = lines[n.line_id]
+                            t_fx = float(t_hit)
+                            lx, ly, lr, la, sc, _la_raw = eval_line_state(ln, t_fx)
+                            x, y = note_world_pos(lx, ly, lr, sc, n, n.scroll_hit, for_tail=False)
+                            c = (255, 255, 255, 255)
+                            if getattr(n, "tint_hitfx_rgb", None) is not None:
+                                rr, gg, bb = n.tint_hitfx_rgb
+                                c = (int(rr), int(gg), int(bb), 255)
+                            elif respack:
+                                c = respack.judge_colors.get("PERFECT", c)
+                            var = "good" if str(grade).upper() == "GOOD" else ""
+                            hitfx.append(HitFX(x, y, t_fx, c, lr, var))
+                            if respack and (not respack.hide_particles):
+                                particles.append(ParticleBurst(x, y, int(t_fx * 1000.0), int(respack.hitfx_duration * 1000), c))
+                            _mark_line_hit(n.line_id, int(t_fx * 1000.0))
+                            _push_hit_debug(
+                                t_now=float(t_fx),
+                                t_hit=float(n.t_hit),
+                                note_id=int(getattr(n, "nid", -1)),
+                                judgement=str(grade),
+                                note_kind=int(getattr(n, "kind", 0) or 0),
+                                mh=bool(getattr(n, "mh", False)),
+                                line_id=int(getattr(n, "line_id", -1)),
+                                source="autoplay",
+                            )
+                            if not record_enabled:
+                                hitsound.play(n, int(t_fx * 1000.0), respack=respack)
+                    else:
+                        act = None
+                        if judge_plan is not None:
+                            try:
+                                act = judge_plan.action_for(n)
+                            except:
+                                act = None
+                        dt_ms = float(getattr(act, "dt_ms", 0.0) if act is not None else 0.0)
+                        grade0 = getattr(act, "grade", None) if act is not None else "PERFECT"
+                        if (grade0 is not None) and str(grade0).upper() == "MISS":
+                            grade = "MISS"
+                        else:
+                            grade = _sanitize_grade(int(n.kind), grade0)
+                        hp = getattr(act, "hold_percent", None) if act is not None else None
+                        t_hit = float(n.t_hit) + dt_ms / 1000.0
+                        if hp is None:
+                            hp = 1.0
+
+                        if (not s.holding) and str(grade).upper() == "MISS" and float(prev_autoplay_t) < float(t_hit) <= float(t):
                             try:
                                 setattr(s, "miss_t", float(t_hit))
                             except:
                                 pass
                             s.miss = True
                             s.judged = True
+                            s.hold_failed = True
+                            s.hold_finalized = True
+                            s.holding = False
                             judge.mark_miss(s)
                             _push_hit_debug(
                                 t_now=float(t_hit),
                                 t_hit=float(n.t_hit),
                                 note_id=int(getattr(n, "nid", -1)),
                                 judgement="MISS",
+                                hold_percent=None,
                                 note_kind=int(getattr(n, "kind", 0) or 0),
                                 mh=bool(getattr(n, "mh", False)),
                                 line_id=int(getattr(n, "line_id", -1)),
-                                source="autoplay",
+                                source="autoplay_hold",
                             )
                             continue
-                        _apply_grade(s, str(grade))
-                        s.judged = True
-                        s.hit = True
-                        ln = lines[n.line_id]
-                        t_fx = float(t_hit)
-                        lx, ly, lr, la, sc, _la_raw = eval_line_state(ln, t_fx)
-                        x, y = note_world_pos(lx, ly, lr, sc, n, n.scroll_hit, for_tail=False)
-                        c = (255, 255, 255, 255)
-                        if getattr(n, "tint_hitfx_rgb", None) is not None:
-                            rr, gg, bb = n.tint_hitfx_rgb
-                            c = (int(rr), int(gg), int(bb), 255)
-                        elif respack:
-                            c = respack.judge_colors.get("PERFECT", c)
-                        var = "good" if str(grade).upper() == "GOOD" else ""
-                        hitfx.append(HitFX(x, y, t_fx, c, lr, var))
-                        if respack and (not respack.hide_particles):
-                            particles.append(ParticleBurst(x, y, int(t_fx * 1000.0), int(respack.hitfx_duration * 1000), c))
-                        _mark_line_hit(n.line_id, int(t_fx * 1000.0))
-                        _push_hit_debug(
-                            t_now=float(t_fx),
-                            t_hit=float(n.t_hit),
-                            note_id=int(getattr(n, "nid", -1)),
-                            judgement=str(grade),
-                            note_kind=int(getattr(n, "kind", 0) or 0),
-                            mh=bool(getattr(n, "mh", False)),
-                            line_id=int(getattr(n, "line_id", -1)),
-                            source="autoplay",
-                        )
-                        if not record_enabled:
-                            hitsound.play(n, int(t_fx * 1000.0), respack=respack)
-                else:
-                    act = None
-                    if judge_plan is not None:
-                        try:
-                            act = judge_plan.action_for(n)
-                        except:
-                            act = None
-                    dt_ms = float(getattr(act, "dt_ms", 0.0) if act is not None else 0.0)
-                    grade0 = getattr(act, "grade", None) if act is not None else "PERFECT"
-                    if (grade0 is not None) and str(grade0).upper() == "MISS":
-                        grade = "MISS"
-                    else:
-                        grade = _sanitize_grade(int(n.kind), grade0)
-                    hp = getattr(act, "hold_percent", None) if act is not None else None
-                    t_hit = float(n.t_hit) + dt_ms / 1000.0
-                    if hp is None:
-                        hp = 1.0
 
-                    if (not s.holding) and str(grade).upper() == "MISS" and float(prev_autoplay_t) < float(t_hit) <= float(t):
-                        try:
-                            setattr(s, "miss_t", float(t_hit))
-                        except:
-                            pass
-                        s.miss = True
-                        s.judged = True
-                        s.hold_failed = True
-                        s.hold_finalized = True
-                        s.holding = False
-                        judge.mark_miss(s)
-                        _push_hit_debug(
-                            t_now=float(t_hit),
-                            t_hit=float(n.t_hit),
-                            note_id=int(getattr(n, "nid", -1)),
-                            judgement="MISS",
-                            hold_percent=None,
-                            note_kind=int(getattr(n, "kind", 0) or 0),
-                            mh=bool(getattr(n, "mh", False)),
-                            line_id=int(getattr(n, "line_id", -1)),
-                            source="autoplay_hold",
-                        )
-                        continue
+                        if (not s.holding) and (grade is not None) and float(prev_autoplay_t) < float(t_hit) <= float(t):
+                            s.hit = True
+                            s.holding = True
+                            s.hold_grade = str(grade)
+                            # Hold counts into combo at press time
+                            judge.bump()
+                            t_fx = float(t_hit)
+                            s.next_hold_fx_ms = int(t_fx * 1000.0) + hold_fx_interval_ms
+                            ln = lines[n.line_id]
+                            lx, ly, lr, la, sc, _la_raw = eval_line_state(ln, t_fx)
+                            x, y = note_world_pos(lx, ly, lr, sc, n, sc, for_tail=False)
+                            c = (255, 255, 255, 255)
+                            if getattr(n, "tint_hitfx_rgb", None) is not None:
+                                rr, gg, bb = n.tint_hitfx_rgb
+                                c = (int(rr), int(gg), int(bb), 255)
+                            elif respack:
+                                c = respack.judge_colors.get(grade, c)
+                                c = respack.judge_colors.get("PERFECT", c)
+                            var = "good" if str(grade).upper() == "GOOD" else ""
+                            hitfx.append(HitFX(x, y, t_fx, c, lr, var))
+                            if respack and (not respack.hide_particles):
+                                particles.append(ParticleBurst(x, y, int(t_fx * 1000.0), int(respack.hitfx_duration * 1000), c))
+                            _push_hit_debug(
+                                t_now=float(t_fx),
+                                t_hit=float(n.t_hit),
+                                note_id=int(getattr(n, "nid", -1)),
+                                judgement=str(grade),
+                                hold_percent=0.0,
+                                note_kind=int(getattr(n, "kind", 0) or 0),
+                                mh=bool(getattr(n, "mh", False)),
+                                line_id=int(getattr(n, "line_id", -1)),
+                                source="autoplay_hold",
+                            )
+                            if not record_enabled:
+                                hitsound.play(n, int(t_fx * 1000.0), respack=respack)
 
-                    if (not s.holding) and (grade is not None) and float(prev_autoplay_t) < float(t_hit) <= float(t):
-                        s.hit = True
-                        s.holding = True
-                        s.hold_grade = str(grade)
-                        # Hold counts into combo at press time
-                        judge.bump()
-                        t_fx = float(t_hit)
-                        s.next_hold_fx_ms = int(t_fx * 1000.0) + hold_fx_interval_ms
-                        ln = lines[n.line_id]
-                        lx, ly, lr, la, sc, _la_raw = eval_line_state(ln, t_fx)
-                        x, y = note_world_pos(lx, ly, lr, sc, n, sc, for_tail=False)
-                        c = (255, 255, 255, 255)
-                        if getattr(n, "tint_hitfx_rgb", None) is not None:
-                            rr, gg, bb = n.tint_hitfx_rgb
-                            c = (int(rr), int(gg), int(bb), 255)
-                        elif respack:
-                            c = respack.judge_colors.get(grade, c)
-                            c = respack.judge_colors.get("PERFECT", c)
-                        var = "good" if str(grade).upper() == "GOOD" else ""
-                        hitfx.append(HitFX(x, y, t_fx, c, lr, var))
-                        if respack and (not respack.hide_particles):
-                            particles.append(ParticleBurst(x, y, int(t_fx * 1000.0), int(respack.hitfx_duration * 1000), c))
-                        _push_hit_debug(
-                            t_now=float(t_fx),
-                            t_hit=float(n.t_hit),
-                            note_id=int(getattr(n, "nid", -1)),
-                            judgement=str(grade),
-                            hold_percent=0.0,
-                            note_kind=int(getattr(n, "kind", 0) or 0),
-                            mh=bool(getattr(n, "mh", False)),
-                            line_id=int(getattr(n, "line_id", -1)),
-                            source="autoplay_hold",
-                        )
-                        if not record_enabled:
-                            hitsound.play(n, int(t_fx * 1000.0), respack=respack)
-
-                    if s.holding:
-                        dur = max(1e-6, float(n.t_end) - float(n.t_hit))
-                        t_rel = float(n.t_hit) + float(hp) * dur
-                        if float(t) >= float(t_rel) and float(t_rel) >= float(n.t_hit) and float(t) < float(n.t_end) - 1e-6:
-                            try:
-                                s.released_early = True
-                                setattr(s, "release_t", float(t_rel))
-                                setattr(s, "release_percent", float(hp))
-                            except:
-                                pass
-                            if float(hp) < float(hold_tail_tol):
+                        if s.holding:
+                            dur = max(1e-6, float(n.t_end) - float(n.t_hit))
+                            t_rel = float(n.t_hit) + float(hp) * dur
+                            if float(t) >= float(t_rel) and float(t_rel) >= float(n.t_hit) and float(t) < float(n.t_end) - 1e-6:
                                 try:
-                                    setattr(s, "miss_t", float(t_rel))
+                                    s.released_early = True
+                                    setattr(s, "release_t", float(t_rel))
+                                    setattr(s, "release_percent", float(hp))
                                 except:
                                     pass
-                                s.miss = True
-                                s.judged = True
-                                s.hold_failed = True
-                                s.hold_finalized = True
-                                s.holding = False
-                                judge.mark_miss(s)
-                            else:
-                                s.holding = False
-                    if s.holding and t >= n.t_end:
-                        s.holding = False
+                                if float(hp) < float(hold_tail_tol):
+                                    try:
+                                        setattr(s, "miss_t", float(t_rel))
+                                    except:
+                                        pass
+                                    s.miss = True
+                                    s.judged = True
+                                    s.hold_failed = True
+                                    s.hold_finalized = True
+                                    s.holding = False
+                                    judge.mark_miss(s)
+                                    _push_hit_debug(
+                                        t_now=float(t_rel),
+                                        t_hit=float(n.t_hit),
+                                        note_id=int(getattr(n, "nid", -1)),
+                                        judgement="MISS",
+                                        hold_percent=float(hp),
+                                        note_kind=int(getattr(n, "kind", 0) or 0),
+                                        mh=bool(getattr(n, "mh", False)),
+                                        line_id=int(getattr(n, "line_id", -1)),
+                                        source="autoplay_hold_release",
+                                    )
+                                    continue
 
-            prev_autoplay_t = float(t)
+                            if float(t) >= float(n.t_end):
+                                # finalize
+                                try:
+                                    finalize_hold(s, t=float(t), judge=judge)
+                                except Exception:
+                                    pass
+                                try:
+                                    _push_hit_debug(
+                                        t_now=float(n.t_end),
+                                        t_hit=float(n.t_hit),
+                                        note_id=int(getattr(n, "nid", -1)),
+                                        judgement=str(s.hold_grade or "PERFECT"),
+                                        hold_percent=1.0,
+                                        note_kind=int(getattr(n, "kind", 0) or 0),
+                                        mh=bool(getattr(n, "mh", False)),
+                                        line_id=int(getattr(n, "line_id", -1)),
+                                        source="autoplay_hold_finalize",
+                                    )
+                                except Exception:
+                                    pass
 
-        # Manual judgement (pointer-driven)
-        # - tap: press/release without flick
-        # - flick: move >= flick_threshold*W during a press, then release
-        # - hold: long press on hold note head (kind=3)
-        # - drag: holding (down) can judge kind=2 notes
-        if not getattr(args, "autoplay", False):
-            for pf in pointers.frame_pointers():
+                prev_autoplay_t = float(t)
+
+            # Manual judgement (pointer-driven)
+            # - tap: press/release without flick
+            # - flick: move >= flick_threshold*W during a press, then release
+            # - hold: long press on hold note head (kind=3)
+            # - drag: holding (down) can judge kind=2 notes
+            if not getattr(args, "autoplay", False):
+                for pf in pointers.frame_pointers():
+                    try:
+                        apply_manual_judgement(
+                            args=args,
+                            t=float(t),
+                            W=int(W),
+                            H=int(H),
+                            lines=lines,
+                            states=states,
+                            idx_next=int(idx_next),
+                            judge=judge,
+                            record_enabled=bool(record_enabled),
+                            respack=respack,
+                            hitsound=hitsound,
+                            hitfx=hitfx,
+                            particles=particles,
+                            HitFX_cls=HitFX,
+                            ParticleBurst_cls=ParticleBurst,
+                            hold_fx_interval_ms=int(hold_fx_interval_ms),
+                            mark_line_hit_cb=_mark_line_hit,
+                            push_hit_debug_cb=_push_hit_debug,
+                            pointer_id=int(pf.pointer_id),
+                            pointer_x=pf.x,
+                            pointer_y=pf.y,
+                            pointer_start_x=getattr(pf, "start_x", None),
+                            pointer_start_y=getattr(pf, "start_y", None),
+                            gesture=pf.gesture,
+                            hold_like_down=bool(pf.down),
+                            press_edge=bool(pf.press_edge),
+                            pointers=pointers,  # NEW: pass pointers for area judgment
+                        )
+                    except Exception:
+                        pass
+            # hold maintenance
+            if not getattr(args, "autoplay", False):
                 try:
-                    apply_manual_judgement(
+                    hold_maintenance(
                         args=args,
+                        states=states,
+                        idx_next=int(idx_next),
                         t=float(t),
+                        hold_tail_tol=float(hold_tail_tol),
                         W=int(W),
                         H=int(H),
                         lines=lines,
-                        states=states,
-                        idx_next=int(idx_next),
+                        pointers=pointers,
                         judge=judge,
-                        record_enabled=bool(record_enabled),
-                        respack=respack,
-                        hitsound=hitsound,
-                        hitfx=hitfx,
-                        particles=particles,
-                        HitFX_cls=HitFX,
-                        ParticleBurst_cls=ParticleBurst,
-                        hold_fx_interval_ms=int(hold_fx_interval_ms),
-                        mark_line_hit_cb=_mark_line_hit,
-                        push_hit_debug_cb=_push_hit_debug,
-                        pointer_id=int(pf.pointer_id),
-                        pointer_x=pf.x,
-                        pointer_y=pf.y,
-                        pointer_start_x=getattr(pf, "start_x", None),
-                        pointer_start_y=getattr(pf, "start_y", None),
-                        gesture=pf.gesture,
-                        hold_like_down=bool(pf.down),
-                        press_edge=bool(pf.press_edge),
-                        pointers=pointers,  # NEW: pass pointers for area judgment
                     )
                 except Exception:
                     pass
 
-        # hold maintenance
-        if not getattr(args, "autoplay", False):
+            # hold finalize
             try:
-                hold_maintenance(
-                    args=args,
+                hold_finalize(
                     states=states,
                     idx_next=int(idx_next),
                     t=float(t),
                     hold_tail_tol=float(hold_tail_tol),
-                    W=int(W),
-                    H=int(H),
-                    lines=lines,
-                    pointers=pointers,
+                    miss_window=float(MISS_WINDOW),
                     judge=judge,
+                    push_hit_debug_cb=_push_hit_debug,
                 )
             except Exception:
                 pass
 
-        # hold finalize
-        try:
-            hold_finalize(
-                states=states,
-                idx_next=int(idx_next),
-                t=float(t),
-                hold_tail_tol=float(hold_tail_tol),
-                miss_window=float(MISS_WINDOW),
-                judge=judge,
-                push_hit_debug_cb=_push_hit_debug,
-            )
-        except Exception:
-            pass
+            # hold tick fx
+            try:
+                hold_tick_fx(
+                    states=states,
+                    idx_next=int(idx_next),
+                    t=float(t),
+                    hold_fx_interval_ms=int(hold_fx_interval_ms),
+                    lines=lines,
+                    respack=respack,
+                    hitfx=hitfx,
+                    particles=particles,
+                    HitFX_cls=HitFX,
+                    ParticleBurst_cls=ParticleBurst,
+                    mark_line_hit_cb=_mark_line_hit,
+                )
+            except Exception:
+                pass
 
-        # hold tick fx
-        try:
-            hold_tick_fx(
-                states=states,
-                idx_next=int(idx_next),
-                t=float(t),
-                hold_fx_interval_ms=int(hold_fx_interval_ms),
-                lines=lines,
-                respack=respack,
-                hitfx=hitfx,
-                particles=particles,
-                HitFX_cls=HitFX,
-                ParticleBurst_cls=ParticleBurst,
-                mark_line_hit_cb=_mark_line_hit,
-            )
-        except Exception:
-            pass
+            # miss detection
+            try:
+                detect_misses(
+                    states=states,
+                    idx_next=int(idx_next),
+                    t=float(t),
+                    miss_window=float(MISS_WINDOW),
+                    judge=judge,
+                    report_event_cb=_report_judge_event,
+                )
+            except Exception:
+                pass
 
-        # miss detection
-        try:
-            detect_misses(
-                states=states,
-                idx_next=int(idx_next),
-                t=float(t),
-                miss_window=float(MISS_WINDOW),
-                judge=judge,
-                report_event_cb=_report_judge_event,
-            )
-        except Exception:
-            pass
-
-        while idx_next < len(states) and states[idx_next].judged:
-            idx_next += 1
+            while idx_next < len(states) and states[idx_next].judged:
+                idx_next += 1
 
         stop_hit = False
         stop_judged = False
@@ -2048,7 +2494,24 @@ def run(
         except Exception:
             display_frame = display_frame_cur
 
-        if not record_headless:
+        if enable_transitions:
+            try:
+                render_transition_overlay(
+                    display_frame,
+                    font=font,
+                    small=small,
+                    W=int(W),
+                    H=int(H),
+                    phase=_coerce_transition_phase(trans_phase),
+                    progress=float(trans_prog),
+                    chart_info=(chart_info_override if chart_info_override is not None else chart_info),
+                    judge=judge,
+                    total_notes=int(total_notes),
+                )
+            except Exception:
+                pass
+
+        if not headless_mode:
             screen.blit(display_frame, (0, 0))
 
         if record_enabled:
@@ -2080,7 +2543,13 @@ def run(
 
             record_frame_idx += 1
 
+            if enable_transitions and (record_enabled or export_dsl):
+                if _coerce_transition_phase(trans_phase) == TransitionPhase.DONE:
+                    running = False
+
             if record_headless:
+                ui_events_incoming: List[str] = []
+                ui_events_past: List[str] = []
                 if tui_ok and tui is not None:
                     try:
                         if bool(getattr(tui.state, 'should_quit', False)):
@@ -2101,7 +2570,7 @@ def run(
                                 line_props: List[str] = []
                                 note_lines: List[str] = []
                                 if lids:
-                                    lid = int(lids[sel_idx])
+                                    lid = int(lids[int(sel_idx)])
                                     approach_t = float(getattr(args, 'approach', 3.0) or 3.0)
                                     past4, inc4 = line_note_counts_kind(note_times_by_line_kind, int(lid), float(t), float(approach_t))
                                     try:
@@ -2126,6 +2595,17 @@ def run(
                                         line_props.append("(line state unavailable)")
                                 else:
                                     line_props.append("no lines")
+                                try:
+                                    if lids:
+                                        lid_ev = int(lids[int(sel_idx)])
+                                        if lines is not None and int(lid_ev) >= 0 and int(lid_ev) < len(lines):
+                                            ui_events_incoming = [
+                                                _line_track_progress_summary(lines[int(lid_ev)], lid=int(lid_ev))
+                                            ]
+                                            ui_events_past = []
+                                except Exception:
+                                    ui_events_incoming = []
+                                    ui_events_past = []
 
                                 try:
                                     margin = 120
@@ -2251,8 +2731,8 @@ def run(
                                             )
                                         ))()
                                     ),
-                                    incoming=list(cui_events_incoming)[:80],
-                                    past=list(cui_events_past)[:200],
+                                    incoming=list(ui_events_incoming)[:80],
+                                    past=list(ui_events_past)[:200],
                                     line_props=line_props[:40],
                                     notes=note_lines[:120],
                                     selected_line=int(sel_idx),
@@ -2263,6 +2743,23 @@ def run(
                         pass
 
                 elif record_use_curses and cui_ok and cui is not None:
+                    try:
+                        lids = sorted(note_times_by_line_kind.keys())
+                        sel_idx = int(cui_scroll)
+                        if sel_idx < 0:
+                            sel_idx = 0
+                        if sel_idx > max(0, len(lids) - 1):
+                            sel_idx = max(0, len(lids) - 1)
+                        if lids:
+                            lid_ev = int(lids[int(sel_idx)])
+                            if lines is not None and int(lid_ev) >= 0 and int(lid_ev) < len(lines):
+                                ui_events_incoming = [
+                                    _line_track_progress_summary(lines[int(lid_ev)], lid=int(lid_ev))
+                                ]
+                                ui_events_past = []
+                    except Exception:
+                        ui_events_incoming = []
+                        ui_events_past = []
                     cui_scroll = render_curses_ui(
                         cui,
                         curses_mod,
@@ -2284,8 +2781,8 @@ def run(
                         note_times_by_line_kind=note_times_by_line_kind,
                         approach=float(getattr(args, "approach", 3.0) or 3.0),
                         args=args,
-                        events_incoming=list(cui_events_incoming),
-                        events_past=list(cui_events_past),
+                        events_incoming=list(ui_events_incoming),
+                        events_past=list(ui_events_past),
                         lines=lines,
                         notes=notes,
                         states=states,
@@ -2332,7 +2829,7 @@ def run(
             except Exception:
                 pass
 
-        if record_headless:
+        if headless_mode:
             continue
 
         _ui_ci = (chart_info_override if chart_info_override is not None else chart_info)
@@ -2436,6 +2933,12 @@ def run(
             audio.close()
     except Exception:
         pass
+
+    if dsl_exporter is not None:
+        try:
+            dsl_exporter.finalize()
+        except Exception:
+            pass
 
     if not bool(reuse_pygame):
         pygame.quit()

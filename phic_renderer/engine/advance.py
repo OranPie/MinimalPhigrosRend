@@ -4,6 +4,7 @@ import os
 import json
 import sys
 import resource
+import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -184,6 +185,7 @@ def _build_advance_cfg_from_dir(dir_path: str) -> Tuple[Dict[str, Any], Optional
 
 
 def load_from_args(args: Any, W: int, H: int) -> AdvanceLoadResult:
+    logger = logging.getLogger(__name__)
     chart_path: Optional[str] = getattr(args, "input", None)
     pack: Optional[ChartPack] = None
 
@@ -214,6 +216,7 @@ def load_from_args(args: Any, W: int, H: int) -> AdvanceLoadResult:
         chart_info = {}"""
 
     if getattr(args, "advance", None): # or auto_advance_cfg is not None:
+        logger.info("[Advance] Load config: %s", str(getattr(args, "advance")))
         """if auto_advance_cfg is not None:
             advance_cfg = auto_advance_cfg
             advance_base_dir = auto_advance_base_dir
@@ -224,6 +227,16 @@ def load_from_args(args: Any, W: int, H: int) -> AdvanceLoadResult:
         advance_active = True
         advance_mix = bool(advance_cfg.get("mix", False))
         advance_mods = advance_cfg.get("mods") if isinstance(advance_cfg, dict) else None
+
+        try:
+            logger.info(
+                "[Advance] mode=%s mix=%s base_dir=%s",
+                str(advance_cfg.get("mode", "sequence")),
+                bool(advance_mix),
+                str(advance_base_dir),
+            )
+        except Exception:
+            pass
 
         def _resolve_asset_path(p: Optional[str], base_dir: str) -> Optional[str]:
             if not p:
@@ -262,7 +275,7 @@ def load_from_args(args: Any, W: int, H: int) -> AdvanceLoadResult:
 
         def _adv_log(msg: str) -> None:
             try:
-                sys.stderr.write(str(msg).rstrip() + "\n")
+                logger.info(str(msg).rstrip())
             except Exception:
                 pass
 
@@ -283,13 +296,31 @@ def load_from_args(args: Any, W: int, H: int) -> AdvanceLoadResult:
             bg_p = None
             info = {}
             if os.path.isdir(inp) or (os.path.isfile(inp) and str(inp).lower().endswith((".zip", ".pez"))):
+                try:
+                    logger.info("[Advance] Load chart pack: %s", str(inp))
+                except Exception:
+                    pass
                 p = load_chart_pack(inp)
                 packs_keepalive.append(p)
                 chart_p = p.chart_path
                 music_p = p.music_path
                 bg_p = p.bg_path
                 info = p.info
+            try:
+                logger.info("[Advance] Parse chart: %s", str(chart_p))
+            except Exception:
+                pass
             fmt_i, off_i, lines_i, notes_i = load_chart(chart_p, W, H)
+            try:
+                logger.info(
+                    "[Advance] Parsed fmt=%s offset=%.4f lines=%d notes=%d",
+                    str(fmt_i),
+                    float(off_i),
+                    int(len(lines_i)),
+                    int(len(notes_i)),
+                )
+            except Exception:
+                pass
             base_dir = os.path.dirname(os.path.abspath(chart_p))
             return fmt_i, off_i, lines_i, notes_i, music_p, bg_p, info, chart_p, base_dir
 
@@ -602,6 +633,10 @@ def load_from_args(args: Any, W: int, H: int) -> AdvanceLoadResult:
         )
 
     if chart_path and (os.path.isdir(chart_path) or (os.path.isfile(chart_path) and str(chart_path).lower().endswith((".zip", ".pez")))):
+        try:
+            logger.info("[Chart] Load chart pack: %s", str(chart_path))
+        except Exception:
+            pass
         pack = load_chart_pack(chart_path)
         chart_path = pack.chart_path
         music_path = pack.music_path
@@ -614,7 +649,21 @@ def load_from_args(args: Any, W: int, H: int) -> AdvanceLoadResult:
 
         packs_keepalive.append(pack)
 
+    try:
+        logger.info("[Chart] Parse chart: %s", str(chart_path))
+    except Exception:
+        pass
     fmt, offset, lines, notes = load_chart(chart_path, W, H)
+    try:
+        logger.info(
+            "[Chart] Parsed fmt=%s offset=%.4f lines=%d notes=%d",
+            str(fmt),
+            float(offset),
+            int(len(lines)),
+            int(len(notes)),
+        )
+    except Exception:
+        pass
 
     return AdvanceLoadResult(
         fmt=fmt,
