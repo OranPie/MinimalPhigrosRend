@@ -219,17 +219,12 @@ struct BpmMap {
         if (segs.empty()) {
             return 0.0;
         }
-        std::size_t lo = 0;
-        std::size_t hi = segs.size();
-        while (lo + 1 < hi) {
-            const std::size_t mid = (lo + hi) / 2;
-            if (segs[mid].beat0 <= beat) {
-                lo = mid;
-            } else {
-                hi = mid;
-            }
+        auto it = std::upper_bound(segs.begin(), segs.end(), beat,
+            [](double b, const BpmSeg& s) { return b < s.beat0; });
+        if (it != segs.begin()) {
+            --it;
         }
-        const auto& s = segs[lo];
+        const auto& s = *it;
         const double bpm = std::max(1e-9, s.bpm);
         const double factor = std::max(1e-9, bpmfactor);
         return (s.sec_prefix + (beat - s.beat0) * 60.0 / bpm) * factor;

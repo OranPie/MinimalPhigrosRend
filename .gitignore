@@ -41,6 +41,9 @@ phic_web/wasm/phic_web.wasm
 # Reference implementation (excluded from git history for this repo)
 phic_renderer/
 
+# CMake build artifacts
+CMakeFiles/
+
 record/
 charts/
 output*

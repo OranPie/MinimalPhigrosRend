@@ -266,17 +266,17 @@ void Engine::build_frame_commands(std::vector<FrameCommand>& out_cmds) const {
         const float x = static_cast<float>(x_expanded);
         const float y = static_cast<float>(y_expanded);
 
-        FrameCommand cmd;
-        cmd.type = FrameCommand::Type::DrawNote;
-        cmd.note_id = note.id;
-        cmd.lane = note.lane;
-        cmd.kind = note.kind;
-        cmd.x = std::clamp(x, 0.0f, 1.0f);
-        cmd.y = std::clamp(y, 0.0f, 1.0f);
-        cmd.alpha = static_cast<float>(std::clamp(note.alpha01, 0.0, 1.0));
-        cmd.t_hit_sec = note.t_hit;
-        cmd.hold_end_sec = note.hold_end;
-        out_cmds.push_back(cmd);
+        out_cmds.emplace_back(FrameCommand{
+            FrameCommand::Type::DrawNote,
+            note.id,
+            note.lane,
+            note.kind,
+            std::clamp(x, 0.0f, 1.0f),
+            std::clamp(y, 0.0f, 1.0f),
+            static_cast<float>(std::clamp(note.alpha01, 0.0, 1.0)),
+            note.t_hit,
+            note.hold_end,
+        });
     }
 }
 
@@ -297,7 +297,7 @@ Engine::StepResult Engine::step(double dt_sec, const std::vector<InputEvent>& in
     result.time_sec = now_sec_;
     result.stats = stats_;
     build_frame_commands(result.frame_commands);
-    result.judge_events = step_judge_events_;
+    result.judge_events = std::move(step_judge_events_);
     return result;
 }
 
