@@ -1,0 +1,5 @@
+/root/OrangePhi/MinimalPhigrosRend/cpp_port/build-web/CMakeFiles/phic_core.dir
+/root/OrangePhi/MinimalPhigrosRend/cpp_port/build-web/CMakeFiles/phic_c_api.dir
+/root/OrangePhi/MinimalPhigrosRend/cpp_port/build-web/CMakeFiles/phic_web.dir
+/root/OrangePhi/MinimalPhigrosRend/cpp_port/build-web/CMakeFiles/edit_cache.dir
+/root/OrangePhi/MinimalPhigrosRend/cpp_port/build-web/CMakeFiles/rebuild_cache.dir

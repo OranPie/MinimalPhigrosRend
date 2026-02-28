@@ -1,0 +1,2 @@
+emar qc libphic_core.a CMakeFiles/phic_core.dir/core/src/parser.cpp.o CMakeFiles/phic_core.dir/core/src/engine.cpp.o CMakeFiles/phic_core.dir/core/src/mods.cpp.o CMakeFiles/phic_core.dir/core/src/video_recorder.cpp.o
+emranlib libphic_core.a
