@@ -1,6 +1,9 @@
+#include "phic/core/audio_mixer.hpp"
 #include "phic/core/engine.hpp"
 #include "phic/core/mod_config_json.hpp"
 #include "phic/core/parser.hpp"
+#include "phic/core/sw_renderer.hpp"
+#include "phic/core/video_recorder.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -85,6 +88,11 @@ struct AppOptions {
     bool debug_particles = false;
     bool hit_debug = false;
     bool judge_events = false;
+
+    // Video export
+    std::string output;   // --output / -o
+    int fps = 60;         // --fps
+    bool no_hud = false;  // --no-hud
 
     double start_time = 0.0;
     bool has_start_time = false;
@@ -578,6 +586,10 @@ void apply_cli_overrides(AppOptions& opts, int argc, char** argv) {
         else if (arg == "--debug_particles") opts.debug_particles = true;
         else if (arg == "--hit_debug") opts.hit_debug = true;
         else if (arg == "--judge_events") opts.judge_events = true;
+
+        else if (arg == "--output" || arg == "-o") next_s(opts.output);
+        else if (arg == "--fps") next_i(opts.fps);
+        else if (arg == "--no-hud" || arg == "--no_hud") opts.no_hud = true;
 
         else if (arg == "--start_time") { next_d(opts.start_time); opts.has_start_time = true; }
         else if (arg == "--end_time") { next_d(opts.end_time); opts.has_end_time = true; }
@@ -1104,6 +1116,26 @@ std::vector<phic::InputEvent> generate_simulate_inputs(
 
 }  // namespace
 
+namespace {
+
+std::string auto_detect_file(const std::string& chart_path, const std::vector<std::string>& exts) {
+    std::error_code ec;
+    fs::path dir = fs::path(chart_path).parent_path();
+    if (!fs::exists(dir, ec)) return {};
+    for (const auto& entry : fs::directory_iterator(dir, ec)) {
+        if (!entry.is_regular_file()) continue;
+        std::string ext = entry.path().extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        for (const auto& e : exts) {
+            if (ext == e) return entry.path().string();
+        }
+    }
+    return {};
+}
+
+}  // namespace
+
 int main(int argc, char** argv) {
     AppOptions opts;
 
@@ -1221,6 +1253,105 @@ int main(int argc, char** argv) {
             run_for_sec = std::max(0.0, end_time - start_for_duration);
         }
 
+        // ============================================================
+        // Video export mode
+        // ============================================================
+        if (!opts.output.empty()) {
+            const double render_fps = std::max(1, opts.fps);
+            const double dt = 1.0 / render_fps;
+
+            phic::SwRenderer::Config rcfg;
+            rcfg.width = opts.w; rcfg.height = opts.h;
+            rcfg.lane_count = opts.mods.lane_count;
+            rcfg.bg_dim = opts.bg_dim;
+            rcfg.approach_sec = opts.approach;
+            rcfg.expand = opts.expand;
+            rcfg.overrender = opts.overrender;
+            rcfg.note_scale_x = opts.note_scale_x;
+            rcfg.note_scale_y = opts.note_scale_y;
+            rcfg.note_flow_speed_mul = opts.note_flow_speed_multiplier;
+            rcfg.multicolor_lines = opts.multicolor_lines;
+            rcfg.show_hud = !opts.no_hud;
+            phic::SwRenderer renderer(rcfg);
+
+            std::string bg_path = opts.bg.empty()
+                ? auto_detect_file(item.input, {".png", ".jpg", ".jpeg"}) : opts.bg;
+            if (!bg_path.empty()) {
+                std::cout << "[render] bg: " << bg_path << "\n";
+                renderer.load_background(bg_path, opts.bg_blur, opts.bg_dim);
+            }
+            if (!opts.respack.empty() && path_exists(opts.respack))
+                renderer.load_respack(opts.respack);
+
+            std::string bgm_path = opts.bgm.empty()
+                ? auto_detect_file(item.input, {".ogg", ".mp3", ".wav"}) : opts.bgm;
+            if (!bgm_path.empty()) std::cout << "[render] bgm: " << bgm_path << "\n";
+
+            // Mix hit sounds
+            std::string mixed_wav;
+            std::string audio_for_rec = bgm_path;
+            if (!bgm_path.empty() && !opts.respack.empty() && path_exists(opts.respack)) {
+                std::cout << "[render] mixing hit sounds...\n";
+                mixed_wav = phic::mix_audio_with_hitsounds(
+                    bgm_path, opts.respack, engine.chart().notes,
+                    opts.bgm_volume, 0.5, opts.hitsound_min_interval_ms);
+                if (!mixed_wav.empty()) { audio_for_rec = mixed_wav; std::cout << "[render] using mixed audio\n"; }
+            }
+
+            { fs::path od = fs::path(opts.output).parent_path();
+              if (!od.empty()) { std::error_code ec; fs::create_directories(od, ec); } }
+
+            phic::VideoRecorder recorder(opts.output, opts.w, opts.h, render_fps, audio_for_rec);
+            if (!recorder.open()) {
+                std::cerr << "error: recorder open failed: " << recorder.last_error() << "\n";
+                ++run_skipped; continue;
+            }
+
+            const int total_frames = static_cast<int>(run_for_sec * render_fps);
+            std::cout << "[render] " << total_frames << " frames @ " << opts.fps << "fps -> " << opts.output << "\n";
+
+            SimulateState sim_state;
+            if (opts.simulateplay)
+                sim_state.lane_cooldown_until.assign(static_cast<std::size_t>(std::max(1, opts.mods.lane_count)), -1e9);
+
+            double sim_now = has_start ? start_for_duration : 0.0;
+            phic::Engine::StepResult last;
+
+            for (int frame = 0; frame < total_frames; ++frame) {
+                const auto events = generate_simulate_inputs(engine, opts, sim_state, sim_now, dt);
+                last = engine.step(dt, events);
+                renderer.push_judge_events(last.judge_events, last.frame_commands);
+
+                const auto& buf = renderer.render_frame(
+                    last.frame_commands, last.line_states, last.stats,
+                    last.time_sec, chart_end, parsed.chart.title);
+
+                if (!recorder.write_frame_rgb24(buf.data(), buf.size())) {
+                    std::cerr << "error: write_frame failed: " << recorder.last_error() << "\n"; break;
+                }
+                sim_now += dt * std::max(1e-6, cfg.note_speed);
+                if (frame > 0 && frame % opts.fps == 0)
+                    std::cout << "[render] " << frame << "/" << total_frames
+                              << " (" << 100 * frame / total_frames << "%)\n";
+            }
+            recorder.close();
+            if (!mixed_wav.empty()) { std::error_code ec; fs::remove(mixed_wav, ec); }
+
+            std::cout << "[render] exported to " << opts.output << "\n";
+            std::cout << "  combo: " << last.stats.combo << " (" << last.stats.max_combo << ")\n";
+            std::cout << "  acc:   " << std::fixed << std::setprecision(6) << last.stats.accuracy() << std::defaultfloat << "\n";
+            total_stats.combo = last.stats.combo;
+            total_stats.max_combo = std::max(total_stats.max_combo, last.stats.max_combo);
+            total_stats.judged_cnt += last.stats.judged_cnt;
+            total_stats.hit_total += last.stats.hit_total;
+            total_stats.acc_sum += last.stats.acc_sum;
+            ++run_ok;
+            continue;
+        }
+
+        // ============================================================
+        // Stats-only mode
+        // ============================================================
         constexpr double kDt = 1.0 / 120.0;
         const int ticks = static_cast<int>(std::max(0.0, run_for_sec) / kDt);
         phic::Engine::StepResult last;

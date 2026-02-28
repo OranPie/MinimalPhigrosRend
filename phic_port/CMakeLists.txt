@@ -15,11 +15,14 @@ add_library(phic_core
     core/src/mods.cpp
     core/src/mod_config_json.cpp
     core/src/video_recorder.cpp
+    core/src/sw_renderer.cpp
+    core/src/audio_mixer.cpp
 )
 
 target_include_directories(phic_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/core/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb
 )
 
 find_package(nlohmann_json CONFIG QUIET)

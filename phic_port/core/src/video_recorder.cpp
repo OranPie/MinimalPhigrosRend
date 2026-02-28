@@ -28,8 +28,9 @@ bool VideoRecorder::open() {
     if (!audio_path_.empty()) {
         cmd << " -i \"" << audio_path_ << "\" -c:a aac -b:a 192k";
     }
-    cmd << " -c:v libx264 -preset medium -crf 23 -pix_fmt yuv420p"
-        << " \"" << output_path_ << "\"";
+    cmd << " -c:v libx264 -preset medium -crf 23 -pix_fmt yuv420p";
+    if (!audio_path_.empty()) cmd << " -shortest";
+    cmd << " \"" << output_path_ << "\"";
 
     pipe_ = static_cast<void*>(popen(cmd.str().c_str(), "w"));
     if (pipe_ == nullptr) {

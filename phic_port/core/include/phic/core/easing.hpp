@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 
 // RPE easing functions (types 0–29) + cubic-bezier solver.
