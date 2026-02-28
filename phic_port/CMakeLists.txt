@@ -58,6 +58,10 @@ if(PHIC_BUILD_TESTS)
     add_executable(phic_oracle_dump tests/oracle_dump.cpp)
     target_link_libraries(phic_oracle_dump PRIVATE phic_core)
 
+    add_executable(phic_bench_perf tests/bench_perf.cpp)
+    target_link_libraries(phic_bench_perf PRIVATE phic_core)
+    add_test(NAME phic_bench_perf COMMAND phic_bench_perf)
+
     find_package(Python3 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../phic_renderer")
         add_test(
