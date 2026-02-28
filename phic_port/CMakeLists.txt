@@ -20,8 +20,14 @@ add_library(phic_core
 target_include_directories(phic_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/core/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party
 )
+
+find_package(nlohmann_json CONFIG QUIET)
+if(nlohmann_json_FOUND)
+    target_link_libraries(phic_core PUBLIC nlohmann_json::nlohmann_json)
+else()
+    target_include_directories(phic_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
+endif()
 
 add_library(phic_c_api
     core_c_api/src/phic_c_api.cpp

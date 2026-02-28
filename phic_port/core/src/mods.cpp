@@ -353,14 +353,17 @@ void apply_thin_out(std::vector<RuntimeNote>& notes, int every) {
     if (every <= 1) {
         return;
     }
-    std::vector<RuntimeNote> filtered;
-    filtered.reserve(notes.size());
+    const std::size_t stride = static_cast<std::size_t>(every);
+    std::size_t write = 0;
     for (std::size_t i = 0; i < notes.size(); ++i) {
-        if ((i % static_cast<std::size_t>(every)) == 0U) {
-            filtered.push_back(notes[i]);
+        if ((i % stride) == 0U) {
+            if (write != i) {
+                notes[write] = std::move(notes[i]);
+            }
+            ++write;
         }
     }
-    notes.swap(filtered);
+    notes.resize(write);
 }
 
 void apply_stutter(std::vector<RuntimeNote>& notes, int repeat, double interval, double alpha_decay) {
@@ -398,10 +401,8 @@ void apply_compress_zip(std::vector<RuntimeNote>& notes, int count) {
     std::vector<RuntimeNote> out;
     out.reserve(notes.size() * static_cast<std::size_t>(safe_count));
     for (const auto& n : notes) {
-        out.push_back(n);
-        for (int i = 1; i < safe_count; ++i) {
-            RuntimeNote dup = n;
-            out.push_back(dup);
+        for (int i = 0; i < safe_count; ++i) {
+            out.push_back(n);
         }
     }
     notes.swap(out);
