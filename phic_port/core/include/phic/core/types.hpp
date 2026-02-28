@@ -1,5 +1,9 @@
 #pragma once
 
+#include "phic/core/easing.hpp"
+
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -27,8 +31,146 @@ enum class JudgeSource : uint8_t {
     TimeoutMiss = 3,
 };
 
+// ================================================================
+// Animation track types — judge line events
+//
+// Internal coordinate convention (matches Python eval output):
+//   pos_x: raw RPE-X units;  screen_x_norm = (val + 675) / 1350
+//   pos_y: raw RPE-Y units;  screen_y_norm = (450 - val) / 900
+//           (RPE +Y is up; screen +Y is down; defaults both 0 → 0.5)
+//   rot_rad: radians (negative = CW when viewed from front, same sign as Python)
+//   alpha_raw: 0..1 (official) or 0..255 (RPE/PEC); normalised at eval
+//   scroll_px: integral of speed; unit = px at reference H=900
+// ================================================================
+
+// One piecewise eased segment.  easing_type -1 means cubic-bezier.
+struct EasedSeg {
+    double t0 = 0.0, t1 = 0.0;
+    double v0 = 0.0, v1 = 0.0;
+    double L  = 0.0, R  = 1.0;   // easing window clamp (RPE easingLeft/Right)
+    int    easing_type = 0;       // 0/1=linear, 2-29=RPE, -1=bezier
+    double bx1 = 0.0, by1 = 0.0, bx2 = 1.0, by2 = 1.0; // bezier pts (easing_type==-1)
+};
+
+// Single-layer piecewise eased track. Sequential-access cursor gives O(1) amortised eval.
+struct EasedTrack {
+    std::vector<EasedSeg> segs;
+    double default_val = 0.0;
+    mutable std::size_t cursor_ = 0;
+
+    void reset_cursor() const noexcept { cursor_ = 0; }
+
+    double eval(double t) const noexcept {
+        if (segs.empty()) return default_val;
+        // slide cursor forward / backward
+        while (cursor_ + 1 < segs.size() && t >= segs[cursor_].t1) ++cursor_;
+        while (cursor_ > 0 && t < segs[cursor_].t0)                --cursor_;
+        const EasedSeg& s = segs[cursor_];
+        if (t <= s.t0) return s.v0;
+        if (t >= s.t1) return s.v1;
+        const double p_raw = (t - s.t0) / (s.t1 - s.t0);
+        double p;
+        if      (p_raw <= s.L) p = 0.0;
+        else if (p_raw >= s.R) p = 1.0;
+        else p = std::clamp((p_raw - s.L) / std::max(1e-9, s.R - s.L), 0.0, 1.0);
+        const double e = (s.easing_type == -1)
+            ? cubic_bezier_y_for_x(s.bx1, s.by1, s.bx2, s.by2, p)
+            : rpe_ease(s.easing_type, p);
+        return s.v0 + e * (s.v1 - s.v0);
+    }
+};
+
+// Multi-layer sum-of-EasedTracks (RPE eventLayers).
+// Father/child composition appends parent layers here at load time.
+struct SumTrack {
+    std::vector<EasedTrack> layers;
+    double default_val = 0.0;
+
+    void reset_cursors() const noexcept { for (const auto& l : layers) l.reset_cursor(); }
+
+    double eval(double t) const noexcept {
+        if (layers.empty()) return default_val;
+        double s = 0.0;
+        for (const auto& l : layers) s += l.eval(t);
+        return s;
+    }
+};
+
+// One constant-or-linear speed segment for scroll integration.
+struct Seg1D {
+    double t0 = 0.0, t1 = 0.0;
+    double v0 = 0.0, v1 = 0.0;
+    double prefix = 0.0;  // ∫₀^t0 v(u) du
+};
+
+// Integral of a piecewise-linear speed function (scroll position track).
+struct IntegralTrack {
+    std::vector<Seg1D> segs;
+    mutable std::size_t cursor_ = 0;
+
+    void reset_cursor() const noexcept { cursor_ = 0; }
+
+    double integral(double t) const noexcept {
+        if (segs.empty()) return 0.0;
+        while (cursor_ + 1 < segs.size() && t >= segs[cursor_].t1) ++cursor_;
+        while (cursor_ > 0 && t < segs[cursor_].t0)                --cursor_;
+        const Seg1D& s = segs[cursor_];
+        if (t <= s.t0) return s.prefix;
+        if (t >= s.t1) return s.prefix + 0.5 * (s.v0 + s.v1) * (s.t1 - s.t0);
+        const double dt   = t - s.t0;
+        const double full = std::max(1e-9, s.t1 - s.t0);
+        const double vt   = s.v0 + (dt / full) * (s.v1 - s.v0);
+        return s.prefix + 0.5 * (s.v0 + vt) * dt;
+    }
+};
+
+// All animated properties of one judge line.
+struct LineAnim {
+    SumTrack     pos_x;       // RPE-X units; default_val=0 → screen centre (0.5)
+    SumTrack     pos_y;       // RPE-Y units; default_val=0 → screen centre (0.5)
+    SumTrack     rot_rad;     // radians; default_val=0
+    SumTrack     alpha_raw;   // 0..1 (official) or 0..255 (RPE/PEC); default_val set at parse
+    IntegralTrack scroll_px;  // pre-summed speed integral (px units at H=900 reference)
+
+    int total_event_segs = 0; // sum of all segment counts (for bench reporting)
+
+    // Normalised screen x ∈ [0,1] — matches Python's pos_x(t)/W
+    double eval_norm_x(double t) const noexcept { return (pos_x.eval(t) + 675.0) / 1350.0; }
+    // Normalised screen y ∈ [0,1] — matches Python's pos_y(t)/H
+    double eval_norm_y(double t) const noexcept { return (450.0 - pos_y.eval(t)) / 900.0; }
+    // Rotation in radians — matches Python's rot(t)
+    double eval_rot(double t)   const noexcept { return rot_rad.eval(t); }
+    // Alpha ∈ [0,1] — matches Python's alpha01(t) logic
+    double eval_alpha(double t) const noexcept {
+        const double v = alpha_raw.eval(t);
+        if (v <= 1.000001) return std::clamp(v, 0.0, 1.0);
+        return std::clamp(v / 255.0, 0.0, 1.0);
+    }
+
+    void reset_cursors() const noexcept {
+        pos_x.reset_cursors();
+        pos_y.reset_cursors();
+        rot_rad.reset_cursors();
+        alpha_raw.reset_cursors();
+        scroll_px.reset_cursor();
+    }
+};
+
+// Per-frame evaluated state of one judge line (output in StepResult).
+struct LineState {
+    float x     = 0.5f;  // normalised screen x [0..1]
+    float y     = 0.5f;  // normalised screen y [0..1]
+    float rot   = 0.0f;  // radians
+    float alpha = 1.0f;  // [0..1]
+};
+
+// ================================================================
+
 struct RuntimeLine {
     int id = 0;
+    int father = -1;           // RPE parent line id (-1 = none)
+    bool rotate_with_father = true;
+    LineAnim anim;
 };
 
 struct RuntimeNote {
@@ -43,6 +185,8 @@ struct RuntimeNote {
     double alpha01 = 1.0;
     NoteKind kind = NoteKind::Tap;
 };
+
+// ================================================================
 
 struct ChartData {
     std::string title;

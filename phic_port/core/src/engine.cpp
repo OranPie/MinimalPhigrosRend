@@ -4,8 +4,39 @@
 #include <algorithm>
 #include <cstddef>
 #include <cmath>
+#include <functional>
 
 namespace phic {
+
+namespace {
+
+// Compose father/child line position and rotation in-place.
+// Child pos = child_own + parent_pos.  Child rot = child_own + parent_rot (if rotate_with_father).
+// Done at load time by appending parent's SumTrack layers into child's SumTrack.
+void compose_line_parents(std::vector<RuntimeLine>& lines) {
+    const int n = static_cast<int>(lines.size());
+    std::vector<int> state(n, 0);  // 0=unvisited, 1=visiting, 2=done
+    std::function<void(int)> compose = [&](int idx) {
+        if (idx < 0 || idx >= n || state[idx] == 2) return;
+        if (state[idx] == 1) return;  // cycle — skip
+        state[idx] = 1;
+        const int f = lines[idx].father;
+        if (f >= 0 && f < n && f != idx) {
+            compose(f);
+            LineAnim& child  = lines[idx].anim;
+            const LineAnim& parent = lines[f].anim;
+            // Append parent's layers into child (additive composition)
+            for (const auto& l : parent.pos_x.layers)   child.pos_x.layers.push_back(l);
+            for (const auto& l : parent.pos_y.layers)   child.pos_y.layers.push_back(l);
+            if (lines[idx].rotate_with_father)
+                for (const auto& l : parent.rot_rad.layers) child.rot_rad.layers.push_back(l);
+        }
+        state[idx] = 2;
+    };
+    for (int i = 0; i < n; ++i) compose(i);
+}
+
+}  // namespace
 
 Engine::Engine(RenderConfig cfg) : cfg_(cfg) {}
 
@@ -15,6 +46,7 @@ const RenderConfig& Engine::config() const { return cfg_; }
 
 void Engine::load_chart(ChartData chart) {
     apply_mods(chart, cfg_.mods);
+    compose_line_parents(chart.lines);
     chart_ = std::move(chart);
     reset();
 }
@@ -58,6 +90,8 @@ void Engine::seek(double time_sec) {
         st.hit = false;
         st.miss = false;
     }
+    // Reset animation cursors after a backward seek
+    for (auto& line : chart_.lines) line.anim.reset_cursors();
     stats_ = {};
     unresolved_cursor_ = 0;
     step_judge_events_.clear();
@@ -298,6 +332,19 @@ Engine::StepResult Engine::step(double dt_sec, const std::vector<InputEvent>& in
     result.stats = stats_;
     build_frame_commands(result.frame_commands);
     result.judge_events = std::move(step_judge_events_);
+
+    // Evaluate line animation state for every judge line
+    result.line_states.resize(chart_.lines.size());
+    for (std::size_t i = 0; i < chart_.lines.size(); ++i) {
+        const LineAnim& a = chart_.lines[i].anim;
+        result.line_states[i] = LineState{
+            static_cast<float>(a.eval_norm_x(now_sec_)),
+            static_cast<float>(a.eval_norm_y(now_sec_)),
+            static_cast<float>(a.eval_rot(now_sec_)),
+            static_cast<float>(a.eval_alpha(now_sec_)),
+        };
+    }
+
     return result;
 }
 

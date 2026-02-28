@@ -240,9 +240,7 @@ struct ApplyModsResult {
     BenchStats  timing;
 };
 
-// ---------------------------------------------------------------------------
-// Runners – Section A: step() throughput
-// ---------------------------------------------------------------------------
+
 
 static inline double time_step_ns(phic::Engine& e, double dt,
                                    const std::vector<phic::InputEvent>& ev) {
@@ -528,6 +526,114 @@ static ApplyModsResult run_bench_apply_mods(const char* name,
     }
     return ApplyModsResult{name, line_count * notes_per_line,
                            note_count_out, compute_stats(s)};
+}
+
+// ---------------------------------------------------------------------------
+// Chart builder helpers with synthetic line events (Section F)
+// ---------------------------------------------------------------------------
+
+// Build a single EasedTrack with `seg_count` evenly spaced segments over `duration` seconds.
+static phic::EasedTrack make_eased_track(int seg_count, double duration,
+                                          double v_lo, double v_hi,
+                                          int easing_type = 2) {
+    phic::EasedTrack trk;
+    trk.default_val = v_lo;
+    const double dt = duration / std::max(1, seg_count);
+    for (int i = 0; i < seg_count; ++i) {
+        phic::EasedSeg s;
+        s.t0 = i * dt;  s.t1 = (i + 1) * dt;
+        s.v0 = (i % 2 == 0) ? v_lo : v_hi;
+        s.v1 = (i % 2 == 0) ? v_hi : v_lo;
+        s.L = 0.0; s.R = 1.0;
+        s.easing_type = easing_type;
+        trk.segs.push_back(s);
+    }
+    return trk;
+}
+
+// Build a single IntegralTrack with `seg_count` speed segments.
+static phic::IntegralTrack make_integral_track(int seg_count, double duration) {
+    phic::IntegralTrack trk;
+    if (seg_count <= 0) return trk;
+    const double dt = duration / seg_count;
+    double prefix = 0.0;
+    for (int i = 0; i < seg_count; ++i) {
+        phic::Seg1D s;
+        s.t0 = i * dt; s.t1 = (i + 1) * dt;
+        s.v0 = 1.0 + 0.5 * (i % 3);
+        s.v1 = s.v0;
+        s.prefix = prefix;
+        prefix += s.v0 * dt;
+        trk.segs.push_back(s);
+    }
+    return trk;
+}
+
+// Build a SumTrack with `layer_count` EasedTrack layers, each with `segs_per_layer` segments.
+static phic::SumTrack make_sum_track_anim(int layer_count, int segs_per_layer,
+                                           double duration, double v_lo, double v_hi,
+                                           double default_val = 0.0) {
+    phic::SumTrack st;
+    st.default_val = default_val;
+    for (int l = 0; l < layer_count; ++l) {
+        st.layers.push_back(
+            make_eased_track(segs_per_layer, duration, v_lo, v_hi, 2 + l % 28));
+    }
+    return st;
+}
+
+// Build a chart where each line has synthetic animation tracks.
+static phic::ChartData make_chart_with_anims(int line_count, int notes_per_line,
+                                              int segs_per_channel, int speed_segs,
+                                              int layers = 1,
+                                              double note_interval_sec = 0.05) {
+    phic::ChartData chart = make_chart(line_count, notes_per_line, note_interval_sec);
+    const double duration = notes_per_line * note_interval_sec + 2.0;
+    for (auto& ln : chart.lines) {
+        ln.anim.pos_x      = make_sum_track_anim(layers, segs_per_channel, duration, -200.0, 200.0);
+        ln.anim.pos_y      = make_sum_track_anim(layers, segs_per_channel, duration, -100.0, 100.0);
+        ln.anim.rot_rad    = make_sum_track_anim(layers, segs_per_channel, duration, -0.5, 0.5);
+        ln.anim.alpha_raw  = make_sum_track_anim(layers, segs_per_channel, duration, 100.0, 255.0, 255.0);
+        ln.anim.scroll_px  = make_integral_track(speed_segs, duration);
+        ln.anim.total_event_segs = layers * segs_per_channel * 4 + speed_segs;
+    }
+    return chart;
+}
+
+struct LineAnimResult {
+    const char* name;
+    int  line_count;
+    int  segs_per_channel;
+    int  layers;
+    int  total_event_segs;
+    BenchStats step_timing;
+    double ns_per_line_step;
+};
+
+static LineAnimResult run_line_anim_bench(const char* name,
+                                           int line_count, int notes_per_line,
+                                           int segs_per_channel, int speed_segs,
+                                           int layers = 1,
+                                           int step_count = 2000) {
+    phic::RenderConfig cfg; cfg.autoplay = true;
+    phic::Engine engine(cfg);
+    engine.load_chart(
+        make_chart_with_anims(line_count, notes_per_line, segs_per_channel, speed_segs, layers));
+    for (int i = 0; i < 20; ++i) engine.step(1.0 / 60.0, {});
+    engine.reset();
+    std::vector<double> samples(step_count);
+    for (int i = 0; i < step_count; ++i)
+        samples[i] = time_step_ns(engine, 1.0 / 60.0, {});
+    BenchStats st = compute_stats(samples);
+    LineAnimResult r;
+    r.name              = name;
+    r.line_count        = line_count;
+    r.segs_per_channel  = segs_per_channel;
+    r.layers            = layers;
+    r.total_event_segs  = layers * segs_per_channel * 4 + speed_segs;
+    r.step_timing       = st;
+    r.ns_per_line_step  = (line_count > 0) ? st.mean_ns / line_count : 0.0;
+    return r;
 }
 
 // ---------------------------------------------------------------------------
@@ -1072,6 +1178,85 @@ int main() {
         std::printf("| %-22s | %8d | %8d | %12.1f | %12.1f | %12.1f | %12.1f | %12.1f |\n",
                     r.name, r.note_count_in, r.note_count_out,
                     t.mean_ns, t.median_ns, t.p95_ns, t.p99_ns, t.stddev_ns);
+    }
+    std::printf("\n");
+
+    md_hr();
+    std::printf("*Report generated by `phic_bench_perf`. "
+                "All timings wall-clock on a single thread.*\n");
+
+    // =========================================================================
+    // SECTION F — Line Event Evaluation Cost
+    // =========================================================================
+    md_hr();
+    md_h2("Section F \xe2\x80\x94 Line Event Evaluation Cost");
+    md_note("Measures `step()` cost with synthetic line animation tracks. "
+            "Each line has pos\\_x, pos\\_y, rot, alpha (EasedTrack layers) + scroll IntegralTrack. "
+            "`segs/ch` = segments per channel; `layers` = RPE-style event-layer count. "
+            "`ns/line` = mean step time ÷ line count (amortised per-line eval cost).");
+
+    std::vector<LineAnimResult> sec_f;
+
+    // ── Baseline: no line events (0 segs) ──────────────────────────────────
+    sec_f.push_back(run_line_anim_bench("no_events_20l",     20,   500,   0,  0,  1, 3000));
+    sec_f.push_back(run_line_anim_bench("no_events_200l",   200,    50,   0,  0,  1, 3000));
+
+    // ── Sparse events: 10 segs/channel, 1 layer ─────────────────────────────
+    sec_f.push_back(run_line_anim_bench("sparse_1l_10s",      1,  5000,  10, 10,  1, 3000));
+    sec_f.push_back(run_line_anim_bench("sparse_20l_10s",    20,   500,  10, 10,  1, 3000));
+    sec_f.push_back(run_line_anim_bench("sparse_200l_10s",  200,    50,  10, 10,  1, 2000));
+
+    // ── Medium events: 100 segs/channel, 1 layer ────────────────────────────
+    sec_f.push_back(run_line_anim_bench("medium_1l_100s",     1,  5000, 100, 50,  1, 3000));
+    sec_f.push_back(run_line_anim_bench("medium_20l_100s",   20,   500, 100, 50,  1, 3000));
+    sec_f.push_back(run_line_anim_bench("medium_200l_100s", 200,    50, 100, 50,  1, 2000));
+
+    // ── Dense events: 1000 segs/channel, 1 layer ────────────────────────────
+    sec_f.push_back(run_line_anim_bench("dense_1l_1000s",     1,  5000,1000,100,  1, 2000));
+    sec_f.push_back(run_line_anim_bench("dense_20l_1000s",   20,   500,1000,100,  1, 2000));
+    sec_f.push_back(run_line_anim_bench("dense_200l_1000s", 200,    50,1000,100,  1, 1000));
+
+    // ── RPE multi-layer: 3 layers × 100 segs/channel ────────────────────────
+    sec_f.push_back(run_line_anim_bench("rpe_3lay_20l_100s",  20,  500, 100, 50,  3, 3000));
+    sec_f.push_back(run_line_anim_bench("rpe_3lay_200l_100s",200,   50, 100, 50,  3, 2000));
+
+    // ── Extreme: 5 layers × 1000 segs/channel × 200 lines ───────────────────
+    sec_f.push_back(run_line_anim_bench("extreme_200l_1000s",200,   50,1000,200,  5,  500));
+
+    // ── Seek pattern (tests cursor reset overhead) ────────────────────────────
+    {   // seek version: reset cursors every step
+        const char* name = "seek_20l_1000s";
+        phic::RenderConfig cfg; cfg.autoplay = true;
+        phic::Engine engine(cfg);
+        engine.load_chart(make_chart_with_anims(20, 500, 1000, 100, 1));
+        const int kSteps = 2000;
+        std::vector<double> samps(kSteps);
+        for (int i = 0; i < kSteps; ++i) {
+            engine.seek(0.0);
+            samps[i] = time_step_ns(engine, 1.0 / 60.0, {});
+        }
+        BenchStats st = compute_stats(samps);
+        LineAnimResult r;
+        r.name             = name;
+        r.line_count       = 20;
+        r.segs_per_channel = 1000;
+        r.layers           = 1;
+        r.total_event_segs = 1 * 1000 * 4 + 100;
+        r.step_timing      = st;
+        r.ns_per_line_step = st.mean_ns / 20;
+        sec_f.push_back(r);
+    }
+
+    std::printf("| %-24s | %5s | %7s | %6s | %12s | %12s | %12s | %12s | %10s |\n",
+                "Scenario","lines","segs/ch","layers","mean_ns","p50_ns","p95_ns","p99_ns","ns/line");
+    std::printf("|%s|%s|%s|%s|%s|%s|%s|%s|%s|\n",
+                ":-----------------------","----:","------:","-----:",
+                "-----------:","-----------:","-----------:","-----------:","---------:");
+    for (const auto& r : sec_f) {
+        const auto& t = r.step_timing;
+        std::printf("| %-24s | %5d | %7d | %6d | %12.1f | %12.1f | %12.1f | %12.1f | %10.1f |\n",
+                    r.name, r.line_count, r.segs_per_channel, r.layers,
+                    t.mean_ns, t.median_ns, t.p95_ns, t.p99_ns, r.ns_per_line_step);
     }
     std::printf("\n");
 

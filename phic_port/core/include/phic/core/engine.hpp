@@ -23,7 +23,8 @@ public:
 
     struct StepResult {
         std::vector<FrameCommand> frame_commands;
-        std::vector<JudgeEvent> judge_events;
+        std::vector<JudgeEvent>   judge_events;
+        std::vector<LineState>    line_states;  // one per line, indexed by line.id
         EngineStats stats;
         double time_sec = 0.0;
     };
