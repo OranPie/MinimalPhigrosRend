@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  cpp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -S phic_port -B phic_port/build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build phic_port/build -j
+
+      - name: Test
+        run: ctest --test-dir phic_port/build --output-on-failure
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: phic_web/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+        working-directory: phic_web
+
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: phic_web
+
+      - name: Build
+        run: npm run build
+        working-directory: phic_web
