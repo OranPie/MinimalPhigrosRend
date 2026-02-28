@@ -1,0 +1,6 @@
+from __future__ import annotations
+
+from .qt_launcher import run_gui
+
+if __name__ == "__main__":
+    run_gui()

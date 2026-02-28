@@ -33,14 +33,6 @@ coverage.xml
 # Logs
 *.log
 
-# JS
-node_modules/
-phic_web/wasm/phic_web.js
-phic_web/wasm/phic_web.wasm
-
-# Reference implementation (excluded from git history for this repo)
-phic_renderer/
-
 record/
 charts/
 output*
