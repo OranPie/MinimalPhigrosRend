@@ -24,6 +24,9 @@ jobs:
       - name: Test
         run: ctest --test-dir phic_port/build --output-on-failure
 
+      - name: Benchmark
+        run: phic_port/build/phic_bench_perf
+
   web:
     runs-on: ubuntu-latest
     steps:
