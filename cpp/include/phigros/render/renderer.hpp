@@ -33,10 +33,12 @@ struct NoteSnapshot {
     double wx, wy;        // world position (head)
     double wx_tail, wy_tail; // world position (tail, for holds)
     double alpha;
+    double line_rot;      // line rotation for note alignment
     math::RGB color;
     bool is_hold;
     bool judged;
     bool miss;
+    bool mh;              // multi-hit flag
 };
 
 struct FrameSnapshot {
@@ -112,8 +114,8 @@ inline FrameSnapshot build_frame(
         auto color = note_type_color(note.kind);
         frame.notes.push_back({
             note.nid, note.kind, head.x, head.y,
-            wx_tail, wy_tail, note.alpha01, color,
-            note.kind == 3, ns.judged, ns.miss
+            wx_tail, wy_tail, note.alpha01, ls.rot, color,
+            note.kind == 3, ns.judged, ns.miss, note.mh
         });
     }
 
