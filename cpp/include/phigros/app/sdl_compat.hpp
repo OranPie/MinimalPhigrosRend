@@ -113,7 +113,11 @@ inline bool handle_event_window_resized(const SDL_Event& e, int& w, int& h) {
 } // namespace phigros::app::sdl
 
 #elif defined(PHIGROS_SDL2)
+#if defined(__EMSCRIPTEN__)
+#include <SDL.h>
+#else
 #include <SDL2/SDL.h>
+#endif
 
 #define PHIGROS_SDL_EVENT_QUIT       SDL_QUIT
 #define PHIGROS_SDL_EVENT_KEY_DOWN   SDL_KEYDOWN

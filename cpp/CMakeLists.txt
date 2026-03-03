@@ -17,6 +17,7 @@ FetchContent_MakeAvailable(json)
 
 # --- SDL3 via FetchContent ---
 option(USE_SDL3 "Build with SDL3 instead of SDL2" ON)
+option(USE_BGFX "Build with bgfx GPU renderer" ON)
 
 if(USE_SDL3 AND NOT EMSCRIPTEN)
     set(SDL_SHARED OFF CACHE BOOL "" FORCE)
@@ -33,11 +34,33 @@ if(USE_SDL3 AND NOT EMSCRIPTEN)
     FetchContent_MakeAvailable(SDL3)
     set(SDL_TARGET SDL3::SDL3-static)
     set(SDL_VERSION 3)
+elseif(EMSCRIPTEN)
+    # Emscripten has built-in SDL2 port
+    set(SDL_VERSION 2)
+    set(EMSCRIPTEN_SDL_FLAGS "-s USE_SDL=2")
 else()
     # Fallback to system SDL2
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(SDL2 REQUIRED sdl2)
     set(SDL_VERSION 2)
+endif()
+
+# --- bgfx via FetchContent ---
+if(USE_BGFX AND NOT EMSCRIPTEN)
+    set(BGFX_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+    set(BGFX_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(BGFX_INSTALL OFF CACHE BOOL "" FORCE)
+    set(BGFX_CUSTOM_TARGETS OFF CACHE BOOL "" FORCE)
+    set(BX_AMALGAMATED OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        bgfx
+        GIT_REPOSITORY https://github.com/bkaradzic/bgfx.cmake.git
+        GIT_TAG        v1.140.9174-515
+        GIT_SHALLOW    TRUE
+        GIT_PROGRESS   TRUE
+    )
+    FetchContent_MakeAvailable(bgfx)
+    set(HAS_BGFX TRUE)
 endif()
 
 # --- Vendor include directories ---
@@ -86,7 +109,9 @@ target_include_directories(vendor_miniz PUBLIC "${VENDOR_DIR}/miniz")
 
 add_library(vendor_miniaudio STATIC src/vendor/audio_impl.cpp)
 target_include_directories(vendor_miniaudio PUBLIC "${VENDOR_DIR}/miniaudio")
-target_link_libraries(vendor_miniaudio PUBLIC dl pthread m)
+if(NOT EMSCRIPTEN)
+    target_link_libraries(vendor_miniaudio PUBLIC dl pthread m)
+endif()
 
 # --- Render executable ---
 add_executable(phigros_render src/app/main.cpp)
@@ -102,6 +127,18 @@ if(SDL_VERSION EQUAL 3)
         ${SDL_TARGET}
     )
     target_compile_definitions(phigros_render PRIVATE PHIGROS_SDL3=1)
+elseif(EMSCRIPTEN)
+    target_link_libraries(phigros_render PRIVATE
+        phigros_core_lib vendor_stb vendor_miniz vendor_miniaudio
+    )
+    target_compile_options(phigros_render PRIVATE "SHELL:-s USE_SDL=2")
+    target_compile_definitions(phigros_render PRIVATE PHIGROS_SDL2=1 PHIGROS_WASM=1)
+    set_target_properties(phigros_render PROPERTIES SUFFIX ".js")
+    target_link_options(phigros_render PRIVATE
+        "SHELL:-s USE_SDL=2"
+        "SHELL:-s USE_WEBGL2=1"
+        "SHELL:-s ALLOW_MEMORY_GROWTH=1"
+    )
 else()
     target_include_directories(phigros_render PRIVATE ${SDL2_INCLUDE_DIRS})
     target_link_libraries(phigros_render PRIVATE
@@ -110,4 +147,9 @@ else()
     )
     target_compile_options(phigros_render PRIVATE ${SDL2_CFLAGS_OTHER})
     target_compile_definitions(phigros_render PRIVATE PHIGROS_SDL2=1)
+endif()
+
+if(HAS_BGFX)
+    target_link_libraries(phigros_render PRIVATE bgfx bx bimg)
+    target_compile_definitions(phigros_render PRIVATE PHIGROS_HAS_BGFX=1)
 endif()

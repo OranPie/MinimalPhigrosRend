@@ -461,9 +461,10 @@ ChartData load_rpe(const json& data, int W, int H, int rpe_easing_shift) {
         if (f < 0 || f >= line_count) {
             cache[lid] = {bx, by, br};
         } else {
-            auto [px, py, pr] = build_comp(f);
-            auto cx = [bx, px](double t) { return bx(t) + px(t); };
-            auto cy = [by, py](double t) { return by(t) + py(t); };
+            Composed parent = build_comp(f);
+            TrackFn px = parent.x, py = parent.y, pr = parent.r;
+            TrackFn cx = [bx, px](double t) { return bx(t) + px(t); };
+            TrackFn cy = [by, py](double t) { return by(t) + py(t); };
             TrackFn cr;
             if (rot_with_fathers[lid])
                 cr = [br, pr](double t) { return br(t) + pr(t); };

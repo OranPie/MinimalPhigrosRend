@@ -108,6 +108,7 @@ struct AppArgs {
     double duration = 0.0;
     bool headless = false;
     bool score_only = false;
+    std::string backend = "sdl"; // "sdl" or "bgfx"
     // Recording options
     std::string record_output;             // --record output.mp4
     std::string record_preset = "balanced";
@@ -131,6 +132,7 @@ static AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--duration" && i + 1 < argc) args.duration = std::atof(argv[++i]);
         else if (a == "--headless") args.headless = true;
         else if (a == "--score-only") { args.score_only = true; args.headless = true; }
+        else if (a == "--backend" && i + 1 < argc) args.backend = argv[++i];
         else if (a == "--record" && i + 1 < argc) {
             args.record_output = argv[++i];
             args.headless = true; // recording is always headless
