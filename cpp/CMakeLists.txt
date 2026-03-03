@@ -38,3 +38,8 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_chart.cpp")
     add_executable(verify_chart tests/verify_chart.cpp)
     target_link_libraries(verify_chart PRIVATE phigros_core_lib)
 endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_engine.cpp")
+    add_executable(test_engine tests/test_engine.cpp)
+    target_link_libraries(test_engine PRIVATE phigros_core_lib)
+endif()

@@ -92,6 +92,40 @@ public:
         acc_sum += judge_weight("MISS");
         ++judged_cnt;
     }
+
+    // Start a hold (deferred judgment — scoring at finalize_hold)
+    std::optional<std::string> start_hold(NoteState& ns, double t) {
+        double dt = std::abs(t - ns.note->t_hit);
+        std::string grade;
+        if (dt <= PERFECT) grade = "PERFECT";
+        else if (dt <= GOOD) grade = "GOOD";
+        else if (dt <= BAD) grade = "BAD";
+        else return std::nullopt;
+
+        ns.hit = true;
+        ns.holding = true;
+        ns.hold_grade = grade;
+        return grade;
+    }
+
+    // Finalize a hold note (called when hold ends or is released)
+    void finalize_hold(NoteState& ns) {
+        if (ns.hold_finalized) return;
+        ns.hold_finalized = true;
+        ns.judged = true;
+        ns.holding = false;
+
+        if (ns.hit && !ns.hold_failed) {
+            acc_sum += judge_weight(ns.hold_grade);
+            ++judged_cnt;
+            bump();
+        } else {
+            ns.miss = true;
+            break_combo();
+            acc_sum += judge_weight("MISS");
+            ++judged_cnt;
+        }
+    }
 };
 
 } // namespace phigros::engine
