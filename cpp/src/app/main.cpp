@@ -2,6 +2,9 @@
 // Usage: phigros_render <chart_path> [--config config.jsonc] [--respack respack.zip]
 //                       [--bg background.png] [--font font.ttf] [--audio bgm.mp3]
 //                       [--headless] [--screenshot-dir dir] [--duration sec]
+//                       [--record output.mp4] [--record-preset fast|balanced|quality|archive]
+//                       [--record-codec libx264|libx265] [--record-fps 60]
+//                       [--record-resolution 1920x1080]
 
 #include "phigros/core/types.hpp"
 #include "phigros/config/render_config.hpp"
@@ -22,6 +25,7 @@
 #include "phigros/render/texture.hpp"
 #include "phigros/io/respack.hpp"
 #include "phigros/io/audio.hpp"
+#include "phigros/io/video_encoder.hpp"
 #include "phigros/render/background.hpp"
 #include "phigros/render/line_renderer.hpp"
 #include "phigros/render/note_renderer.hpp"
@@ -103,7 +107,15 @@ struct AppArgs {
     std::string screenshot_dir;
     double duration = 0.0;
     bool headless = false;
-    bool score_only = false; // Engine-only, no SDL/rendering
+    bool score_only = false;
+    // Recording options
+    std::string record_output;             // --record output.mp4
+    std::string record_preset = "balanced";
+    std::string record_codec;              // override codec
+    double record_fps = 60.0;
+    int record_w = 0, record_h = 0;       // 0 = use window size
+    double record_start = -1.0;
+    double record_end = 0.0;
 };
 
 static AppArgs parse_args(int argc, char* argv[]) {
@@ -119,6 +131,23 @@ static AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--duration" && i + 1 < argc) args.duration = std::atof(argv[++i]);
         else if (a == "--headless") args.headless = true;
         else if (a == "--score-only") { args.score_only = true; args.headless = true; }
+        else if (a == "--record" && i + 1 < argc) {
+            args.record_output = argv[++i];
+            args.headless = true; // recording is always headless
+        }
+        else if (a == "--record-preset" && i + 1 < argc) args.record_preset = argv[++i];
+        else if (a == "--record-codec" && i + 1 < argc) args.record_codec = argv[++i];
+        else if (a == "--record-fps" && i + 1 < argc) args.record_fps = std::atof(argv[++i]);
+        else if (a == "--record-resolution" && i + 1 < argc) {
+            std::string res = argv[++i];
+            auto x = res.find('x');
+            if (x != std::string::npos) {
+                args.record_w = std::atoi(res.substr(0, x).c_str());
+                args.record_h = std::atoi(res.substr(x + 1).c_str());
+            }
+        }
+        else if (a == "--record-start" && i + 1 < argc) args.record_start = std::atof(argv[++i]);
+        else if (a == "--record-end" && i + 1 < argc) args.record_end = std::atof(argv[++i]);
         else if (args.chart_path.empty()) args.chart_path = a;
     }
     return args;
@@ -128,14 +157,22 @@ int main(int argc, char* argv[]) {
     auto args = parse_args(argc, argv);
     if (args.chart_path.empty()) {
         std::cerr << "Usage: phigros_render <chart_path> [options]\n"
-                  << "  --config <path>         Render config JSONC\n"
-                  << "  --respack <path>        Respack ZIP file\n"
-                  << "  --bg <path>             Background image\n"
-                  << "  --font <path>           TTF font file\n"
-                  << "  --audio <path>          BGM audio file\n"
-                  << "  --screenshot-dir <dir>  Save frames as BMP\n"
-                  << "  --duration <sec>        Auto-quit after N seconds\n"
-                  << "  --headless              No visible window\n";
+                  << "  --config <path>           Render config JSONC\n"
+                  << "  --respack <path>          Respack ZIP file\n"
+                  << "  --bg <path>               Background image\n"
+                  << "  --font <path>             TTF font file\n"
+                  << "  --audio <path>            BGM audio file\n"
+                  << "  --screenshot-dir <dir>    Save frames as BMP\n"
+                  << "  --duration <sec>          Auto-quit after N seconds\n"
+                  << "  --headless                No visible window\n"
+                  << "  --score-only              Engine-only scoring (fastest)\n"
+                  << "  --record <output.mp4>     Record video\n"
+                  << "  --record-preset <name>    fast|balanced|quality|archive\n"
+                  << "  --record-codec <codec>    libx264|libx265|libvpx-vp9\n"
+                  << "  --record-fps <fps>        Recording framerate (default 60)\n"
+                  << "  --record-resolution WxH   Recording resolution\n"
+                  << "  --record-start <sec>      Start recording at time\n"
+                  << "  --record-end <sec>        Stop recording at time\n";
         return 1;
     }
 
@@ -242,6 +279,34 @@ int main(int argc, char* argv[]) {
     }
     int screenshot_counter = 0;
 
+    // Recording setup
+    phigros::io::RecordingSession recorder;
+    bool is_recording = !args.record_output.empty();
+    std::vector<uint8_t> readback_rgba; // RGBA readback buffer
+    if (is_recording) {
+        phigros::io::RecordConfig rc;
+        rc.output = args.record_output;
+        rc.preset_name = args.record_preset;
+        rc.codec = args.record_codec;
+        rc.fps = args.record_fps;
+        rc.width = args.record_w;
+        rc.height = args.record_h;
+        rc.start_time = args.record_start;
+        rc.end_time = args.record_end;
+        // Find audio for muxing
+        rc.audio_path = args.audio_path;
+        if (rc.audio_path.empty()) {
+            auto chart_dir = fs::path(args.chart_path).parent_path().string();
+            rc.audio_path = find_audio(chart_dir);
+        }
+        if (!recorder.start(rc, W, H)) {
+            std::cerr << "[Record] Failed to start recording\n";
+            is_recording = false;
+        } else {
+            readback_rgba.resize(static_cast<size_t>(W) * H * 4);
+        }
+    }
+
     // Timing
     double t = -1.0; // Start 1 second before chart
     double dt_frame = 1.0 / 60.0;
@@ -296,10 +361,12 @@ int main(int argc, char* argv[]) {
     std::cout << "[Render] Starting main loop (chart_end=" << chart_end << "s, "
               << playable_notes << " playable notes)" << std::endl;
 
-    // Headless: decouple sim rate (240fps) from render rate (60fps)
+    // Headless/recording: decouple sim rate (240fps) from render rate
     constexpr double SIM_DT = 1.0 / 240.0;
-    constexpr int SIM_STEPS_PER_RENDER = 4; // 240/60
+    double render_dt = is_recording ? (1.0 / args.record_fps) : (1.0 / 60.0);
+    int sim_steps_per_render = std::max(1, static_cast<int>(std::round(render_dt / SIM_DT)));
     int headless_sub = 0;
+    int record_log_frames = 0;
 
     // === MAIN LOOP ===
     while (!window.quit_requested) {
@@ -356,8 +423,8 @@ int main(int argc, char* argv[]) {
             effects.update(t, t * 1000.0, respack.cfg.hitfx_duration);
         }
 
-        // Skip rendering on intermediate sim ticks in headless mode
-        if (args.headless && ++headless_sub < SIM_STEPS_PER_RENDER) continue;
+        // Skip rendering on intermediate sim ticks in headless/recording mode
+        if (args.headless && ++headless_sub < sim_steps_per_render) continue;
         headless_sub = 0;
 
         // === BUILD FRAME SNAPSHOT ===
@@ -373,6 +440,26 @@ int main(int argc, char* argv[]) {
         hitfx_renderer.draw(batch, respack, effects, t);
         hud_renderer.draw(batch, frame.hud, fps_display);
         window.end_frame();
+
+        // Video recording: capture frame before present
+        if (is_recording) {
+            bool in_range = true;
+            if (args.record_start > -0.5 && t < args.record_start) in_range = false;
+            if (args.record_end > 0.0 && t > args.record_end) {
+                // Stop recording
+                recorder.finish();
+                is_recording = false;
+                break;
+            }
+            if (in_range) {
+                window.read_pixels_rgba(readback_rgba.data());
+                recorder.capture_rgba(readback_rgba.data(), W, H);
+                // Progress logging every ~1 second of chart time
+                if (++record_log_frames % static_cast<int>(args.record_fps) == 0) {
+                    recorder.log_progress(t, chart_end);
+                }
+            }
+        }
 
         // Screenshot
         if (!args.screenshot_dir.empty()) {
@@ -396,6 +483,12 @@ int main(int argc, char* argv[]) {
     std::cout << "Accuracy: " << (sr.acc_ratio * 100.0) << "%" << std::endl;
     std::cout << "MaxCombo: " << judge.max_combo << "/" << playable_notes << std::endl;
     std::cout << "Judged: " << judge.judged_cnt << "/" << playable_notes << std::endl;
+
+    // Finalize recording
+    if (is_recording) {
+        std::cout << std::endl; // newline after progress
+        recorder.finish();
+    }
 
     // Cleanup
     audio.destroy();

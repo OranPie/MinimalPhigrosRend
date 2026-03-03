@@ -2,7 +2,7 @@
 #include "phigros/render/sprite_batch.hpp"
 #include "phigros/render/texture.hpp"
 #include "phigros/hud/hud.hpp"
-#include <SDL2/SDL.h>
+#include "phigros/app/sdl_compat.hpp"
 #include <string>
 #include <vector>
 #include <cmath>
@@ -109,7 +109,7 @@ struct HudRenderer {
             dst.w = static_cast<float>(dw);
             dst.h = static_cast<float>(dh);
 
-            SDL_RenderCopyF(batch.ren, font.atlas_tex.tex, &src, &dst);
+            app::sdl::render_copy(batch.ren, font.atlas_tex.tex, &src, &dst);
             xpos += bc.xadvance;
         }
     }

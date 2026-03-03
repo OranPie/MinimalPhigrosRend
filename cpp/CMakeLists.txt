@@ -15,6 +15,31 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
+# --- SDL3 via FetchContent ---
+option(USE_SDL3 "Build with SDL3 instead of SDL2" ON)
+
+if(USE_SDL3 AND NOT EMSCRIPTEN)
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+    set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        SDL3
+        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+        GIT_TAG        release-3.2.8
+        GIT_SHALLOW    TRUE
+        GIT_PROGRESS   TRUE
+    )
+    FetchContent_MakeAvailable(SDL3)
+    set(SDL_TARGET SDL3::SDL3-static)
+    set(SDL_VERSION 3)
+else()
+    # Fallback to system SDL2
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(SDL2 REQUIRED sdl2)
+    set(SDL_VERSION 2)
+endif()
+
 # --- Vendor include directories ---
 set(VENDOR_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor")
 
@@ -63,23 +88,26 @@ add_library(vendor_miniaudio STATIC src/vendor/audio_impl.cpp)
 target_include_directories(vendor_miniaudio PUBLIC "${VENDOR_DIR}/miniaudio")
 target_link_libraries(vendor_miniaudio PUBLIC dl pthread m)
 
-# --- SDL2 ---
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(SDL2 REQUIRED sdl2)
-
-# --- Render executable (SDL2 + full visual pipeline) ---
+# --- Render executable ---
 add_executable(phigros_render src/app/main.cpp)
 target_include_directories(phigros_render PRIVATE
-    ${SDL2_INCLUDE_DIRS}
     "${VENDOR_DIR}/stb"
     "${VENDOR_DIR}/miniz"
     "${VENDOR_DIR}/miniaudio"
 )
-target_link_libraries(phigros_render PRIVATE
-    phigros_core_lib
-    vendor_stb
-    vendor_miniz
-    vendor_miniaudio
-    ${SDL2_LIBRARIES}
-)
-target_compile_options(phigros_render PRIVATE ${SDL2_CFLAGS_OTHER})
+
+if(SDL_VERSION EQUAL 3)
+    target_link_libraries(phigros_render PRIVATE
+        phigros_core_lib vendor_stb vendor_miniz vendor_miniaudio
+        ${SDL_TARGET}
+    )
+    target_compile_definitions(phigros_render PRIVATE PHIGROS_SDL3=1)
+else()
+    target_include_directories(phigros_render PRIVATE ${SDL2_INCLUDE_DIRS})
+    target_link_libraries(phigros_render PRIVATE
+        phigros_core_lib vendor_stb vendor_miniz vendor_miniaudio
+        ${SDL2_LIBRARIES}
+    )
+    target_compile_options(phigros_render PRIVATE ${SDL2_CFLAGS_OTHER})
+    target_compile_definitions(phigros_render PRIVATE PHIGROS_SDL2=1)
+endif()

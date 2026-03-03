@@ -1,9 +1,9 @@
 #pragma once
-#include <SDL2/SDL.h>
+#include "phigros/app/sdl_compat.hpp"
 #include <string>
 #include <cstdint>
+#include <vector>
 
-// Forward-declare stb_image functions (defined in vendor_impl.cpp)
 extern "C" {
     unsigned char* stbi_load_from_memory(const unsigned char*, int, int*, int*, int*, int);
     unsigned char* stbi_load(const char*, int*, int*, int*, int);
@@ -33,7 +33,6 @@ struct Texture {
         w = h = 0;
     }
 
-    // Create from raw RGBA pixels
     static Texture from_rgba(SDL_Renderer* ren, const uint8_t* pixels,
                              int width, int height) {
         SDL_Texture* t = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGBA32,
@@ -44,7 +43,6 @@ struct Texture {
         return {t, width, height};
     }
 
-    // Load from image file on disk
     static Texture from_file(SDL_Renderer* ren, const std::string& path) {
         int w, h, ch;
         uint8_t* pixels = stbi_load(path.c_str(), &w, &h, &ch, 4);
@@ -54,7 +52,6 @@ struct Texture {
         return tex;
     }
 
-    // Load from in-memory data (PNG/JPG bytes)
     static Texture from_memory(SDL_Renderer* ren, const uint8_t* data, int len) {
         int w, h, ch;
         uint8_t* pixels = stbi_load_from_memory(data, len, &w, &h, &ch, 4);
@@ -64,7 +61,6 @@ struct Texture {
         return tex;
     }
 
-    // Create a solid colored rectangle texture
     static Texture solid_rect(SDL_Renderer* ren, int width, int height,
                               uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255) {
         std::vector<uint8_t> pixels(width * height * 4);
