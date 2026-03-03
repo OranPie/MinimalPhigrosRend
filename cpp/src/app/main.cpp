@@ -42,6 +42,11 @@
 #include <cmath>
 #include <algorithm>
 #include <cstring>
+#include <chrono>
+
+#ifdef PHIGROS_WASM
+#include <emscripten.h>
+#endif
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
@@ -108,6 +113,8 @@ struct AppArgs {
     double duration = 0.0;
     bool headless = false;
     bool score_only = false;
+    bool benchmark = false;
+    int benchmark_iterations = 10;
     std::string backend = "sdl"; // "sdl" or "bgfx"
     // Recording options
     std::string record_output;             // --record output.mp4
@@ -132,6 +139,8 @@ static AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--duration" && i + 1 < argc) args.duration = std::atof(argv[++i]);
         else if (a == "--headless") args.headless = true;
         else if (a == "--score-only") { args.score_only = true; args.headless = true; }
+        else if (a == "--benchmark") { args.benchmark = true; args.score_only = true; args.headless = true; }
+        else if (a == "--benchmark-iterations" && i + 1 < argc) args.benchmark_iterations = std::atoi(argv[++i]);
         else if (a == "--backend" && i + 1 < argc) args.backend = argv[++i];
         else if (a == "--record" && i + 1 < argc) {
             args.record_output = argv[++i];
@@ -168,6 +177,8 @@ int main(int argc, char* argv[]) {
                   << "  --duration <sec>          Auto-quit after N seconds\n"
                   << "  --headless                No visible window\n"
                   << "  --score-only              Engine-only scoring (fastest)\n"
+                  << "  --benchmark               Benchmark engine performance\n"
+                  << "  --benchmark-iterations N  Number of benchmark runs (default 10)\n"
                   << "  --record <output.mp4>     Record video\n"
                   << "  --record-preset <name>    fast|balanced|quality|archive\n"
                   << "  --record-codec <codec>    libx264|libx265|libvpx-vp9\n"
@@ -338,6 +349,73 @@ int main(int argc, char* argv[]) {
     if (args.score_only) {
         constexpr double SIM_DT = 1.0 / 240.0;
         constexpr double HOLD_TAIL_TOL = 0.30;
+
+        auto run_engine = [&]() -> phigros::engine::ScoreResult {
+            std::vector<phigros::NoteState> st(chart.notes.size());
+            for (size_t i = 0; i < st.size(); ++i) st[i].note = &chart.notes[i];
+            phigros::engine::Judge j;
+            phigros::engine::SimulatePlayer ap(phigros::engine::SimMode::Conservative);
+            auto fn = [&](double t_) -> int {
+                int lo = 0, hi = static_cast<int>(st.size());
+                while (lo < hi) {
+                    int mid = (lo + hi) / 2;
+                    if (st[mid].judged || st[mid].note->t_hit < t_ - 0.5) lo = mid + 1;
+                    else hi = mid;
+                }
+                return lo;
+            };
+            int inx = 0;
+            for (double t_ = chart.offset; t_ <= chart_end; t_ += SIM_DT) {
+                ap.step(t_, chart.notes, st, chart.lines, j, W, H);
+                inx = fn(t_);
+                phigros::engine::detect_misses(st, inx, t_,
+                                               phigros::engine::Judge::BAD, j);
+                phigros::engine::hold_maintenance(st, inx, t_, HOLD_TAIL_TOL, j);
+                phigros::engine::hold_finalize(st, inx, t_, HOLD_TAIL_TOL,
+                                               phigros::engine::Judge::BAD, j);
+            }
+            return phigros::engine::compute_score(j.acc_sum, j.max_combo, playable_notes);
+        };
+
+        if (args.benchmark) {
+            int N = args.benchmark_iterations;
+            std::cout << "[Benchmark] Running " << N << " iterations..." << std::endl;
+            using clock = std::chrono::high_resolution_clock;
+            std::vector<double> times_ms;
+            times_ms.reserve(N);
+            for (int i = 0; i < N; ++i) {
+                auto t0 = clock::now();
+                auto sr = run_engine();
+                auto t1 = clock::now();
+                double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+                times_ms.push_back(ms);
+                if (sr.score != 1000000)
+                    std::cerr << "[Benchmark] WARNING: iteration " << i
+                              << " score=" << sr.score << std::endl;
+            }
+            std::sort(times_ms.begin(), times_ms.end());
+            double total = 0;
+            for (double m : times_ms) total += m;
+            double mean = total / N;
+            double median = times_ms[N / 2];
+            double p5 = times_ms[std::max(0, static_cast<int>(N * 0.05))];
+            double p95 = times_ms[std::min(N - 1, static_cast<int>(N * 0.95))];
+            double chart_len = chart_end - chart.offset;
+
+            std::cout << "\n=== Benchmark Results (" << N << " iterations) ===" << std::endl;
+            std::cout << "Chart: " << args.chart_path << std::endl;
+            std::cout << "  Notes: " << playable_notes
+                      << ", Duration: " << chart_len << "s" << std::endl;
+            std::cout << "  Mean:   " << mean << " ms" << std::endl;
+            std::cout << "  Median: " << median << " ms" << std::endl;
+            std::cout << "  P5:     " << p5 << " ms" << std::endl;
+            std::cout << "  P95:    " << p95 << " ms" << std::endl;
+            std::cout << "  Speed:  " << (chart_len / (mean / 1000.0))
+                      << "x realtime" << std::endl;
+            return 0;
+        }
+
+        // Single score-only run
         double t = chart.offset;
         for (; t <= chart_end; t += SIM_DT) {
             autoplay.step(t, chart.notes, states, chart.lines, judge, W, H);
@@ -371,7 +449,8 @@ int main(int argc, char* argv[]) {
     int record_log_frames = 0;
 
     // === MAIN LOOP ===
-    while (!window.quit_requested) {
+    // Loop body as a lambda for Emscripten compatibility
+    auto main_loop_body = [&]() -> bool {
         // In headless mode, only do event poll/timing on render frames
         if (!args.headless || headless_sub == 0) {
             double now = phigros::app::Window::get_time_sec();
@@ -404,9 +483,9 @@ int main(int argc, char* argv[]) {
         }
 
         // Auto-quit conditions
-        if (args.duration > 0 && t >= args.duration) break;
-        if (t > chart_end) break;
-        if (has_audio && started_audio && audio.is_at_end() && t > 1.0) break;
+        if (args.duration > 0 && t >= args.duration) return false;
+        if (t > chart_end) return false;
+        if (has_audio && started_audio && audio.is_at_end() && t > 1.0) return false;
 
         // === ENGINE UPDATE (every sim tick) ===
         autoplay.step(t, chart.notes, states, chart.lines, judge, W, H);
@@ -426,7 +505,7 @@ int main(int argc, char* argv[]) {
         }
 
         // Skip rendering on intermediate sim ticks in headless/recording mode
-        if (args.headless && ++headless_sub < sim_steps_per_render) continue;
+        if (args.headless && ++headless_sub < sim_steps_per_render) return true;
         headless_sub = 0;
 
         // === BUILD FRAME SNAPSHOT ===
@@ -448,15 +527,13 @@ int main(int argc, char* argv[]) {
             bool in_range = true;
             if (args.record_start > -0.5 && t < args.record_start) in_range = false;
             if (args.record_end > 0.0 && t > args.record_end) {
-                // Stop recording
                 recorder.finish();
                 is_recording = false;
-                break;
+                return false;
             }
             if (in_range) {
                 window.read_pixels_rgba(readback_rgba.data());
                 recorder.capture_rgba(readback_rgba.data(), W, H);
-                // Progress logging every ~1 second of chart time
                 if (++record_log_frames % static_cast<int>(args.record_fps) == 0) {
                     recorder.log_progress(t, chart_end);
                 }
@@ -475,7 +552,27 @@ int main(int argc, char* argv[]) {
                 screenshot_counter = expected + 1;
             }
         }
-    }
+        return !window.quit_requested;
+    };
+
+#ifdef PHIGROS_WASM
+    // Emscripten: use set_main_loop for browser compatibility
+    struct WasmState {
+        decltype(main_loop_body)* body;
+        bool done;
+    };
+    WasmState wasm_state{&main_loop_body, false};
+    emscripten_set_main_loop_arg([](void* arg) {
+        auto* st = static_cast<WasmState*>(arg);
+        if (st->done) return;
+        if (!(*st->body)()) {
+            st->done = true;
+            emscripten_cancel_main_loop();
+        }
+    }, &wasm_state, 0, 1);
+#else
+    while (main_loop_body()) {}
+#endif
 
     // Final results
     auto sr = phigros::engine::compute_score(

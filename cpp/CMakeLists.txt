@@ -138,6 +138,11 @@ elseif(EMSCRIPTEN)
         "SHELL:-s USE_SDL=2"
         "SHELL:-s USE_WEBGL2=1"
         "SHELL:-s ALLOW_MEMORY_GROWTH=1"
+        "SHELL:-s EXPORTED_RUNTIME_METHODS=['FS','callMain','cwrap']"
+        "SHELL:-s EXPORTED_FUNCTIONS=['_main','_malloc','_free']"
+        "SHELL:-s INVOKE_RUN=0"
+        "SHELL:-s FORCE_FILESYSTEM=1"
+        "SHELL:--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html"
     )
 else()
     target_include_directories(phigros_render PRIVATE ${SDL2_INCLUDE_DIRS})
