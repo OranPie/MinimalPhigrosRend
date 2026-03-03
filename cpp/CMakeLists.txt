@@ -28,8 +28,13 @@ target_link_libraries(phigros_core_lib PUBLIC nlohmann_json::nlohmann_json)
 add_executable(phigros_core src/main.cpp)
 target_link_libraries(phigros_core PRIVATE phigros_core_lib)
 
-# --- Test executable ---
+# --- Test executables ---
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_easing.cpp")
     add_executable(test_easing tests/test_easing.cpp)
     target_link_libraries(test_easing PRIVATE phigros_core_lib)
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_chart.cpp")
+    add_executable(verify_chart tests/verify_chart.cpp)
+    target_link_libraries(verify_chart PRIVATE phigros_core_lib)
 endif()

@@ -32,7 +32,7 @@ static IntegralTrack build_official_scroll_px(const json& speed_events, double b
             e.value("value", 0.0)
         });
     }
-    std::sort(evs.begin(), evs.end(), [](auto& a, auto& b) { return a.st < b.st; });
+    std::stable_sort(evs.begin(), evs.end(), [](auto& a, auto& b) { return a.st < b.st; });
 
     std::vector<Seg1D> segs;
     double prefix = 0.0;
@@ -75,7 +75,7 @@ build_official_pos_tracks(const json& move_events, double bpm, int fmt, int W, i
     struct Ev { double st; json data; };
     std::vector<Ev> evs;
     for (auto& e : move_events) evs.push_back({e.value("startTime", 0.0), e});
-    std::sort(evs.begin(), evs.end(), [](auto& a, auto& b) { return a.st < b.st; });
+    std::stable_sort(evs.begin(), evs.end(), [](auto& a, auto& b) { return a.st < b.st; });
 
     for (auto& ev : evs) {
         const auto& e = ev.data;
@@ -120,7 +120,7 @@ static PiecewiseEased build_official_rot_track(const json& rot_events, double bp
     struct Ev { double st; json data; };
     std::vector<Ev> evs;
     for (auto& e : rot_events) evs.push_back({e.value("startTime", 0.0), e});
-    std::sort(evs.begin(), evs.end(), [](auto& a, auto& b) { return a.st < b.st; });
+    std::stable_sort(evs.begin(), evs.end(), [](auto& a, auto& b) { return a.st < b.st; });
 
     std::vector<EasedSeg> segs;
     for (auto& ev : evs) {
@@ -143,7 +143,7 @@ static PiecewiseEased build_official_alpha_track(const json& disp_events, double
     struct Ev { double st; json data; };
     std::vector<Ev> evs;
     for (auto& e : disp_events) evs.push_back({e.value("startTime", 0.0), e});
-    std::sort(evs.begin(), evs.end(), [](auto& a, auto& b) { return a.st < b.st; });
+    std::stable_sort(evs.begin(), evs.end(), [](auto& a, auto& b) { return a.st < b.st; });
 
     std::vector<EasedSeg> segs;
     for (auto& ev : evs) {
