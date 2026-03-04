@@ -1,0 +1,14 @@
+# Target labels
+ bgfx-populate
+# Source files and their labels
+/root/MinimalPhigrosRend/cpp/build_bgfx/_deps/bgfx-subbuild/CMakeFiles/bgfx-populate
+/root/MinimalPhigrosRend/cpp/build_bgfx/_deps/bgfx-subbuild/CMakeFiles/bgfx-populate.rule
+/root/MinimalPhigrosRend/cpp/build_bgfx/_deps/bgfx-subbuild/CMakeFiles/bgfx-populate-complete.rule
+/root/MinimalPhigrosRend/cpp/build_bgfx/_deps/bgfx-subbuild/bgfx-populate-prefix/src/bgfx-populate-stamp/bgfx-populate-build.rule
+/root/MinimalPhigrosRend/cpp/build_bgfx/_deps/bgfx-subbuild/bgfx-populate-prefix/src/bgfx-populate-stamp/bgfx-populate-configure.rule
+/root/MinimalPhigrosRend/cpp/build_bgfx/_deps/bgfx-subbuild/bgfx-populate-prefix/src/bgfx-populate-stamp/bgfx-populate-download.rule
+/root/MinimalPhigrosRend/cpp/build_bgfx/_deps/bgfx-subbuild/bgfx-populate-prefix/src/bgfx-populate-stamp/bgfx-populate-install.rule
+/root/MinimalPhigrosRend/cpp/build_bgfx/_deps/bgfx-subbuild/bgfx-populate-prefix/src/bgfx-populate-stamp/bgfx-populate-mkdir.rule
+/root/MinimalPhigrosRend/cpp/build_bgfx/_deps/bgfx-subbuild/bgfx-populate-prefix/src/bgfx-populate-stamp/bgfx-populate-patch.rule
+/root/MinimalPhigrosRend/cpp/build_bgfx/_deps/bgfx-subbuild/bgfx-populate-prefix/src/bgfx-populate-stamp/bgfx-populate-test.rule
+/root/MinimalPhigrosRend/cpp/build_bgfx/_deps/bgfx-subbuild/bgfx-populate-prefix/src/bgfx-populate-stamp/bgfx-populate-update.rule

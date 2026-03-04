@@ -1,15 +1,24 @@
 #pragma once
 #include "phigros/app/sdl_compat.hpp"
 #include "phigros/render/texture.hpp"
+#include "phigros/render/draw_list.hpp"
 #include <cmath>
 #include <algorithm>
 
 namespace phigros::render {
 
+// Immediate-mode 2-D sprite batcher for SDL.
+// When dl != nullptr, calls are recorded into the DrawList instead of being
+// submitted to SDL immediately — enabling backend-agnostic rendering via executors.
 struct SpriteBatch {
     SDL_Renderer* ren = nullptr;
+    DrawList* dl = nullptr;                        // non-null → record mode
+    mutable SDL_BlendMode current_blend = SDL_BLENDMODE_BLEND; // tracked for DrawList emission
 
     void init(SDL_Renderer* renderer) { ren = renderer; }
+
+    // Switch blend mode for subsequent draws (works in both immediate and record modes).
+    void set_blend_mode(SDL_BlendMode mode) const { current_blend = mode; }
 
     void draw_texture(const Texture& tex,
                       double x, double y, double w, double h,
@@ -19,8 +28,30 @@ struct SpriteBatch {
                       const SDL_Rect* src_rect = nullptr,
                       PhigrosFlipMode flip = PHIGROS_FLIP_NONE) const {
         if (!tex.tex) return;
+
+        if (dl) {
+            // Record mode: emit command
+            if (src_rect) {
+                dl->quad_region(&tex,
+                    src_rect->x, src_rect->y, src_rect->w, src_rect->h,
+                    static_cast<float>(x), static_cast<float>(y),
+                    static_cast<float>(w), static_cast<float>(h),
+                    static_cast<float>(angle_rad),
+                    r, g, b, a, current_blend);
+            } else {
+                dl->quad(&tex,
+                    static_cast<float>(x), static_cast<float>(y),
+                    static_cast<float>(w), static_cast<float>(h),
+                    static_cast<float>(angle_rad),
+                    r, g, b, a, current_blend);
+            }
+            return;
+        }
+
+        // Immediate SDL mode (unchanged)
         tex.set_color_mod(r, g, b);
         tex.set_alpha_mod(a);
+        tex.set_blend_mode(current_blend);
 
         SDL_FRect dst;
         dst.x = static_cast<float>(x - w * 0.5);
@@ -44,6 +75,12 @@ struct SpriteBatch {
 
     void draw_rect(double x, double y, double w, double h,
                    uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255) const {
+        if (dl) {
+            dl->rect(static_cast<float>(x), static_cast<float>(y),
+                     static_cast<float>(w), static_cast<float>(h),
+                     r, g, b, a);
+            return;
+        }
         app::sdl::set_draw_color(ren, r, g, b, a);
         SDL_FRect rect;
         rect.x = static_cast<float>(x);
@@ -60,8 +97,14 @@ struct SpriteBatch {
         double len = std::sqrt(dx * dx + dy * dy);
         if (len < 0.5) return;
 
-        app::sdl::set_draw_color(ren, r, g, b, a);
+        if (dl) {
+            dl->line(static_cast<float>(x0), static_cast<float>(y0),
+                     static_cast<float>(x1), static_cast<float>(y1),
+                     static_cast<float>(width), r, g, b, a);
+            return;
+        }
 
+        app::sdl::set_draw_color(ren, r, g, b, a);
         double nx = -dy / len, ny = dx / len;
         int half = static_cast<int>(width * 0.5);
         for (int i = -half; i <= half; ++i) {

@@ -1,0 +1,2 @@
+/usr/bin/ar qc libphigros_core_lib.a CMakeFiles/phigros_core_lib.dir/src/chart/official.cpp.o CMakeFiles/phigros_core_lib.dir/src/chart/rpe.cpp.o CMakeFiles/phigros_core_lib.dir/src/chart/pec.cpp.o
+/usr/bin/ranlib libphigros_core_lib.a

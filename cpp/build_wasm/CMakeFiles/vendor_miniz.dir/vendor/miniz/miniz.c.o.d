@@ -1,0 +1,26 @@
+CMakeFiles/vendor_miniz.dir/vendor/miniz/miniz.c.o: \
+  /root/MinimalPhigrosRend/cpp/vendor/miniz/miniz.c \
+  /root/MinimalPhigrosRend/cpp/vendor/miniz/miniz.h \
+  /root/MinimalPhigrosRend/cpp/vendor/miniz/miniz_export.h \
+  /usr/lib/llvm-14/lib/clang/14.0.6/include/stddef.h \
+  /usr/lib/llvm-14/lib/clang/14.0.6/include/__stddef_max_align_t.h \
+  /root/.emscripten_cache/sysroot/include/compat/time.h \
+  /root/.emscripten_cache/sysroot/include/time.h \
+  /root/.emscripten_cache/sysroot/include/features.h \
+  /root/.emscripten_cache/sysroot/include/bits/alltypes.h \
+  /root/MinimalPhigrosRend/cpp/vendor/miniz/miniz_common.h \
+  /root/.emscripten_cache/sysroot/include/assert.h \
+  /usr/lib/llvm-14/lib/clang/14.0.6/include/stdint.h \
+  /root/.emscripten_cache/sysroot/include/stdint.h \
+  /root/.emscripten_cache/sysroot/include/bits/stdint.h \
+  /root/.emscripten_cache/sysroot/include/compat/stdlib.h \
+  /root/.emscripten_cache/sysroot/include/stdlib.h \
+  /root/.emscripten_cache/sysroot/include/alloca.h \
+  /root/.emscripten_cache/sysroot/include/compat/string.h \
+  /root/.emscripten_cache/sysroot/include/string.h \
+  /root/.emscripten_cache/sysroot/include/strings.h \
+  /root/.emscripten_cache/sysroot/include/stdio.h \
+  /root/.emscripten_cache/sysroot/include/wasi/api.h \
+  /root/MinimalPhigrosRend/cpp/vendor/miniz/miniz_tdef.h \
+  /root/MinimalPhigrosRend/cpp/vendor/miniz/miniz_tinfl.h \
+  /root/MinimalPhigrosRend/cpp/vendor/miniz/miniz_zip.h

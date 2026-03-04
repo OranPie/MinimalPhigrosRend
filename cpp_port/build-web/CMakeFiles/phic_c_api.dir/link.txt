@@ -1,2 +1,0 @@
-emar qc libphic_c_api.a CMakeFiles/phic_c_api.dir/core_c_api/src/phic_c_api.cpp.o
-emranlib libphic_c_api.a

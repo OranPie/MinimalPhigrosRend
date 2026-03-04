@@ -1,0 +1,8 @@
+_deps/sdl3-build/CMakeFiles/SDL3-static.dir/wayland-generated-protocols/tablet-v2-protocol.c.o: \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-build/wayland-generated-protocols/tablet-v2-protocol.c \
+ /usr/include/stdc-predef.h /usr/include/stdlib.h \
+ /usr/lib/gcc/x86_64-linux-gnu/12/include/stdint.h \
+ /usr/include/wayland-util.h /usr/include/math.h \
+ /usr/lib/gcc/x86_64-linux-gnu/12/include/stddef.h \
+ /usr/include/inttypes.h \
+ /usr/lib/gcc/x86_64-linux-gnu/12/include/stdarg.h

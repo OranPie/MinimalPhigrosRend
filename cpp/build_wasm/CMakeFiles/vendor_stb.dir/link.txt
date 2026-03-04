@@ -1,0 +1,2 @@
+emar qc libvendor_stb.a CMakeFiles/vendor_stb.dir/src/vendor/vendor_impl.cpp.o
+emranlib libvendor_stb.a

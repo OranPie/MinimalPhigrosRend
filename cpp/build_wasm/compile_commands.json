@@ -1,0 +1,72 @@
+[
+{
+  "directory": "/root/MinimalPhigrosRend/cpp/build_wasm",
+  "command": "/usr/bin/em++  @CMakeFiles/phigros_core_lib.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles/phigros_core_lib.dir/src/chart/official.cpp.o -c /root/MinimalPhigrosRend/cpp/src/chart/official.cpp",
+  "file": "/root/MinimalPhigrosRend/cpp/src/chart/official.cpp"
+},
+{
+  "directory": "/root/MinimalPhigrosRend/cpp/build_wasm",
+  "command": "/usr/bin/em++  @CMakeFiles/phigros_core_lib.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles/phigros_core_lib.dir/src/chart/rpe.cpp.o -c /root/MinimalPhigrosRend/cpp/src/chart/rpe.cpp",
+  "file": "/root/MinimalPhigrosRend/cpp/src/chart/rpe.cpp"
+},
+{
+  "directory": "/root/MinimalPhigrosRend/cpp/build_wasm",
+  "command": "/usr/bin/em++  @CMakeFiles/phigros_core_lib.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles/phigros_core_lib.dir/src/chart/pec.cpp.o -c /root/MinimalPhigrosRend/cpp/src/chart/pec.cpp",
+  "file": "/root/MinimalPhigrosRend/cpp/src/chart/pec.cpp"
+},
+{
+  "directory": "/root/MinimalPhigrosRend/cpp/build_wasm",
+  "command": "/usr/bin/em++  @CMakeFiles/phigros_core.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles/phigros_core.dir/src/main.cpp.o -c /root/MinimalPhigrosRend/cpp/src/main.cpp",
+  "file": "/root/MinimalPhigrosRend/cpp/src/main.cpp"
+},
+{
+  "directory": "/root/MinimalPhigrosRend/cpp/build_wasm",
+  "command": "/usr/bin/em++  @CMakeFiles/test_easing.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles/test_easing.dir/tests/test_easing.cpp.o -c /root/MinimalPhigrosRend/cpp/tests/test_easing.cpp",
+  "file": "/root/MinimalPhigrosRend/cpp/tests/test_easing.cpp"
+},
+{
+  "directory": "/root/MinimalPhigrosRend/cpp/build_wasm",
+  "command": "/usr/bin/em++  @CMakeFiles/verify_chart.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles/verify_chart.dir/tests/verify_chart.cpp.o -c /root/MinimalPhigrosRend/cpp/tests/verify_chart.cpp",
+  "file": "/root/MinimalPhigrosRend/cpp/tests/verify_chart.cpp"
+},
+{
+  "directory": "/root/MinimalPhigrosRend/cpp/build_wasm",
+  "command": "/usr/bin/em++  @CMakeFiles/test_engine.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles/test_engine.dir/tests/test_engine.cpp.o -c /root/MinimalPhigrosRend/cpp/tests/test_engine.cpp",
+  "file": "/root/MinimalPhigrosRend/cpp/tests/test_engine.cpp"
+},
+{
+  "directory": "/root/MinimalPhigrosRend/cpp/build_wasm",
+  "command": "/usr/bin/em++  @CMakeFiles/vendor_stb.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles/vendor_stb.dir/src/vendor/vendor_impl.cpp.o -c /root/MinimalPhigrosRend/cpp/src/vendor/vendor_impl.cpp",
+  "file": "/root/MinimalPhigrosRend/cpp/src/vendor/vendor_impl.cpp"
+},
+{
+  "directory": "/root/MinimalPhigrosRend/cpp/build_wasm",
+  "command": "/usr/bin/emcc  @CMakeFiles/vendor_miniz.dir/includes_C.rsp -O3 -DNDEBUG -o CMakeFiles/vendor_miniz.dir/vendor/miniz/miniz.c.o -c /root/MinimalPhigrosRend/cpp/vendor/miniz/miniz.c",
+  "file": "/root/MinimalPhigrosRend/cpp/vendor/miniz/miniz.c"
+},
+{
+  "directory": "/root/MinimalPhigrosRend/cpp/build_wasm",
+  "command": "/usr/bin/emcc  @CMakeFiles/vendor_miniz.dir/includes_C.rsp -O3 -DNDEBUG -o CMakeFiles/vendor_miniz.dir/vendor/miniz/miniz_tdef.c.o -c /root/MinimalPhigrosRend/cpp/vendor/miniz/miniz_tdef.c",
+  "file": "/root/MinimalPhigrosRend/cpp/vendor/miniz/miniz_tdef.c"
+},
+{
+  "directory": "/root/MinimalPhigrosRend/cpp/build_wasm",
+  "command": "/usr/bin/emcc  @CMakeFiles/vendor_miniz.dir/includes_C.rsp -O3 -DNDEBUG -o CMakeFiles/vendor_miniz.dir/vendor/miniz/miniz_tinfl.c.o -c /root/MinimalPhigrosRend/cpp/vendor/miniz/miniz_tinfl.c",
+  "file": "/root/MinimalPhigrosRend/cpp/vendor/miniz/miniz_tinfl.c"
+},
+{
+  "directory": "/root/MinimalPhigrosRend/cpp/build_wasm",
+  "command": "/usr/bin/emcc  @CMakeFiles/vendor_miniz.dir/includes_C.rsp -O3 -DNDEBUG -o CMakeFiles/vendor_miniz.dir/vendor/miniz/miniz_zip.c.o -c /root/MinimalPhigrosRend/cpp/vendor/miniz/miniz_zip.c",
+  "file": "/root/MinimalPhigrosRend/cpp/vendor/miniz/miniz_zip.c"
+},
+{
+  "directory": "/root/MinimalPhigrosRend/cpp/build_wasm",
+  "command": "/usr/bin/em++  @CMakeFiles/vendor_miniaudio.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles/vendor_miniaudio.dir/src/vendor/audio_impl.cpp.o -c /root/MinimalPhigrosRend/cpp/src/vendor/audio_impl.cpp",
+  "file": "/root/MinimalPhigrosRend/cpp/src/vendor/audio_impl.cpp"
+},
+{
+  "directory": "/root/MinimalPhigrosRend/cpp/build_wasm",
+  "command": "/usr/bin/em++ -DPHIGROS_SDL2=1 -DPHIGROS_WASM=1 @CMakeFiles/phigros_render.dir/includes_CXX.rsp -O3 -DNDEBUG -s USE_SDL=2 -std=gnu++17 -o CMakeFiles/phigros_render.dir/src/app/main.cpp.o -c /root/MinimalPhigrosRend/cpp/src/app/main.cpp",
+  "file": "/root/MinimalPhigrosRend/cpp/src/app/main.cpp"
+}
+]

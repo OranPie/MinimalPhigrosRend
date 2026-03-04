@@ -1,0 +1,1 @@
+/usr/bin/em++ -O3 -DNDEBUG @CMakeFiles/phigros_core.dir/objects1 -o phigros_core.js @CMakeFiles/phigros_core.dir/linkLibs.rsp

@@ -1,0 +1,2 @@
+emar qc libvendor_miniz.a CMakeFiles/vendor_miniz.dir/vendor/miniz/miniz.c.o CMakeFiles/vendor_miniz.dir/vendor/miniz/miniz_tdef.c.o CMakeFiles/vendor_miniz.dir/vendor/miniz/miniz_tinfl.c.o CMakeFiles/vendor_miniz.dir/vendor/miniz/miniz_zip.c.o
+emranlib libvendor_miniz.a

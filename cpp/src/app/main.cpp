@@ -35,6 +35,8 @@
 #include "phigros/render/render_target.hpp"
 #include "phigros/render/trail_renderer.hpp"
 #include "phigros/render/motion_blur.hpp"
+#include "phigros/render/draw_list.hpp"
+#include "phigros/render/sdl_executor.hpp"
 
 #include "phigros/app/input_manager.hpp"
 #include "phigros/engine/manual_judge.hpp"
@@ -268,6 +270,8 @@ int main(int argc, char* argv[]) {
     // Init sprite batch
     phigros::render::SpriteBatch batch;
     batch.init(window.ren);
+    phigros::render::DrawList draw_list;
+    draw_list.reserve(2048);
 
     // Load respack
     std::string respack_path = args.respack_path.empty() ? cfg.respack_path : args.respack_path;
@@ -635,22 +639,26 @@ int main(int argc, char* argv[]) {
             t, chart, states, judge, cfg);
 
         // === RENDER ===
-        // render_scene: draws foreground (no background) at an arbitrary time t_r.
-        // Used by trail and motion blur to composite multiple time offsets.
+        // render_scene: records foreground draw commands into draw_list, then executes
+        // via SdlExecutor. Used by trail and motion blur for multi-pass compositing.
         auto render_scene = [&](double t_r) {
             auto fr = (t_r == t)
                 ? frame  // reuse already-built snapshot for current t
                 : phigros::render::build_frame(t_r, chart, states, judge, cfg);
+            draw_list.clear();
+            batch.dl = &draw_list;
             hold_renderer.draw(batch, respack, fr.notes, t_r);
             line_renderer.draw(batch, respack.white_tex, fr.lines, W, H, cfg.expand_factor);
             note_renderer.draw(batch, respack, fr.notes, t_r);
             hitfx_renderer.draw(batch, respack, effects, t_r);
+            batch.dl = nullptr;
+            phigros::render::SdlExecutor::execute(window.ren, draw_list);
         };
 
         window.begin_frame();
 
         if (motion_blur.enabled()) {
-            // Background drawn once, unblurred
+            // Background drawn once, unblurred (direct, not via draw_list)
             bg_renderer.draw(batch, cfg.bg_dim);
             motion_blur.begin_accumulate(window.ren);
             for (int i = 0; i < motion_blur.samples; ++i) {

@@ -1,0 +1,27 @@
+_deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_clipboard.c.o: \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/video/SDL_clipboard.c \
+ /usr/include/stdc-predef.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/SDL_internal.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/video/SDL_clipboard_c.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/video/SDL_sysvideo.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/include/SDL3/SDL_vulkan.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/include/SDL3/SDL_stdinc.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/include/SDL3/SDL_error.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/include/SDL3/SDL_video.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/include/SDL3/SDL_begin_code.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/include/SDL3/SDL_close_code.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/video/SDL_surface_c.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/video/SDL_blit.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/video/../events/SDL_events_c.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/video/../events/../video/SDL_sysvideo.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/video/../events/SDL_clipboardevents_c.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/video/../events/SDL_displayevents_c.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/video/../events/SDL_dropevents_c.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/video/../events/SDL_keyboard_c.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/video/../events/SDL_keymap_c.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/video/../events/SDL_mouse_c.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/video/../events/SDL_touch_c.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/video/../events/SDL_pen_c.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/video/../events/../SDL_internal.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/video/../events/SDL_windowevents_c.h \
+ /root/MinimalPhigrosRend/cpp/build_bgfx/_deps/sdl3-src/src/video/../events/SDL_clipboardevents_c.h

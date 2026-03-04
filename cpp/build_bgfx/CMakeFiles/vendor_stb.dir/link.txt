@@ -1,0 +1,2 @@
+/usr/bin/ar qc libvendor_stb.a CMakeFiles/vendor_stb.dir/src/vendor/vendor_impl.cpp.o
+/usr/bin/ranlib libvendor_stb.a
