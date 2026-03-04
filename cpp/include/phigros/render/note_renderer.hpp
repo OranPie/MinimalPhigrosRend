@@ -17,6 +17,7 @@ struct NoteRenderer {
     double note_scale_y = 1.0;
     double miss_fade_sec = 0.5;
     double bad_ghost_sec = 0.3;
+    bool note_outline = false;  // draw dark outline at 1.08× size before the note
 
     void init(int W, int H, double scale_x, double scale_y) {
         base_note_w = 0.06 * W;
@@ -55,6 +56,14 @@ struct NoteRenderer {
 
             uint8_t a = static_cast<uint8_t>(std::clamp(alpha_f, 0.0, 255.0));
             if (a == 0) continue;
+
+            // Outline: draw at 1.08× size with dark colour before main sprite
+            if (note_outline && !ns.miss) {
+                uint8_t oa = static_cast<uint8_t>(a * 0.5);
+                if (oa > 0)
+                    batch.draw_texture(tex, ns.wx, ns.wy, ws * 1.08, hs * 1.08,
+                                       ns.line_rot, 0, 0, 0, oa);
+            }
 
             // Rotate note to match line angle
             batch.draw_texture(tex, ns.wx, ns.wy, ws, hs, ns.line_rot, r, g, b, a);

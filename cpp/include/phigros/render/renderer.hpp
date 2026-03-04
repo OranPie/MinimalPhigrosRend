@@ -30,15 +30,16 @@ struct LineSnapshot {
 struct NoteSnapshot {
     int nid;
     int kind;
-    double wx, wy;        // world position (head)
+    double wx, wy;           // world position (head)
     double wx_tail, wy_tail; // world position (tail, for holds)
     double alpha;
-    double line_rot;      // line rotation for note alignment
+    double line_rot;         // line rotation for note alignment
     math::RGB color;
     bool is_hold;
     bool judged;
     bool miss;
-    bool mh;              // multi-hit flag
+    bool mh;                 // multi-hit flag
+    bool holding = false;    // true while a hold note is actively held
 };
 
 struct FrameSnapshot {
@@ -112,10 +113,22 @@ inline FrameSnapshot build_frame(
         }
 
         auto color = note_type_color(note.kind);
+
+        // Apply line_alpha_affects_notes scaling
+        double note_alpha = note.alpha01;
+        const auto& laan = cfg.line_alpha_affects_notes;
+        if (laan == "always") {
+            note_alpha *= ls.alpha01;
+        } else if (laan == "negative_only") {
+            if (ls.alpha01 < 0.5)
+                note_alpha *= ls.alpha01 * 2.0;
+        }
+
         frame.notes.push_back({
             note.nid, note.kind, head.x, head.y,
-            wx_tail, wy_tail, note.alpha01, ls.rot, color,
-            note.kind == 3, ns.judged, ns.miss, note.mh
+            wx_tail, wy_tail, note_alpha, ls.rot, color,
+            note.kind == 3, ns.judged, ns.miss, note.mh,
+            ns.holding
         });
     }
 

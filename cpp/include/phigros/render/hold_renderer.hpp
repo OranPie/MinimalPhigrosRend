@@ -85,6 +85,22 @@ struct HoldRenderer {
                     cx, cy, ws, body_screen_h, angle, r, g, b, a);
             }
 
+            // Hold-glow: while this hold is actively pressed, draw a tinted
+            // additive-blend overlay along the body to indicate active input.
+            if (ns.holding && body_screen_h > 1.0) {
+                double glow_cx = tx + ux * (tail_screen_h + body_screen_h * 0.5);
+                double glow_cy = ty + uy * (tail_screen_h + body_screen_h * 0.5);
+                uint8_t ga = static_cast<uint8_t>(a * 0.35);
+                if (ga > 0) {
+                    SDL_SetTextureBlendMode(tex.tex, SDL_BLENDMODE_ADD);
+                    batch.draw_texture_region(tex,
+                        0, head_h, tex.w, body_h,
+                        glow_cx, glow_cy, ws * 1.15, body_screen_h,
+                        angle, r, g, b, ga);
+                    SDL_SetTextureBlendMode(tex.tex, SDL_BLENDMODE_BLEND);
+                }
+            }
+
             // 3. Head (at head end)
             {
                 double cx = hx - ux * head_screen_h * 0.5;

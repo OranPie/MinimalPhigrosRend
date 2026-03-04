@@ -32,6 +32,9 @@
 #include "phigros/render/hold_renderer.hpp"
 #include "phigros/render/hitfx_renderer.hpp"
 #include "phigros/render/hud_renderer.hpp"
+#include "phigros/render/render_target.hpp"
+#include "phigros/render/trail_renderer.hpp"
+#include "phigros/render/motion_blur.hpp"
 
 #include <nlohmann/json.hpp>
 #include <iostream>
@@ -255,11 +258,26 @@ int main(int argc, char* argv[]) {
 
     phigros::render::NoteRenderer note_renderer;
     note_renderer.init(W, H, cfg.note_scale_x, cfg.note_scale_y);
+    note_renderer.note_outline = cfg.note_outline;
 
     phigros::render::HoldRenderer hold_renderer;
     hold_renderer.init(W, H, cfg.note_scale_x, cfg.note_scale_y);
 
     phigros::render::HitFXRenderer hitfx_renderer;
+
+    phigros::render::TrailRenderer trail;
+    trail.init(window.ren, W, H, cfg);
+
+    phigros::render::MotionBlurRenderer motion_blur;
+    motion_blur.init(window.ren, W, H, cfg);
+
+    if (trail.enabled())
+        std::cout << "[Trail] Enabled: alpha=" << cfg.trail_alpha.value()
+                  << " frames=" << cfg.trail_frames.value_or(6)
+                  << " decay=" << cfg.trail_decay.value_or(0.85) << std::endl;
+    if (motion_blur.enabled())
+        std::cout << "[MotionBlur] Enabled: samples=" << cfg.motion_blur_samples.value()
+                  << " shutter=" << cfg.motion_blur_shutter.value_or(0.5) << std::endl;
 
     phigros::render::HudRenderer hud_renderer;
     if (!args.font_path.empty()) {
@@ -513,12 +531,44 @@ int main(int argc, char* argv[]) {
             t, chart, states, judge, cfg);
 
         // === RENDER ===
+        // render_scene: draws foreground (no background) at an arbitrary time t_r.
+        // Used by trail and motion blur to composite multiple time offsets.
+        auto render_scene = [&](double t_r) {
+            auto fr = (t_r == t)
+                ? frame  // reuse already-built snapshot for current t
+                : phigros::render::build_frame(t_r, chart, states, judge, cfg);
+            hold_renderer.draw(batch, respack, fr.notes, t_r);
+            line_renderer.draw(batch, respack.white_tex, fr.lines, W, H, cfg.expand_factor);
+            note_renderer.draw(batch, respack, fr.notes, t_r);
+            hitfx_renderer.draw(batch, respack, effects, t_r);
+        };
+
         window.begin_frame();
-        bg_renderer.draw(batch, cfg.bg_dim);
-        hold_renderer.draw(batch, respack, frame.notes, t);
-        line_renderer.draw(batch, respack.white_tex, frame.lines, W, H, cfg.expand_factor);
-        note_renderer.draw(batch, respack, frame.notes, t);
-        hitfx_renderer.draw(batch, respack, effects, t);
+
+        if (motion_blur.enabled()) {
+            // Background drawn once, unblurred
+            bg_renderer.draw(batch, cfg.bg_dim);
+            motion_blur.begin_accumulate(window.ren);
+            for (int i = 0; i < motion_blur.samples; ++i) {
+                double t_sub = t - dt_frame * motion_blur.shutter
+                               * (1.0 - static_cast<double>(i) / motion_blur.samples);
+                motion_blur.begin_subframe(window.ren);
+                render_scene(t_sub);
+                motion_blur.add_subframe(window.ren);
+            }
+            motion_blur.composite(window.ren);
+        } else if (trail.enabled()) {
+            // Render foreground into ring-buffer slot, background below
+            trail.begin_frame(window.ren);
+            render_scene(t);
+            phigros::render::RenderTarget::unbind(window.ren);
+            bg_renderer.draw(batch, cfg.bg_dim);
+            trail.composite(window.ren);
+        } else {
+            bg_renderer.draw(batch, cfg.bg_dim);
+            render_scene(t);
+        }
+
         hud_renderer.draw(batch, frame.hud, fps_display);
         window.end_frame();
 
@@ -590,6 +640,8 @@ int main(int argc, char* argv[]) {
     }
 
     // Cleanup
+    trail.destroy();
+    motion_blur.destroy();
     audio.destroy();
     respack.destroy();
     bg_renderer.destroy();
