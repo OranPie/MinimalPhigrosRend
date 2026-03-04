@@ -1,5 +1,9 @@
 # Phigros Renderer Advance Mode 使用指南
 
+> **C++ 渲染器用户**：本文档描述的是 Python `phic_renderer` 的 advance 模式。
+> C++ 渲染器 (`phigros_render`) 使用更完善的 ChartScript DSL 代替 advance.json，
+> 详见 [CHARTSCRIPT.md](CHARTSCRIPT.md)。
+
 Advance Mode 允许你将多个谱面组合播放，支持顺序播放（sequence）和多谱叠加（composite）两种模式。
 
 ## 基本用法

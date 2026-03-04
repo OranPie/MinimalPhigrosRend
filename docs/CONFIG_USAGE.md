@@ -1,5 +1,9 @@
 # MinimalPhigrosRend / phic_renderer — CONFIG & USAGE (配置与用法)
 
+> **C++ renderer**: This document covers the Python `phic_renderer`.
+> For the C++ native renderer (`phigros_render`), see **[CPP_RENDERER.md](CPP_RENDERER.md)**.
+> For the C++ playlist scripting system, see **[CHARTSCRIPT.md](CHARTSCRIPT.md)**.
+
 ## 中文（简体）
 
 ### 1. 快速开始

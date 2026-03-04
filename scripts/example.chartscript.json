@@ -1,57 +1,127 @@
-// Example chart script — declarative playlist DSL for phigros_render.
+// ChartScript v2 example — shows variables, presets, groups, segments, on_complete.
 // Usage: phigros_render --script scripts/example.chartscript.json
 {
-  "version": 1,
+  "version": 2,
   "name": "Example Playlist",
   "mode": "sequence",
+  "repeat": 1,
+  "resume_file": ".example_resume.json",
 
-  // Transition between charts
-  "transition": {
-    "type": "fade",
-    "duration": 0.5
+  // ── Variables (referenced as "$name" in any string value) ─────────────────
+  "variables": {
+    "spd":  1.3,
+    "glow": 0.3,
+    "chro": 1.5
   },
 
-  // Default config applied to all items (can be overridden per-item)
+  // ── Presets (named config templates, referenced via "preset": "name") ──────
+  "presets": {
+    "vibrant": {
+      "chart_speed":         "$spd",
+      "trail_alpha":         0.7,
+      "trail_frames":        10,
+      "trail_decay_curve":   "gaussian",
+      "trail_blur_quality":  3,
+      "trail_chromatic":     "$chro",
+      "trail_glow":          "$glow",
+      "motion_blur_samples": 4,
+      "motion_blur_shutter": 0.55,
+      "motion_blur_curve":   "gaussian"
+    },
+    "chill": {
+      "trail_alpha":        0.35,
+      "trail_frames":       6,
+      "trail_decay_curve":  "gaussian",
+      "trail_blur_quality": 2,
+      "trail_glow":         0.15,
+      "motion_blur_samples": 3,
+      "motion_blur_shutter": 0.45
+    }
+  },
+
+  // ── Groups (shared config + mods, items reference by "group": "name") ──────
+  "groups": {
+    "hype": {
+      "config": { "preset": "vibrant" },
+      "mods":   [{ "type": "colorize", "mode": "hue", "hue_s": 0.9, "hue_v": 0.85 }]
+    },
+    "relax": {
+      "config": { "preset": "chill" }
+    }
+  },
+
+  // ── Global filter (applied to every item after building the list) ──────────
+  "global_filter": { "min_notes": 50 },
+
+  // ── Defaults (applied to all items; per-item config overrides these) ───────
   "defaults": {
     "chart_speed": 1.0,
     "trail_alpha": 0.5,
-    "trail_frames": 6,
-    "trail_decay": 0.85,
+    "trail_frames": 8,
     "trail_decay_curve": "gaussian",
-    "trail_glow": 0.3,
     "show_hitfx": true,
     "show_particles": true
   },
 
-  // Auto-discover charts from a directory (alternative to manual items)
-  // Uncomment to use:
+  "transition": { "type": "fade", "duration": 0.4 },
+
+  // ── Auto-discover (uncomment to scan a directory at runtime) ───────────────
   // "discover": {
   //   "directory": "charts/",
   //   "levels": ["AT", "IN"],
   //   "recursive": true,
-  //   "sort_by": "name"
+  //   "sort_by": "random",
+  //   "limit": 20
   // },
 
-  // Manual playlist items
+  // ── Explicit items ─────────────────────────────────────────────────────────
   "items": [
+    // 1. Simple item — play first 30 s, group-based visuals
     {
       "input": "charts/example/AT.json",
       "name": "Example Chart",
+      "level": "AT",
+      "group": "hype",
+      "weight": 2,
+      "tags": ["featured"],
       "start": 0.0,
-      "end": 30.0,
-      // Per-item config overrides
-      "config": {
-        "chart_speed": 1.5,
-        "trail_alpha": 0.8,
-        "trail_chromatic": 1.5,
-        "motion_blur_samples": 4,
-        "motion_blur_shutter": 0.6,
-        "motion_blur_curve": "gaussian"
-      },
-      // Inline mods applied to this chart
-      "mods": [
-        { "type": "colorize", "mode": "hue", "hue_s": 0.9, "hue_v": 0.85 }
+      "end": 30.0
+    },
+
+    // 2. notes_window — auto-cut after 200 notes
+    {
+      "input": "charts/example/IN.json",
+      "name": "Example (notes window)",
+      "level": "IN",
+      "group": "hype",
+      "notes_window": 200,
+      "tail_time": 1.0
+    },
+
+    // 3. Segments — play two non-contiguous windows from the same chart
+    {
+      "input": "charts/example/AT.json",
+      "name": "Example (segments)",
+      "level": "AT",
+      "group": "relax",
+      "segments": [
+        { "start": 0.0,  "end": 15.0 },
+        { "start": 45.0, "end": 60.0 }
       ]
+    },
+
+    // 4. on_complete with score gate — retry until 900 000
+    {
+      "input": "charts/example/IN.json",
+      "name": "Score Gate Demo",
+      "level": "IN",
+      "config": { "preset": "vibrant", "chart_speed": 1.2 },
+      "mods": [{ "type": "mirror" }],
+      "on_complete": {
+        "action":      "next",
+        "min_score":   900000,
+        "else_action": "repeat"
+      }
     }
   ]
 }

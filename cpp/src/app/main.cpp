@@ -182,41 +182,94 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        int repeats_done = 0;
-        int total_played = 0;
-        bool keep_going = true;
+        // Helper: run one segment of a chart, returns score
+        auto run_segment = [&](
+            const chartscript::Item& item,
+            const ChartData& item_chart,
+            const config::RenderConfig& item_cfg,
+            double seg_start, double seg_end,
+            bool& quit_out) -> engine::ScoreResult
+        {
+            const int iW = item_cfg.window_w, iH = item_cfg.window_h;
+            AppArgs item_args = args;
+            item_args.chart_path = item.input;
+            if (!item.bgm.empty()) item_args.audio_path = item.bgm;
+            if (!item.bg.empty())  item_args.bg_path    = item.bg;
+            double duration = seg_end - seg_start;
+            if (duration > 0.0) item_args.duration = duration;
+
+            AppContext item_ctx;
+            item_ctx.init(item.input, item_chart.offset + seg_start,
+                          item_args.respack_path, item_args.bg_path,
+                          item_args.font_path, item_args.audio_path,
+                          item_args.headless, iW, iH, item_cfg);
+
+            GameLoop gl(item_ctx, item_args, item_cfg, item_chart,
+                        item_chart.playable_count, seg_end);
+
+#ifdef PHIGROS_WASM
+            emscripten_set_main_loop_arg(GameLoop::wasm_tick, &gl, 0, 1);
+            quit_out = true;
+            return {};
+#else
+            while (gl.run_frame()) {}
+#endif
+            auto sr = gl.final_score();
+            quit_out = item_ctx.window.quit_requested;
+            gl.finish();
+            item_ctx.destroy();
+            return sr;
+        };
+
+        // Collect sorted note hit times for notes_window calculation
+        auto get_sorted_note_times = [](const ChartData& chart) {
+            std::vector<double> times;
+            times.reserve(chart.notes.size());
+            for (const auto& n : chart.notes)
+                if (!n.fake) times.push_back(n.t_hit);
+            std::sort(times.begin(), times.end());
+            return times;
+        };
+
+        // Resume cursor
+        int start_cursor = chartscript::load_resume(script.resume_file);
+        if (start_cursor > 0)
+            std::cout << "[ChartScript] Resuming from item " << (start_cursor + 1) << "\n";
+
+        int  repeats_done = 0;
+        int  total_played = 0;
+        bool keep_going   = true;
+        int  cursor       = start_cursor;
 
         while (keep_going) {
-            for (size_t idx = 0; idx < script.items.size() && keep_going; ++idx) {
-                const auto& item = script.items[idx];
-                if (item.input.empty()) continue;
+            while (cursor < static_cast<int>(script.items.size()) && keep_going) {
+                const auto& item = script.items[static_cast<size_t>(cursor)];
+                if (item.input.empty()) { ++cursor; continue; }
 
                 // Build per-item config
                 auto item_cfg = chartscript::build_item_config(cfg, script.defaults, item.config);
                 const int iW = item_cfg.window_w, iH = item_cfg.window_h;
 
-                // Load chart
-                std::cout << "\n[ChartScript] Playing [" << (idx + 1) << "/"
-                          << script.items.size() << "]: " << item.input;
-                if (!item.name.empty()) std::cout << " (" << item.name << ")";
+                // Load chart (once for all segments)
+                std::cout << "\n[ChartScript] [" << (cursor + 1) << "/"
+                          << script.items.size() << "] " << item.input;
+                if (!item.name.empty())  std::cout << " (" << item.name << ")";
+                if (!item.level.empty()) std::cout << " [" << item.level << "]";
                 std::cout << "\n";
 
                 ChartData item_chart;
                 try {
                     item_chart = load_chart(item.input, item_cfg);
                 } catch (const std::exception& e) {
-                    std::cerr << "[ChartScript] Failed to load '" << item.input
-                              << "': " << e.what() << "\n";
-                    continue;
+                    std::cerr << "[ChartScript] Failed to load: " << e.what() << "\n";
+                    ++cursor; continue;
                 }
-
                 if (!item_chart.is_compiled)
                     engine::precompute_t_enter(item_chart.lines, item_chart.notes, iW, iH);
 
-                // Apply CLI mods + per-item mods
+                // Apply mods
                 for (const auto& mp : args.mod_paths) {
-                    try { mods::apply(item_chart, mods::load_mod(mp)); }
-                    catch (...) {}
+                    try { mods::apply(item_chart, mods::load_mod(mp)); } catch (...) {}
                 }
                 auto item_mod = chartscript::resolve_item_mods(item);
                 if (!item_mod.ops.empty()) {
@@ -224,58 +277,98 @@ int main(int argc, char* argv[]) {
                     mods::apply(item_chart, item_mod);
                 }
 
-                // Apply time window
-                double item_end = item_chart.chart_end_t + 2.0;
-                if (item.end > 0.0) item_end = std::min(item_end, item.end);
-                double duration = item_end - item.start;
-                if (duration <= 0.0) continue;
+                // Build segment list (from segments[], or single start/end, or notes_window)
+                std::vector<std::pair<double,double>> windows;
+                if (!item.segments.empty()) {
+                    auto note_times = get_sorted_note_times(item_chart);
+                    for (const auto& seg : item.segments) {
+                        double s_start = seg.start;
+                        double s_end   = seg.end;
+                        if (seg.notes_window > 0) {
+                            double nw = chartscript::notes_window_end(
+                                note_times, seg.notes_window, seg.tail_time);
+                            if (nw > 0.0) s_end = s_start + nw;
+                        }
+                        if (s_end < 0.0) s_end = item_chart.chart_end_t + 2.0;
+                        windows.push_back({s_start, s_end});
+                    }
+                } else {
+                    double s_start = item.start;
+                    double s_end   = (item.end > 0.0) ? item.end
+                                                       : (item_chart.chart_end_t + 2.0);
+                    if (item.notes_window > 0) {
+                        auto note_times = get_sorted_note_times(item_chart);
+                        double nw = chartscript::notes_window_end(
+                            note_times, item.notes_window, item.tail_time);
+                        if (nw > 0.0) s_end = s_start + nw;
+                    }
+                    windows.push_back({s_start, s_end});
+                }
 
-                // Override args for this item
-                AppArgs item_args = args;
-                item_args.chart_path = item.input;
-                if (!item.bgm.empty()) item_args.audio_path = item.bgm;
-                if (!item.bg.empty())  item_args.bg_path = item.bg;
-                if (item.end > 0.0)    item_args.duration = duration;
+                // Play each segment window
+                engine::ScoreResult last_sr{};
+                for (auto& [w_start, w_end] : windows) {
+                    if (w_end <= w_start) continue;
+                    bool quit = false;
+                    last_sr = run_segment(item, item_chart, item_cfg, w_start, w_end, quit);
+                    ++total_played;
+                    if (quit) { keep_going = false; break; }
+                }
 
-                // Init context and run game loop for this item
-                AppContext item_ctx;
-                item_ctx.init(item.input, item_chart.offset + item.start,
-                              item_args.respack_path, item_args.bg_path,
-                              item_args.font_path, item_args.audio_path,
-                              item_args.headless, iW, iH, item_cfg);
+                std::cout << "[ChartScript] Score: " << last_sr.score
+                          << "  Acc: " << (last_sr.acc_ratio * 100.0) << "%\n";
 
-                GameLoop gl(item_ctx, item_args, item_cfg, item_chart,
-                            item_chart.playable_count, item_end);
+                // Save resume position
+                chartscript::save_resume(script.resume_file, cursor + 1);
 
-#ifdef PHIGROS_WASM
-                emscripten_set_main_loop_arg(GameLoop::wasm_tick, &gl, 0, 1);
-                keep_going = false;
-                break;
-#else
-                while (gl.run_frame()) {}
-#endif
-                auto sr = gl.final_score();
-                std::cout << "[ChartScript] Score: " << sr.score
-                          << "  Acc: " << (sr.acc_ratio * 100.0) << "%\n";
+                if (!keep_going) break;
 
-                gl.finish();
-                item_ctx.destroy();
-                ++total_played;
+                // on_complete: decide what happens next
+                const auto& oc = item.on_complete;
+                chartscript::CompleteAction action = oc.action;
+                if (oc.has_condition())
+                    action = (last_sr.score >= oc.min_score) ? oc.action : oc.else_action;
 
-                if (item_ctx.window.quit_requested) { keep_going = false; break; }
+                switch (action) {
+                case chartscript::CompleteAction::Stop:
+                    keep_going = false;
+                    break;
+                case chartscript::CompleteAction::Repeat:
+                    // Re-run same item (don't advance cursor)
+                    continue;
+                case chartscript::CompleteAction::Loop:
+                    cursor = 0;
+                    continue;
+                case chartscript::CompleteAction::Goto:
+                    if (oc.goto_index >= 0 &&
+                        oc.goto_index < static_cast<int>(script.items.size())) {
+                        cursor = oc.goto_index;
+                        continue;
+                    }
+                    [[fallthrough]];
+                case chartscript::CompleteAction::Next:
+                default:
+                    ++cursor;
+                    break;
+                }
             }
 
+            // End of one pass through items
             ++repeats_done;
             if (script.repeat > 0 && repeats_done >= script.repeat) keep_going = false;
-            if (script.mode == chartscript::PlayMode::Shuffle && keep_going) {
-                // Re-shuffle for next loop iteration
-                unsigned seed = std::random_device{}();
-                std::mt19937 rng(seed);
-                std::shuffle(script.items.begin(), script.items.end(), rng);
+
+            if (keep_going) {
+                cursor = 0;
+                chartscript::save_resume(script.resume_file, 0);
+                // Re-shuffle for next loop pass
+                if (script.mode == chartscript::PlayMode::Shuffle)
+                    chartscript::weighted_shuffle(script.items, 0);
             }
         }
 
-        std::cout << "\n[ChartScript] Done. Played " << total_played << " chart(s).\n";
+        std::cout << "\n[ChartScript] Done. Played " << total_played << " segment(s).\n";
+        if (!script.resume_file.empty())
+            chartscript::save_resume(script.resume_file, 0);
         return 0;
     }
 
