@@ -179,6 +179,9 @@ elseif(EMSCRIPTEN)
     endif()
 else()
     target_include_directories(phigros_render PRIVATE ${SDL2_INCLUDE_DIRS})
+    if(SDL2_LIBRARY_DIRS)
+        target_link_directories(phigros_render PRIVATE ${SDL2_LIBRARY_DIRS})
+    endif()
     target_link_libraries(phigros_render PRIVATE
         phigros_core_lib vendor_stb vendor_miniz vendor_miniaudio
         ${SDL2_LIBRARIES}
