@@ -1,0 +1,16 @@
+{
+  "name": "Kind Colors",
+  "description": "Color each note type: tap=white, drag=cyan, hold=yellow, flick=red.",
+  "ops": [
+    {
+      "type": "colorize",
+      "mode": "by_kind",
+      "by_kind": {
+        "1": [220, 220, 220],
+        "2": [80,  220, 255],
+        "3": [255, 220, 60],
+        "4": [255, 80,  80]
+      }
+    }
+  ]
+}

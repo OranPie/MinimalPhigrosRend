@@ -1,0 +1,12 @@
+{
+  "name": "Rainbow",
+  "description": "Tint notes with a full-spectrum hue gradient over the course of the chart.",
+  "ops": [
+    {
+      "type": "colorize",
+      "mode": "hue",
+      "hue_s": 1.0,
+      "hue_v": 1.0
+    }
+  ]
+}

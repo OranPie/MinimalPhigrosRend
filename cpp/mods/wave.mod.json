@@ -1,0 +1,12 @@
+{
+  "name": "Wave",
+  "description": "Oscillate note x positions with a sine wave — notes drift left/right as the chart progresses.",
+  "ops": [
+    {
+      "type": "wave",
+      "amplitude": 120,
+      "frequency": 0.5,
+      "phase": 0.0
+    }
+  ]
+}

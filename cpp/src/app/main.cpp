@@ -15,6 +15,7 @@
 #include "phigros/engine/hold_logic.hpp"
 #include "phigros/engine/simulateplay.hpp"
 #include "phigros/core/mods.hpp"
+#include "phigros/core/mod_loader.hpp"
 #include <nlohmann/json.hpp>
 #include <iostream>
 #include <fstream>
@@ -171,6 +172,21 @@ int main(int argc, char* argv[]) {
 
     if (!chart.is_compiled)
         engine::precompute_t_enter(chart.lines, chart.notes, W, H);
+
+    // ── Apply mods ────────────────────────────────────────────────────────────
+    for (const auto& mp : args.mod_paths) {
+        try {
+            auto mod = mods::load_mod(mp);
+            std::cout << "[Mod] Applying: " << mod.name;
+            if (!mod.description.empty()) std::cout << " — " << mod.description;
+            std::cout << "  (" << mod.ops.size() << " op"
+                      << (mod.ops.size() != 1 ? "s" : "") << ")\n";
+            mods::apply(chart, mod);
+        } catch (const std::exception& e) {
+            std::cerr << "[Mod] Error loading '" << mp << "': " << e.what() << "\n";
+            return 1;
+        }
+    }
 
     double chart_end = chart.chart_end_t + 2.0;
 

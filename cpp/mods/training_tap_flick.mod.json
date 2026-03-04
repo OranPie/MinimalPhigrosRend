@@ -1,0 +1,10 @@
+{
+  "name": "Training — Tap+Flick Only",
+  "description": "Remove hold and drag notes for tap/flick practice.",
+  "ops": [
+    {
+      "type": "note_filter",
+      "keep": [1, 4]
+    }
+  ]
+}

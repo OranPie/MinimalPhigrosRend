@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <vector>
 #include <cstdlib>
 #include <cstdio>
 
@@ -36,6 +37,8 @@ struct AppArgs {
     // Compile
     std::string compile_output;
     float       compile_sample_rate = 240.0f;
+    // Mods (applied to chart after load, in order)
+    std::vector<std::string> mod_paths; // --mod <file.mod.json>, repeatable
     // Info / utility
     bool        version_mode        = false; // --version
     bool        info_mode           = false; // --info  : print chart metadata and exit
@@ -89,6 +92,7 @@ inline AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--record-end"    && i+1 < argc) args.record_end   = std::atof(argv[++i]);
         else if (a == "--compile"       && i+1 < argc) { args.compile_output = argv[++i]; args.headless = true; }
         else if (a == "--sample-rate"   && i+1 < argc) args.compile_sample_rate = static_cast<float>(std::atof(argv[++i]));
+        else if (a == "--mod"           && i+1 < argc) args.mod_paths.push_back(argv[++i]);
         else if (a == "--list-charts"   && i+1 < argc) { args.list_charts_dir = argv[++i]; args.headless = true; }
         else if (args.chart_path.empty()) args.chart_path = a;
     }
@@ -116,6 +120,10 @@ inline void print_usage(const char* prog) {
         "COMPILE\n"
         "  --compile <out.phbc>      Compile chart to binary and exit\n"
         "  --sample-rate <Hz>        Sampling rate for --compile (default 240)\n"
+        "\n"
+        "MODS\n"
+        "  --mod <file.mod.json>     Apply a mod to the chart (repeatable, applied in order)\n"
+        "                            See mods/ directory for examples and scripts/new_mod.py\n"
         "\n"
         "ASSETS\n"
         "  --config <path>           Render config JSONC file\n"

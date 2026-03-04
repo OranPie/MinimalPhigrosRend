@@ -1,0 +1,11 @@
+{
+  "name": "Shuffle",
+  "description": "Randomly displace note x positions by up to ±150px (seed 1337 for reproducibility).",
+  "ops": [
+    {
+      "type": "shuffle",
+      "seed": 1337,
+      "range": 150
+    }
+  ]
+}

@@ -557,7 +557,7 @@ static void test_mods() {
     chart.notes[0].above = true;
     chart.notes[1].above = false;
 
-    mods::apply_mirror(chart, 0.0, false);
+    mods::apply(chart, mods::MirrorOp{0.0, false});
     CHECK(std::abs(chart.notes[0].x_local_px - (-100.0)) < 1e-9,
           "Mirror: 100 → -100");
     CHECK(std::abs(chart.notes[1].x_local_px - 50.0) < 1e-9,
@@ -567,17 +567,16 @@ static void test_mods() {
     CHECK(chart.notes[0].above == true, "Mirror no flip_side: above unchanged");
 
     // Mirror with flip_side
-    mods::apply_mirror(chart, 0.0, true);
+    mods::apply(chart, mods::MirrorOp{0.0, true});
     CHECK(chart.notes[0].above == false, "Mirror flip_side: above flipped");
 
     // Colorize constant
-    mods::apply_colorize(chart, mods::ColorMode::Constant, {255, 0, 0});
+    mods::apply(chart, mods::ColorizeOp{mods::ColorMode::Constant, {255, 0, 0}});
     CHECK(chart.notes[0].tint_rgb.r == 255 && chart.notes[0].tint_rgb.g == 0,
           "Colorize constant: red");
 
     // Colorize gradient
-    mods::apply_colorize(chart, mods::ColorMode::Gradient,
-                         {}, {0, 0, 0}, {255, 255, 255});
+    mods::apply(chart, mods::ColorizeOp{mods::ColorMode::Gradient, {}, {0, 0, 0}, {255, 255, 255}});
     CHECK(chart.notes[0].tint_rgb.r == 0, "Gradient start=black");
     CHECK(chart.notes[2].tint_rgb.r == 255, "Gradient end=white");
 }

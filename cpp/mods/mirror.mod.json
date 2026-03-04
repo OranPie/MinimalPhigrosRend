@@ -1,0 +1,11 @@
+{
+  "name": "Mirror",
+  "description": "Flip all note positions horizontally around the chart center.",
+  "ops": [
+    {
+      "type": "mirror",
+      "center": 0.0,
+      "flip_side": false
+    }
+  ]
+}
