@@ -481,7 +481,81 @@ Config v2:
 
 ### 5. Example config v2 (JSONC)
 
-See the Chinese example above; the structure is identical.
+```jsonc
+// MinimalPhigrosRend config v2 (JSON with comments)
+{
+  "version": 2,
+
+  "window": {
+    "w": 1280,
+    "h": 720
+  },
+
+  "ui": {
+    "lang": "en",
+    "font_path": null,
+    "font_size_multiplier": 1.5,
+    "no_title_overlay": false
+  },
+
+  "render": {
+    "backend": "pygame",
+    "approach": 3.0,
+    "chart_speed": 1.0,
+    "expand": 1.0,
+
+    "note_scale_x": 1.0,
+    "note_scale_y": 1.0,
+    "note_flow_speed_multiplier": 1.0,
+
+    "multicolor_lines": false,
+    "no_note_outline": false,
+    "line_alpha_affects_notes": "negative_only",
+
+    "overrender": 2.0,
+    "trail_alpha": 0.0,
+    "trail_blur": 0,
+    "trail_dim": 0,
+
+    "hitfx_scale_mul": 1.0
+  },
+
+  "audio": {
+    "audio_backend": "pygame",
+    "bgm": null,
+    "bgm_volume": 0.8,
+    "hitsound_min_interval_ms": 30
+  },
+
+  "assets": {
+    "respack": "./respack.zip",
+    "bg": null,
+    "bg_blur": 10,
+    "bg_dim": 120
+  },
+
+  "gameplay": {
+    "autoplay": false,
+    "hold_fx_interval_ms": 200,
+    "hold_tail_tol": 0.8,
+    "start_time": null,
+    "end_time": null
+  },
+
+  "rpe": {
+    "rpe_easing_shift": 0
+  },
+
+  "debug": {
+    "basic_debug": false,
+    "debug_line_label": false,
+    "debug_line_stats": false,
+    "debug_judge_windows": false,
+    "debug_note_info": false,
+    "debug_particles": false
+  }
+}
+```
 
 ### 6. FAQ
 

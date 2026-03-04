@@ -472,3 +472,417 @@ python phic_pygame_renderer.py --advance advance.json \
 ```
 
 注意：`--start_time` 和 `--end_time` 在 Advance 模式下无效。
+
+---
+
+# Phigros Renderer Advance Mode — User Guide
+
+Advance Mode lets you combine multiple charts into a single playback session.  
+Two top-level modes are supported: **sequence** (play charts one after another) and **composite** (overlay multiple charts simultaneously).
+
+## Basic Usage
+
+```bash
+python phic_pygame_renderer.py --advance advance.json
+```
+
+## JSON Configuration Format
+
+### 1. Sequence Mode
+
+Plays multiple chart segments one after another. Each item can specify a time window.
+
+```json
+{
+  "mode": "sequence",
+  "mix": false,
+  "items": [
+    {
+      "input": "chart1.json",
+      "start": 30.0,
+      "end": 90.0,
+      "start_at": 0.0,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "music1.ogg",
+      "bg": "bg1.jpg"
+    },
+    {
+      "input": "chart2.json",
+      "start": 0.0,
+      "end": 60.0,
+      "start_at": 60.0,
+      "time_offset": 0.0,
+      "chart_speed": 1.2,
+      "bgm": "music2.ogg",
+      "bg": "bg2.jpg"
+    }
+  ]
+}
+```
+
+#### Top-level fields:
+- `mode`: `"sequence"` or `"composite"`
+- `mix`: BGM mixing mode (see below)
+- `items`: list of segments
+
+**Per-item fields:**
+- `input`: chart file path (`.json`, `.zip`, `.pez`)
+- `start`: chart start time (seconds)
+- `end`: chart end time (seconds, optional)
+- `start_at`: when this segment starts on the master timeline (seconds)
+- `time_offset`: time offset (seconds) for alignment
+- `chart_speed`: chart speed multiplier (default `1.0`)
+- `bgm`: BGM file path (optional, overrides the chart pack BGM)
+- `bg`: background image path (optional, overrides the chart pack background)
+
+### 2. Composite Mode
+
+Plays multiple chart tracks simultaneously; all notes are overlaid.
+
+```json
+{
+  "mode": "composite",
+  "mix": true,
+  "main": 0,
+  "tracks": [
+    {
+      "input": "chart1.json",
+      "start_at": 0.0,
+      "end_at": 120.0,
+      "time_offset": 0.0,
+      "chart_speed": 1.0,
+      "bgm": "main.ogg"
+    },
+    {
+      "input": "chart2.json",
+      "start_at": 30.0,
+      "end_at": 90.0,
+      "time_offset": 0.0,
+      "chart_speed": 0.8,
+      "bgm": "overlay.ogg"
+    }
+  ]
+}
+```
+
+#### Top-level fields:
+- `main`: primary track index (determines the main BGM)
+- `tracks`: list of tracks
+
+**Per-track fields:**
+- `input`: chart file path
+- `start_at`: start time on the master timeline
+- `end_at`: end time on the master timeline (optional)
+- `time_offset`: time offset for alignment
+- `chart_speed`: chart speed multiplier
+- `bgm`: BGM for this track
+
+## BGM Mixing Modes
+
+### mix = false (default)
+- Uses `pygame.mixer.music` (single stream)
+- Sequence mode: switches BGM between segments
+- Composite mode: only the main track BGM plays
+
+### mix = true
+- Uses `pygame.mixer.Sound` for multi-channel mixing
+- Each BGM starts at its specified `start_at` time
+- Falls back to `mix = false` automatically on load failure
+
+**Limitations:**
+- Sound objects cannot seek (no fast-forward / rewind)
+- Mixing uses more audio channels
+
+## Path Resolution Rules
+
+1. All relative paths (charts, BGM, backgrounds, hitsounds) are resolved relative to the directory containing `advance.json`.
+2. If a relative path is not found there, the renderer also looks in the chart file's own directory.
+
+## Timeline Diagram
+
+### Sequence Mode
+```
+Master:  0s ──────► 60s ──────► 120s
+         │ chart1  │ chart2  │
+         │ 30–90s  │ 0–60s   │
+         │ speed 1 │ speed 1.2│
+```
+
+### Composite Mode
+```
+Master:  0s ──────► 30s ──────► 90s ──────► 120s
+         │ chart1  │ chart1+chart2 │ chart1  │
+         │ full    │ 30–90s overlay│ full    │
+```
+
+## Practical Examples
+
+### 1. Practice a Specific Section
+```json
+{
+  "mode": "sequence",
+  "items": [
+    {
+      "input": "difficult_chart.json",
+      "start": 60.0,
+      "end": 80.0,
+      "start_at": 0.0,
+      "chart_speed": 0.5
+    }
+  ]
+}
+```
+
+### 2. Concatenate Multiple Short Charts
+```json
+{
+  "mode": "sequence",
+  "items": [
+    {"input": "part1.json", "start_at": 0.0},
+    {"input": "part2.json", "start_at": 60.0},
+    {"input": "part3.json", "start_at": 120.0}
+  ]
+}
+```
+
+### 3. Co-op Chart (Two Players)
+```json
+{
+  "mode": "composite",
+  "mix": true,
+  "tracks": [
+    {"input": "player1.json", "start_at": 0.0, "chart_speed": 1.0},
+    {"input": "player2.json", "start_at": 0.0, "chart_speed": 1.0}
+  ]
+}
+```
+
+### 4. Speed Ramp Practice
+```json
+{
+  "mode": "sequence",
+  "items": [
+    {"input": "chart.json", "start": 0.0, "end": 60.0, "start_at": 0.0,   "chart_speed": 0.8},
+    {"input": "chart.json", "start": 0.0, "end": 60.0, "start_at": 60.0,  "chart_speed": 1.0},
+    {"input": "chart.json", "start": 0.0, "end": 60.0, "start_at": 120.0, "chart_speed": 1.2}
+  ]
+}
+```
+
+## MOD GUIDE
+
+The renderer supports `mods` for runtime chart rewriting (the source chart file is never modified). Useful for practice, visual modes, and custom overrides.
+
+### 1. Where to Put mods
+
+- **Advance Mode**: add `"mods"` at the top level of `advance.json`.
+- **Normal / generic config**: add `"mods"` at the top level of your `--config config.json`.
+
+### 2. Merge & Priority
+
+If both `--config` and `advance.json` define `mods`, they are merged; `advance.json` wins on key conflicts.
+
+Effective order (later = higher priority):
+
+- `mods.force_line_alpha` / `mods.note_speed_mul_affects_travel` (global flags)
+- `mods.full_blue` (FullBlue Mode)
+- `mods.rules` / `mods.note_rules` (conditional batch edits)
+- `mods.note_overrides` (global forced overrides; overrides rule results)
+- `mods.line_rules` (per-line batch edits / forced alpha)
+
+Line alpha final priority:
+- `mods.line_rules[].set.force_alpha` (per-line forced, highest)
+- `mods.force_line_alpha` (global forced)
+- Original chart events (Official / RPE alpha events)
+
+### 3. General Conventions
+
+- **Note kind**: `1=tap`, `2=drag`, `3=hold`, `4=flick`
+- **alpha**: accepts `0..1` (e.g. `0.5`) or `0..255` (e.g. `128`)
+- **side**: `"above"` / `"below"` / `"flip"` (or `true`/`false`)
+
+### 4. Global Flags
+
+Place these at the top level of `mods`:
+
+- `force_line_alpha`: force all line alphas (supports `255` or `1.0`)
+- `note_speed_mul_affects_travel`: make non-Hold note travel distance also respect `speed_mul`
+
+```json
+{
+  "mods": {
+    "force_line_alpha": 255,
+    "note_speed_mul_affects_travel": true
+  }
+}
+```
+
+### 5. FullBlue Mode
+
+Entry: `mods.full_blue` (aliases: `full_blue_mode` / `fullbluemode` / `FullBlueMode`).
+
+Fields:
+- `enable` (default `true`)
+- `convert_non_hold_to_tap` (default `true`)
+- `force_line_alpha` (default `255`)
+- `note_speed_mul_affects_travel` (default `true`)
+- `note_overrides`: built-in note global override (see §7)
+
+```json
+{
+  "mods": {
+    "full_blue": {
+      "enable": true,
+      "convert_non_hold_to_tap": true,
+      "force_line_alpha": 255
+    }
+  }
+}
+```
+
+### 6. Note Rules: mods.rules / mods.note_rules
+
+Batch-edit notes that match a filter.
+
+Rule format (array):
+- `filter` / `when`: selection criteria
+- `set` / `then`: fields to change
+- `apply_to_hold`: whether holds are affected (default `true`)
+
+`filter` fields:
+- `line_id` / `line_ids`
+- `kind` / `kinds`
+- `not_kind` / `not_kinds` / `exclude_kind`
+- `above`, `fake`
+- `t_hit_min` / `time_min` (seconds)
+- `t_hit_max` / `time_max` (seconds)
+- `t_end_min` / `t_end_max` (seconds)
+
+`set` fields:
+- `kind`, `speed_mul`, `alpha`, `size`, `side` / `above`
+
+Example — convert all Flick(4) notes between 2–10 s into Tap(1):
+
+```json
+{
+  "mods": {
+    "rules": [
+      {
+        "filter": {"kind": 4, "t_hit_min": 2.0, "t_hit_max": 10.0},
+        "set": {"kind": 1}
+      }
+    ]
+  }
+}
+```
+
+### 7. Global Note Override: mods.note_overrides
+
+Force-override all notes (higher priority than `mods.rules`).
+
+Fields: `apply_to_hold`, `kind`, `speed_mul`, `alpha`, `size`, `side`
+
+```json
+{
+  "mods": {
+    "note_overrides": {
+      "apply_to_hold": false,
+      "alpha": 255,
+      "speed_mul": 1.2,
+      "side": "above"
+    }
+  }
+}
+```
+
+### 8. Line Rules: mods.line_rules
+
+Batch-edit judge lines (color, name, forced alpha).
+
+`filter` fields: `lid` / `lids` / `line_id` / `line_ids`, `name`
+
+`set` fields:
+- `color`: `[r,g,b]` or `"#RRGGBB"`
+- `name`
+- `force_alpha`: `0..1` or `0..255`
+
+```json
+{
+  "mods": {
+    "line_rules": [
+      {
+        "filter": {"line_ids": [0, 3]},
+        "set": {"force_alpha": 255, "color": "#00A0FF"}
+      }
+    ]
+  }
+}
+```
+
+### 9. Hold → Tap + Drag: mods.hold_to_tap_drag
+
+Disassembles a Hold note into:
+- 1 Tap at the head (optional)
+- Periodic Drag notes during the hold duration (default `kind=2`)
+
+This mod **generates new notes** (unlike `note_rules` which only modifies fields).
+
+Fields:
+- `enable` (default `true`)
+- `interval` / `drag_interval`: seconds between Drags (default `0.1`)
+- `tap_head`: add a Tap at hold start (default `true`)
+- `remove_hold`: remove the original Hold (default `true`)
+- `include_end`: add one more Drag at `t_end` (default `true`)
+- `drag_kind`: kind of generated notes (default `2`; can be `1/3/4`)
+
+```json
+{
+  "mods": {
+    "hold_to_tap_drag": {
+      "enable": true,
+      "interval": 0.12,
+      "tap_head": true,
+      "remove_hold": true,
+      "include_end": true,
+      "drag_kind": 2
+    }
+  }
+}
+```
+
+## Scoring
+
+- **Sequence mode**: only the notes from played segments count
+- **Composite mode**: all unique notes across all active tracks count
+- Accuracy contributes 90 %, max combo contributes 10 %
+- All Perfect = 1,000,000 points
+
+## Notes & Caveats
+
+1. `time_offset` is for micro-alignment. Formula:
+   ```
+   master_time = (chart_time + offset - time_offset) / chart_speed + start_at
+   ```
+2. `chart_speed` only affects the chart timeline — it does **not** change audio playback speed.
+3. `--start_time` / `--end_time` CLI flags are ignored in Advance Mode.
+4. Use absolute paths to avoid path-resolution ambiguity.
+
+## Troubleshooting
+
+- **BGM won't play**: check file path; try `"mix": false`.
+- **Notes out of sync**: adjust `time_offset`.
+- **Performance issues**: reduce concurrent track count or disable effects.
+
+## Combining with Other CLI Flags
+
+Advance Mode works with most other arguments:
+```bash
+python phic_pygame_renderer.py --advance advance.json \
+  --respack my_respack.zip \
+  --autoplay \
+  --chart_speed 1.0 \
+  --expand 1.5
+```
+
+Note: `--start_time` and `--end_time` are ignored in Advance Mode.
