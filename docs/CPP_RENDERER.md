@@ -1,5 +1,6 @@
 # C++ Renderer — Reference Guide
 
+> 🌐 [中文](CPP_RENDERER.zh.md)
 The C++ renderer (`phigros_render`) is the high-performance, headless-capable native renderer
 for Phigros charts. It shares no runtime dependency with the Python `phic_renderer` and
 targets desktop (SDL 2/3) and WebAssembly (Emscripten) platforms.

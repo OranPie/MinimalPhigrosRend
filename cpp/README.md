@@ -1,5 +1,7 @@
 # MinimalPhigrosRend — C++ Renderer
 
+> 🌐 [中文](README.zh.md)
+
 High-performance Phigros chart renderer rewritten in C++17.  
 Cross-platform: Desktop (SDL3), Web (WASM/Emscripten + SDL2), Mobile.
 

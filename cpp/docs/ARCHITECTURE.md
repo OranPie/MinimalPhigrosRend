@@ -1,5 +1,6 @@
 # Architecture Overview
 
+> 🌐 [中文](ARCHITECTURE.zh.md)
 ```
 cpp/
 ├── include/phigros/       # All headers (header-only core)
@@ -72,6 +73,11 @@ CLI args + config.jsonc
 | `rpe_parser.hpp` | Parses RPE (Re:PhiEdit) JSON format |
 | `pec_parser.hpp` | Parses PEC binary/text format |
 | `chart_loader.hpp` | Auto-detects format, calls the right parser |
+| `bpm_map.hpp` | `BpmMap` — beat-to-seconds conversion (BPM segment list) |
+| `compiled_chart.hpp` | `CompiledChartData` — pre-sampled flat float arrays for all line tracks |
+| `compiler.hpp` | `compile_chart()` — samples all easing tracks at a fixed Hz into `CompiledChartData` |
+| `phbc_io.hpp` | `write_phbc()` / `read_phbc()` — binary `.phbc` round-trip serialization |
+| `sampled_track.hpp` | `SampledTrack` — O(1) lerp lookup into a uniform float sample array |
 
 All parsers produce `ChartData`:
 ```cpp
@@ -105,6 +111,7 @@ Notes are **sorted by `t_hit`** after parsing — required for binary-search vis
 | `simulateplay.hpp` | `SimulatePlayer` — frame-accurate autoplay simulation |
 | `manual_judge.hpp` | `ManualJudge` — spatial note search for interactive play |
 | `effects.hpp` | `EffectManager` — `HitFX`, `FlashFX`, `ParticleBurst` lifecycle |
+| `visibility.hpp` | `scroll_speed_at()`, AABB visibility check helpers used by `note_manager` |
 
 #### Judge timing constants
 
@@ -158,6 +165,7 @@ score = int( acc_sum/N × 900000 + max_combo/N × 100000 )
 | `respack.hpp` | Loads `respack.zip` via miniz; holds note/hitfx textures |
 | `replay.hpp` | `ReplayWriter` (records events) + `ReplayPlayer` (replays); miniz-compressed binary format |
 | `video_encoder.hpp` | `RecordingSession` — pipes raw RGBA frames to FFmpeg subprocess |
+| `audio.hpp` | `AudioSystem` — miniaudio-based BGM player with offset compensation |
 
 #### Replay format
 

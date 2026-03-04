@@ -1,5 +1,6 @@
 # Configuration Reference
 
+> 🌐 [中文](CONFIG.zh.md)
 All options are loaded from a JSONC file (JSON with `//` and `#` line comments).
 
 ```bash
