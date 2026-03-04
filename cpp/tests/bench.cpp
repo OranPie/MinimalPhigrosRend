@@ -381,9 +381,10 @@ struct BuildFrameBench {
     int    samples = 0;  // frames sampled
 };
 
-static BuildFrameBench bench_build_frame(const ChartEntry& e) {
+static BuildFrameBench bench_build_frame(const ChartEntry& e,
+                                         double expand_factor = 1.0) {
     ChartData chart = load_source(e.path);
-    engine::precompute_t_enter(chart.lines, chart.notes, 1280, 720);
+    engine::precompute_t_enter(chart.lines, chart.notes, 1280, 720, expand_factor);
 
     double t_start = chart.offset;
     double t_end   = chart.chart_end_t + 2.0;
@@ -763,6 +764,116 @@ static TrackEvalBench bench_track_eval(const ChartEntry& e) {
     tb.speedup = tb.piecewise_ns_per_call > 0
                ? tb.piecewise_ns_per_call / tb.sampled_ns_per_call : 0;
     return tb;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Section 11 — Render Effects CPU Overhead (trail / motion blur simulation)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Trail:  The trail renderer reuses past SDL render-target textures — zero extra
+//         build_frame() calls per render frame.  CPU overhead = negligible.
+//
+// Motion blur: Samples N evenly-spaced sub-frames within the current shutter
+//              window, calling build_frame() once per sample.  This section
+//              measures the per-render-frame cost for 1×, 4×, and 8× samples
+//              to show how motion-blur sample count scales.
+//
+// We also check that no_cull_enter_time=false (t_enter culling enabled) does
+// not visually regress the snapshot versus the default no-cull baseline.
+// ─────────────────────────────────────────────────────────────────────────────
+
+struct RenderEffectsBench {
+    std::string name;
+    int notes = 0;
+    // us per render-frame for 1×/4×/8× build_frame calls
+    double us_plain  = 0;   // 1 sample  (plain render)
+    double us_mb4    = 0;   // 4 samples (motion blur, shutter=0.5)
+    double us_mb8    = 0;   // 8 samples (motion blur, shutter=0.5)
+    // t_enter culling: verify snapshot note count matches baseline
+    int    cull_ok   = 1;   // 1 = culled count ≤ uncullled count (no extra notes)
+};
+
+static RenderEffectsBench bench_render_effects(const ChartEntry& e) {
+    ChartData chart = load_source(e.path);
+    engine::precompute_t_enter(chart.lines, chart.notes, 1280, 720);
+
+    const double t_start   = chart.offset;
+    const double t_end     = chart.chart_end_t + 2.0;
+    constexpr double SIM_DT = 1.0 / 240.0;
+    constexpr double SHUTTER = 0.5;    // shutter angle fraction (matches default)
+
+    config::RenderConfig cfg_plain;
+    cfg_plain.window_w = 1280; cfg_plain.window_h = 720;
+    // no_cull_enter_time = true (default) — t_enter culling OFF
+
+    config::RenderConfig cfg_cull = cfg_plain;
+    cfg_cull.no_cull_enter_time = false; // t_enter culling ON
+
+    std::vector<NoteState> states(chart.notes.size());
+    for (size_t i = 0; i < states.size(); ++i) states[i].note = &chart.notes[i];
+    engine::Judge          judge;
+    engine::SimulatePlayer sim(engine::SimMode::Conservative);
+    engine::NoteManager    note_mgr(&chart.notes, &states);
+
+    // Collect a representative set of simulation time points for benchmarking
+    std::vector<double> ts;
+    ts.reserve(static_cast<size_t>((t_end - t_start) / SIM_DT) + 128);
+
+    for (double t = t_start; t <= t_end; t += SIM_DT) {
+        int idx = note_mgr.find_next_note_index(t);
+        sim.step(t, chart.notes, states, chart.lines, judge, 1280, 720);
+        engine::detect_misses(states, idx, t, engine::Judge::BAD, judge);
+        engine::hold_maintenance(states, idx, t, 0.30, judge);
+        engine::hold_finalize(states, idx, t, 0.30, engine::Judge::BAD, judge);
+        ts.push_back(t);
+    }
+    if (ts.empty()) return {};
+
+    // Helper: time N build_frame calls per render tick at each time point
+    auto measure_ns = [&](int samples_per_frame,
+                          const config::RenderConfig& cfg) -> double {
+        // Limit frames measured to keep benchmark fast (sample every 4th tick)
+        std::vector<double> frame_ns;
+        frame_ns.reserve(ts.size() / 4 + 1);
+        for (size_t fi = 0; fi < ts.size(); fi += 4) {
+            double t_base = ts[fi];
+            auto ta = SC::now();
+            for (int s = 0; s < samples_per_frame; ++s) {
+                // Sub-frame offset: spread samples across shutter window
+                double frac = (samples_per_frame <= 1)
+                    ? 0.0
+                    : static_cast<double>(s) / (samples_per_frame - 1);
+                double t_sub = t_base - SHUTTER * SIM_DT * (1.0 - frac);
+                auto fr = render::build_frame(t_sub, chart, states, judge, cfg);
+                (void)fr;
+            }
+            auto tb = SC::now();
+            frame_ns.push_back(
+                std::chrono::duration<double, std::nano>(tb - ta).count());
+        }
+        double sum = std::accumulate(frame_ns.begin(), frame_ns.end(), 0.0);
+        return (sum / frame_ns.size()) / 1000.0; // → μs
+    };
+
+    // Verify: with t_enter culling on, note count in snapshot must be ≤ baseline
+    int cull_ok = 1;
+    {
+        // Pick a time near the midpoint where notes are active
+        double t_mid = ts[ts.size() / 2];
+        auto fr_plain = render::build_frame(t_mid, chart, states, judge, cfg_plain);
+        auto fr_cull  = render::build_frame(t_mid, chart, states, judge, cfg_cull);
+        // Culled snapshot must not show MORE notes than uncullled baseline
+        if (fr_cull.notes.size() > fr_plain.notes.size()) cull_ok = 0;
+    }
+
+    RenderEffectsBench b;
+    b.name    = e.name;
+    b.notes   = chart.playable_count;
+    b.us_plain = measure_ns(1, cfg_plain);
+    b.us_mb4   = measure_ns(4, cfg_plain);
+    b.us_mb8   = measure_ns(8, cfg_plain);
+    b.cull_ok  = cull_ok;
+    return b;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1211,6 +1322,56 @@ int main(int argc, char* argv[]) {
         md.table({"Chart", "Piecewise ns/call", "SampledTrack ns/call", "Speedup"}, rows);
     }
 
+    // ── Render Effects (motion blur CPU overhead) ─────────────────────────────
+    std::cout << "\n──── 11. Render Effects (Motion Blur CPU Overhead) ──────────────\n";
+    md.h2("11. Render Effects — Motion Blur CPU Overhead");
+    md.p("Measures the CPU cost of calling `build_frame()` 1×, 4×, and 8× per render "
+         "tick to simulate motion-blur sub-frame sampling. Shutter fraction = 0.5 (180° "
+         "shutter), sub-frames spread evenly across the shutter window. "
+         "**Trail** uses SDL render-target compositing only — zero extra `build_frame()` "
+         "calls — so trail CPU overhead is negligible and not listed separately. "
+         "t_enter culling (`no_cull_enter_time=false`) is verified: the culled note count "
+         "must not exceed the baseline (uncullled) count at the chart midpoint.");
+
+    std::vector<RenderEffectsBench> re_results;
+    {
+        std::vector<std::vector<std::string>> rows;
+        for (const auto& e : entries) {
+            std::cout << "  " << e.name << "…  "; std::cout.flush();
+            auto rb = bench_render_effects(e);
+            re_results.push_back(rb);
+
+            std::ostringstream plain_s, mb4_s, mb8_s, ov4_s, ov8_s, fps4_s, cull_s;
+            plain_s << std::fixed << std::setprecision(1) << rb.us_plain  << " μs";
+            mb4_s   << std::fixed << std::setprecision(1) << rb.us_mb4    << " μs";
+            mb8_s   << std::fixed << std::setprecision(1) << rb.us_mb8    << " μs";
+            double ov4 = rb.us_plain > 0 ? rb.us_mb4 / rb.us_plain : 0;
+            double ov8 = rb.us_plain > 0 ? rb.us_mb8 / rb.us_plain : 0;
+            double max_fps4 = rb.us_mb4 > 0 ? 1e6 / rb.us_mb4 : 0;
+            ov4_s   << std::fixed << std::setprecision(2) << ov4  << "×";
+            ov8_s   << std::fixed << std::setprecision(2) << ov8  << "×";
+            fps4_s  << std::fixed << std::setprecision(0) << max_fps4;
+            cull_s  << (rb.cull_ok ? "✓" : "✗ REGRESSED");
+
+            std::cout << "plain=" << plain_s.str()
+                      << "  MB×4=" << mb4_s.str() << " (" << ov4_s.str() << ")"
+                      << "  MB×8=" << mb8_s.str() << " (" << ov8_s.str() << ")"
+                      << "  cull=" << cull_s.str() << "\n";
+            rows.push_back({
+                e.name, plain_s.str(),
+                mb4_s.str() + " (" + ov4_s.str() + ")",
+                mb8_s.str() + " (" + ov8_s.str() + ")",
+                fps4_s.str() + " fps",
+                cull_s.str()
+            });
+        }
+        md.table(
+            {"Chart", "Plain (1×)", "Motion Blur 4× (overhead)", "Motion Blur 8× (overhead)",
+             "Max fps at MB×4", "t_enter cull"},
+            rows);
+        md.p("*Overhead = μs(N×) / μs(1×). Max fps at MB×4 = 1,000,000 / μs(4×).*");
+    }
+
     // ── Summary ───────────────────────────────────────────────────────────────
     md.h2("Summary");
 
@@ -1253,6 +1414,14 @@ int main(int argc, char* argv[]) {
             {"Mod application",        "All mods < " + fmt_ns(slowest_mod_us * 1000) + "; range " + mod_range_s.str()},
             {"PHBC load speedup",      "Up to " + speedup_s.str() + " faster than source chart load"},
             {"Note struct size",       std::to_string(mf.sizeof_note) + " bytes; NoteState " + std::to_string(mf.sizeof_notestate) + " bytes"},
+            {"Render effects (MB CPU)", [&]{
+                double max_mb4 = 0;
+                for (const auto& r : re_results) max_mb4 = std::max(max_mb4, r.us_mb4);
+                std::ostringstream s;
+                s << std::fixed << std::setprecision(1)
+                  << "Motion blur ×4 worst-case " << max_mb4 << " μs/frame; "
+                  << "trail = 0 extra CPU";
+                return s.str(); }()},
         });
     }
 

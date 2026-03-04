@@ -1,5 +1,6 @@
 #pragma once
 #include "phigros/render/sprite_batch.hpp"
+#include "phigros/render/renderer.hpp"   // apply_expand_xy
 #include "phigros/render/texture.hpp"
 #include "phigros/engine/effects.hpp"
 #include "phigros/io/respack.hpp"
@@ -32,7 +33,8 @@ struct HitFXRenderer {
               double t,
               bool show_hitfx = true,
               bool show_particles = true,
-              float intensity = 1.0f) const {
+              float intensity = 1.0f,
+              int W = 1280, int H = 720, double expand = 1.0) const {
 
         const auto& sheet = respack.hitfx_sheet;
         bool has_sheet = sheet.valid();
@@ -71,9 +73,11 @@ struct HitFXRenderer {
                     double rendered_rot = respack.cfg.hitfx_rotate
                         ? (fx.rot + fx.rot_speed * age) : 0.0;
 
+                    double fx_x = fx.x, fx_y = fx.y;
+                    apply_expand_xy(fx_x, fx_y, W, H, expand);
                     batch.draw_texture_region(sheet,
                         ix * cell_w, iy * cell_h, cell_w, cell_h,
-                        fx.x, fx.y, draw_size, draw_size,
+                        fx_x, fx_y, draw_size, draw_size,
                         rendered_rot, cr, cg, cb, a);
                 }
             }
@@ -87,7 +91,9 @@ struct HitFXRenderer {
                     double r = f.radius_start + (f.radius_end - f.radius_start) * p;
                     uint8_t a = static_cast<uint8_t>(
                         std::clamp(255.0 * (1.0 - p) * double(intensity), 0.0, 255.0));
-                    draw_circle_outline(batch, f.x, f.y, r,
+                    double fx_x = f.x, fx_y = f.y;
+                    apply_expand_xy(fx_x, fx_y, W, H, expand);
+                    draw_circle_outline(batch, fx_x, fx_y, r,
                                         f.color.r, f.color.g, f.color.b, a);
                 }
             }
@@ -107,8 +113,10 @@ struct HitFXRenderer {
                         std::clamp(static_cast<float>(pt.alpha) * intensity,
                                    0.0f, 255.0f));
                     if (a_p == 0) continue;
+                    double pt_x = pt.x, pt_y = pt.y;
+                    apply_expand_xy(pt_x, pt_y, W, H, expand);
                     batch.draw_rect(
-                        pt.x - pt.size * 0.5, pt.y - pt.size * 0.5,
+                        pt_x - pt.size * 0.5, pt_y - pt.size * 0.5,
                         pt.size, pt.size,
                         burst.rgba.r, burst.rgba.g, burst.rgba.b, a_p);
                 }

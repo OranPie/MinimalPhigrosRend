@@ -1,6 +1,6 @@
 #pragma once
 #include "phigros/render/sprite_batch.hpp"
-#include "phigros/render/renderer.hpp"
+#include "phigros/render/renderer.hpp"   // apply_expand_xy
 #include "phigros/io/respack.hpp"
 #include "phigros/core/types.hpp"
 #include "phigros/engine/kinematics.hpp"
@@ -29,7 +29,8 @@ struct NoteRenderer {
     void draw(const SpriteBatch& batch,
               const io::Respack& respack,
               const std::vector<NoteSnapshot>& notes,
-              double t) const {
+              double t,
+              int W = 1280, int H = 720, double expand = 1.0) const {
 
         for (auto& ns : notes) {
             // Skip holds (drawn by HoldRenderer)
@@ -40,6 +41,10 @@ struct NoteRenderer {
 
             double ws = base_note_w * note_scale_x * ns.size_px;
             double hs = base_note_h * note_scale_y * ns.size_px;
+
+            // Apply expand: compress world coords toward screen centre (matches Python)
+            double draw_x = ns.wx, draw_y = ns.wy;
+            apply_expand_xy(draw_x, draw_y, W, H, expand);
 
             // Color and alpha
             uint8_t r = ns.color.r, g = ns.color.g, b = ns.color.b;
@@ -61,12 +66,12 @@ struct NoteRenderer {
             if (note_outline && !ns.miss) {
                 uint8_t oa = static_cast<uint8_t>(a * 0.5);
                 if (oa > 0)
-                    batch.draw_texture(tex, ns.wx, ns.wy, ws * 1.08, hs * 1.08,
+                    batch.draw_texture(tex, draw_x, draw_y, ws * 1.08, hs * 1.08,
                                        ns.line_rot, 0, 0, 0, oa);
             }
 
             // Rotate note to match line angle
-            batch.draw_texture(tex, ns.wx, ns.wy, ws, hs, ns.line_rot, r, g, b, a);
+            batch.draw_texture(tex, draw_x, draw_y, ws, hs, ns.line_rot, r, g, b, a);
         }
     }
 };

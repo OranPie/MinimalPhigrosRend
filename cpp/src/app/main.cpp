@@ -150,7 +150,7 @@ int main(int argc, char* argv[]) {
             printf("  File size:    %.2f MB\n", mb);
         } else {
             auto chart = load_chart(p, cfg);
-            engine::precompute_t_enter(chart.lines, chart.notes, W, H);
+            engine::precompute_t_enter(chart.lines, chart.notes, W, H, cfg.expand_factor);
             int holds = 0;
             for (auto& n : chart.notes) if (!n.fake && n.kind == 3) ++holds;
             printf("[Info] %s\n", p.c_str());
@@ -265,7 +265,7 @@ int main(int argc, char* argv[]) {
                     ++cursor; continue;
                 }
                 if (!item_chart.is_compiled)
-                    engine::precompute_t_enter(item_chart.lines, item_chart.notes, iW, iH);
+                    engine::precompute_t_enter(item_chart.lines, item_chart.notes, iW, iH, item_cfg.expand_factor);
 
                 // Apply mods
                 for (const auto& mp : args.mod_paths) {
@@ -380,7 +380,7 @@ int main(int argc, char* argv[]) {
               << " Offset=" << chart.offset << "s\n";
 
     if (!chart.is_compiled)
-        engine::precompute_t_enter(chart.lines, chart.notes, W, H);
+        engine::precompute_t_enter(chart.lines, chart.notes, W, H, cfg.expand_factor);
 
     // ── Apply mods ────────────────────────────────────────────────────────────
     for (const auto& mp : args.mod_paths) {

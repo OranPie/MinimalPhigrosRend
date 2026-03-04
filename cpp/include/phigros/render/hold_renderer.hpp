@@ -1,6 +1,6 @@
 #pragma once
 #include "phigros/render/sprite_batch.hpp"
-#include "phigros/render/renderer.hpp"
+#include "phigros/render/renderer.hpp"   // apply_expand_xy
 #include "phigros/io/respack.hpp"
 #include <cmath>
 #include <vector>
@@ -22,7 +22,8 @@ struct HoldRenderer {
     void draw(const SpriteBatch& batch,
               const io::Respack& respack,
               const std::vector<NoteSnapshot>& notes,
-              double t) const {
+              double t,
+              int W = 1280, int H = 720, double expand = 1.0) const {
         for (auto& ns : notes) {
             if (!ns.is_hold) continue;
 
@@ -31,9 +32,11 @@ struct HoldRenderer {
 
             double ws = base_note_w * note_scale_x * ns.size_px;
 
-            // Head and tail positions from snapshot
+            // Head and tail positions from snapshot — apply expand transform
             double hx = ns.wx, hy = ns.wy;
             double tx = ns.wx_tail, ty = ns.wy_tail;
+            apply_expand_xy(hx, hy, W, H, expand);
+            apply_expand_xy(tx, ty, W, H, expand);
 
             // Direction vector from tail to head
             double dx = hx - tx, dy = hy - ty;

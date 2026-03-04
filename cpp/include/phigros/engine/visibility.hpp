@@ -50,18 +50,26 @@ inline bool note_visible_on_screen(
             pos.y + h / 2 >= top - margin  && pos.y - h / 2 <= bottom + margin);
 }
 
-// Precompute t_enter for all notes
+// Precompute t_enter for all notes.
+// expand_factor must match the value used during rendering so that the
+// visibility check sees the same viewport as the actual draw pass.
 inline void precompute_t_enter(
     std::vector<Line>& lines,
     std::vector<Note>& notes,
     int W, int H,
+    double expand_factor    = 1.0,
     double lookback_default = 256.0,
-    double dt_init = 1.0 / 30.0)
+    double dt_init          = 1.0 / 30.0)
 {
     int base_w = static_cast<int>(0.06 * W);
     int base_h = static_cast<int>(0.018 * H);
     dt_init = std::max(1e-4, dt_init);
     constexpr int MAX_EXPAND = 32;
+
+    auto visible = [&](const Note& n, double t) {
+        return note_visible_on_screen(lines, n, t, W, H, base_w, base_h,
+                                      expand_factor);
+    };
 
     for (auto& n : notes) {
         if (n.fake) { n.t_enter = -1e9; continue; }
@@ -76,7 +84,7 @@ inline void precompute_t_enter(
 
         // Find a visible point (prefer t_hit)
         double t_vis = t_hit;
-        bool vis_at_hit = note_visible_on_screen(lines, n, t_vis, W, H, base_w, base_h);
+        bool vis_at_hit = visible(n, t_vis);
 
         if (!vis_at_hit) {
             double step = dt_init;
@@ -84,9 +92,7 @@ inline void precompute_t_enter(
             for (int i = 0; i < MAX_EXPAND; ++i) {
                 double t2 = t_hit - step;
                 if (t2 < t_hit - lookback_default) break;
-                if (note_visible_on_screen(lines, n, t2, W, H, base_w, base_h)) {
-                    t_vis = t2; found = true; break;
-                }
+                if (visible(n, t2)) { t_vis = t2; found = true; break; }
                 step *= 2.0;
             }
             if (!found) { n.t_enter = t_hit - lookback_default; continue; }
@@ -100,7 +106,7 @@ inline void precompute_t_enter(
         for (int i = 0; i < MAX_EXPAND; ++i) {
             double t2 = hi - step;
             if (t2 < t_hit - lookback_default) break;
-            if (note_visible_on_screen(lines, n, t2, W, H, base_w, base_h)) {
+            if (visible(n, t2)) {
                 hi = t2;
                 step *= 2.0;
             } else {
@@ -113,10 +119,7 @@ inline void precompute_t_enter(
         // Binary search refinement (lo=invisible, hi=visible)
         for (int i = 0; i < 20; ++i) {
             double mid = (lo + hi) * 0.5;
-            if (note_visible_on_screen(lines, n, mid, W, H, base_w, base_h))
-                hi = mid;
-            else
-                lo = mid;
+            if (visible(n, mid)) hi = mid; else lo = mid;
         }
         n.t_enter = hi;
     }

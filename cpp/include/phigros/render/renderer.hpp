@@ -53,6 +53,17 @@ struct FrameSnapshot {
 };
 
 // Build a full frame snapshot for time t
+// Apply Python-style expand transform: compress world coords toward screen centre
+// by 1/expand, making a larger portion of the playfield visible.
+// Matches phic_renderer's apply_expand_xy(x, y, W, H, expand).
+inline void apply_expand_xy(double& x, double& y, int W, int H, double expand) {
+    if (expand <= 1.000001) return;
+    double cx = W * 0.5, cy = H * 0.5;
+    double s = 1.0 / expand;
+    x = cx + (x - cx) * s;
+    y = cy + (y - cy) * s;
+}
+
 inline FrameSnapshot build_frame(
     double t,
     const ChartData& chart,
@@ -98,6 +109,13 @@ inline FrameSnapshot build_frame(
     for (auto it = lo_it; it != hi_it; ++it) {
         const size_t i = static_cast<size_t>(it - chart.notes.begin());
         const auto& note = *it;
+
+        // Optional time-based culling via precomputed t_enter (disabled by default).
+        // Enable with no_cull_enter_time = false in config.
+        // t_enter must have been computed with the same expand_factor as cfg.expand_factor.
+        if (!cfg.no_cull_enter_time) {
+            if (t < note.t_enter) continue;
+        }
         auto& ns = states[i];
 
         // Skip judged non-holds and missed notes past their time

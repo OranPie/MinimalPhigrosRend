@@ -397,12 +397,13 @@ private:
         ctx.draw_list.clear();
         ctx.draw_list.cmds.reserve(s_last_dl_sz + 32);
         ctx.batch.dl = &ctx.draw_list;
-        ctx.hold_ren.draw(ctx.batch, ctx.respack, fr.notes, t_r);
+        ctx.hold_ren.draw(ctx.batch, ctx.respack, fr.notes, t_r, W, H, cfg.expand_factor);
         ctx.line_ren.draw(ctx.batch, ctx.respack.white_tex, fr.lines, W, H, cfg.expand_factor);
-        ctx.note_ren.draw(ctx.batch, ctx.respack, fr.notes, t_r);
+        ctx.note_ren.draw(ctx.batch, ctx.respack, fr.notes, t_r, W, H, cfg.expand_factor);
         ctx.hitfx_ren.draw(ctx.batch, ctx.respack, effects, t_r,
                            cfg.show_hitfx, cfg.show_particles,
-                           static_cast<float>(cfg.hitfx_intensity));
+                           static_cast<float>(cfg.hitfx_intensity),
+                           W, H, cfg.expand_factor);
         s_last_dl_sz = ctx.draw_list.cmds.size();
         ctx.batch.dl = nullptr;
         render::SdlExecutor::execute(ctx.window.ren, ctx.draw_list);
