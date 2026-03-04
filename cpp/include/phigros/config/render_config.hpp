@@ -57,6 +57,7 @@ struct RenderConfig {
     bool autoplay = true;
     double hold_tail_tol = 0.8;
     int hold_fx_interval_ms = 200;
+    double audio_offset_ms = 0.0; // positive = advance notes relative to audio
 
     // RPE
     int rpe_easing_shift = 0;
@@ -145,6 +146,7 @@ inline RenderConfig load_config(const std::string& path) {
         if (g.contains("autoplay") && !g["autoplay"].is_null()) cfg.autoplay = g["autoplay"].get<bool>();
         if (g.contains("hold_tail_tol") && !g["hold_tail_tol"].is_null()) cfg.hold_tail_tol = g["hold_tail_tol"].get<double>();
         if (g.contains("hold_fx_interval_ms") && !g["hold_fx_interval_ms"].is_null()) cfg.hold_fx_interval_ms = g["hold_fx_interval_ms"].get<int>();
+        if (g.contains("audio_offset_ms") && !g["audio_offset_ms"].is_null()) cfg.audio_offset_ms = g["audio_offset_ms"].get<double>();
     }
 
     if (j.contains("rpe")) {

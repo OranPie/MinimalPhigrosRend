@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <cstring>
 #include <vector>
+#include "stb_image_write.h"
 
 namespace phigros::app {
 
@@ -55,6 +56,13 @@ struct Window {
 
     bool save_screenshot(const std::string& path) const {
         return sdl::save_screenshot_bmp(ren, path.c_str(), w, h);
+    }
+
+    // Save current frame as PNG (RGBA readback → stb_image_write).
+    bool save_screenshot_png(const std::string& path) const {
+        std::vector<uint8_t> pixels(static_cast<size_t>(w) * h * 4);
+        if (!read_pixels_rgba(pixels.data())) return false;
+        return stbi_write_png(path.c_str(), w, h, 4, pixels.data(), w * 4) != 0;
     }
 
     bool read_pixels_rgba(uint8_t* out) const {

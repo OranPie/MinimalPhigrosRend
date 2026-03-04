@@ -1,6 +1,7 @@
 #pragma once
 // SDL compatibility layer: enables building with either SDL2 or SDL3.
 // All rendering code should include this instead of SDL headers directly.
+#include <cstring>  // std::memcpy used in read_pixels_rgba
 
 #if defined(PHIGROS_SDL3)
 #include <SDL3/SDL.h>
