@@ -147,7 +147,7 @@ private:
             if (ns.nid == nidx) {
                 math::RGB color = ns.color;
                 effects.add_hitfx(ns.wx, ns.wy, t, color);
-                effects.add_particle_burst(ns.wx, ns.wy, t * 1000.0, 500.0, color, 4);
+                effects.add_particle_burst(ns.wx, ns.wy, t * 1000.0, 500.0, color);
                 return;
             }
         }

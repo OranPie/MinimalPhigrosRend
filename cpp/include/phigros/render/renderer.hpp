@@ -5,6 +5,8 @@
 #include "phigros/config/render_config.hpp"
 #include "phigros/hud/hud.hpp"
 #include <vector>
+#include <array>
+#include <algorithm>
 #include <string>
 
 namespace phigros::render {
@@ -60,52 +62,63 @@ inline FrameSnapshot build_frame(
     FrameSnapshot frame;
     frame.t = t;
 
-    // Evaluate all line states
-    std::vector<engine::LineState> ls_cache(chart.lines.size());
-    frame.lines.reserve(chart.lines.size());
-    for (size_t i = 0; i < chart.lines.size(); ++i) {
+    // Evaluate all line states — use stack array (6B5: no heap alloc per call)
+    std::array<engine::LineState, 256> ls_arr{};
+    const size_t n_lines = std::min(chart.lines.size(), size_t(256));
+    frame.lines.reserve(n_lines);
+    for (size_t i = 0; i < n_lines; ++i) {
         auto& ln = chart.lines[i];
         auto ls = engine::eval_line_state(
             ln, t, cfg.force_line_alpha01,
             cfg.force_line_alpha01_by_lid
                 ? &(*cfg.force_line_alpha01_by_lid) : nullptr);
-        ls_cache[i] = ls;
+        ls_arr[i] = ls;
         frame.lines.push_back({
             ln.lid, ls.x, ls.y, ls.rot, ls.alpha01, ls.scroll,
             ln.color ? ln.color->eval(t) : ln.color_rgb
         });
     }
 
-    // Evaluate visible notes
+    // Evaluate visible notes — binary search bounds on sorted notes (6B1 + 6B5)
+    static constexpr double MAX_HOLD_SEC = 12.0;
     double flow_mul = cfg.note_flow_speed_multiplier;
-    frame.notes.reserve(chart.notes.size() / 4);
-    for (size_t i = 0; i < chart.notes.size(); ++i) {
-        auto& note = chart.notes[i];
+    static thread_local size_t s_last_note_count = 32;
+    frame.notes.reserve(s_last_note_count + 8);
+
+    auto lo_it = std::lower_bound(chart.notes.begin(), chart.notes.end(),
+        t - MAX_HOLD_SEC,
+        [](const Note& n, double v) { return n.t_hit < v; });
+    auto hi_it = std::upper_bound(chart.notes.begin(), chart.notes.end(),
+        t + cfg.approach * 2.0,
+        [](double v, const Note& n) { return v < n.t_hit; });
+
+    for (auto it = lo_it; it != hi_it; ++it) {
+        const size_t i = static_cast<size_t>(it - chart.notes.begin());
+        const auto& note = *it;
         auto& ns = states[i];
 
         // Skip judged non-holds and missed notes past their time
         if (ns.judged && note.kind != 3) continue;
         if (ns.miss) continue;
 
-        // Simple culling
-        if (note.t_hit > t + cfg.approach * 2.0) continue;
+        // Skip holds whose tail already passed (lower bound is conservative)
         if (note.t_end < t - 0.5) continue;
 
-        if (note.line_id < 0 || note.line_id >= static_cast<int>(chart.lines.size()))
+        if (note.line_id < 0 || note.line_id >= static_cast<int>(n_lines))
             continue;
-        auto& ls = ls_cache[note.line_id];
+        const auto& ls = ls_arr[note.line_id];
 
-        // Head position
-        auto head = engine::note_world_pos(
-            ls.x, ls.y, ls.rot, ls.scroll, note,
+        // Head position — use precomputed cos/sin (6B3)
+        auto head = engine::note_world_pos_cs(
+            ls.x, ls.y, ls.cos_rot, ls.sin_rot, ls.scroll, note,
             note.scroll_hit, false, flow_mul,
             cfg.note_speed_mul_affects_travel, false);
 
         // Tail position (holds)
         double wx_tail = head.x, wy_tail = head.y;
         if (note.kind == 3) {
-            auto tail = engine::note_world_pos(
-                ls.x, ls.y, ls.rot, ls.scroll, note,
+            auto tail = engine::note_world_pos_cs(
+                ls.x, ls.y, ls.cos_rot, ls.sin_rot, ls.scroll, note,
                 note.scroll_end, true, flow_mul,
                 cfg.note_speed_mul_affects_travel, false);
             wx_tail = tail.x;
@@ -115,13 +128,16 @@ inline FrameSnapshot build_frame(
         auto color = note_type_color(note.kind);
 
         // Apply line_alpha_affects_notes scaling
-        double note_alpha = note.alpha01;
-        const auto& laan = cfg.line_alpha_affects_notes;
-        if (laan == "always") {
+        double note_alpha = note.alpha01 * cfg.note_alpha;
+        switch (cfg.line_alpha_mode) {
+        case config::LineAlphaMode::Always:
             note_alpha *= ls.alpha01;
-        } else if (laan == "negative_only") {
+            break;
+        case config::LineAlphaMode::NegativeOnly:
             if (ls.alpha01 < 0.5)
                 note_alpha *= ls.alpha01 * 2.0;
+            break;
+        default: break;
         }
 
         frame.notes.push_back({
@@ -131,6 +147,7 @@ inline FrameSnapshot build_frame(
             ns.holding
         });
     }
+    s_last_note_count = frame.notes.size();  // 6B5: update adaptive reserve hint
 
     // Update HUD
     auto sr = engine::compute_score(judge.acc_sum, judge.max_combo,

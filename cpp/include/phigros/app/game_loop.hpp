@@ -101,6 +101,9 @@ struct GameLoop {
         for (size_t i = 0; i < chart.notes.size(); ++i)
             states[i].note = &chart.notes[i];
 
+        // Propagate config to EffectManager
+        effects.particle_count = cfg.particle_count;
+
         // Timing constants
         render_dt = args.record_output.empty() ? (1.0 / 60.0)
                                                : (1.0 / args.record_fps);
@@ -227,7 +230,7 @@ struct GameLoop {
                                 if (ns.nid == nidx) {
                                     effects.add_hitfx(ns.wx, ns.wy, ft, ns.color);
                                     effects.add_particle_burst(ns.wx, ns.wy,
-                                        ft * 1000.0, 500.0, ns.color, 4);
+                                        ft * 1000.0, 500.0, ns.color);
                                     break;
                                 }
                             }
@@ -374,7 +377,9 @@ private:
         ctx.hold_ren.draw(ctx.batch, ctx.respack, fr.notes, t_r);
         ctx.line_ren.draw(ctx.batch, ctx.respack.white_tex, fr.lines, W, H, cfg.expand_factor);
         ctx.note_ren.draw(ctx.batch, ctx.respack, fr.notes, t_r);
-        ctx.hitfx_ren.draw(ctx.batch, ctx.respack, effects, t_r);
+        ctx.hitfx_ren.draw(ctx.batch, ctx.respack, effects, t_r,
+                           cfg.show_hitfx, cfg.show_particles,
+                           static_cast<float>(cfg.hitfx_intensity));
         ctx.batch.dl = nullptr;
         render::SdlExecutor::execute(ctx.window.ren, ctx.draw_list);
     }
@@ -389,6 +394,7 @@ private:
         }
         judge         = engine::Judge{};
         effects       = engine::EffectManager{};
+        effects.particle_count = cfg.particle_count;
         manual_judge  = engine::ManualJudge{};
         replay_player.cursor = 0;
         ctx.reload_audio(chart.offset);

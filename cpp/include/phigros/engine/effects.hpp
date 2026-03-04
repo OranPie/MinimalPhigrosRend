@@ -11,11 +11,11 @@ namespace phigros::engine {
 
 struct HitFX {
     double x, y;
-    double t0;           // start time (seconds)
+    double t0;
     math::RGB rgba;
-    int alpha = 255;
     double rot = 0.0;
-    std::string variant;
+    double rot_speed = 0.0;   // radians/sec — for sheet rotation animation
+    std::string variant;      // "" = default, "good" = GOOD effect sheet
 
     bool alive(double t, double duration = 0.5) const {
         return t < t0 + duration;
@@ -25,6 +25,18 @@ struct HitFX {
 struct Particle {
     double speed;
     double angle;
+};
+
+// Brief expanding ring drawn at hit position (fallback when no respack sheet).
+struct FlashFX {
+    double x, y;
+    double t0;
+    math::RGB color;
+    float radius_start = 12.0f;
+    float radius_end   = 70.0f;
+
+    static constexpr double DURATION = 0.18;
+    bool alive(double t) const { return t < t0 + DURATION; }
 };
 
 class ParticleBurst {
@@ -66,12 +78,14 @@ public:
         tick = std::max(0.0, std::min(1.0, tick));
 
         int alpha = static_cast<int>(255.0 * (1.0 - tick));
+        // Cubic curve: peaks quickly, then shrinks — matches Python reference
         double sz = 20.0 * (((0.2078 * tick - 1.6524) * tick + 1.6399) * tick + 0.4988);
         sz = std::max(2.0, sz);
 
         std::vector<State> out;
         out.reserve(particles.size());
         for (const auto& p : particles) {
+            // Deceleration curve: fast burst then gradual stop
             double dist = p.speed * (9.0 * tick / (8.0 * tick + 1.0)) / 2.0;
             out.push_back({
                 x + dist * std::cos(p.angle),
@@ -81,29 +95,52 @@ public:
         }
         return out;
     }
+
+    // In-place version avoids per-call allocation (caller must clear out between bursts).
+    void get_particles_inplace(double now_ms, std::vector<State>& out) const {
+        double tick = (now_ms - start_ms) / duration_ms;
+        tick = std::max(0.0, std::min(1.0, tick));
+        int alpha = static_cast<int>(255.0 * (1.0 - tick));
+        double sz = std::max(2.0, 20.0 * (((0.2078 * tick - 1.6524) * tick + 1.6399) * tick + 0.4988));
+        for (const auto& p : particles) {
+            double dist = p.speed * (9.0 * tick / (8.0 * tick + 1.0)) / 2.0;
+            out.push_back({
+                x + dist * std::cos(p.angle),
+                y + dist * std::sin(p.angle),
+                static_cast<int>(sz), rgba, alpha
+            });
+        }
+    }
 };
 
 class EffectManager {
 public:
     std::vector<HitFX> hitfx;
     std::vector<ParticleBurst> particles;
+    std::vector<FlashFX> flashes;
+    int particle_count = 8;  // particles per burst; set from RenderConfig
 
-    void add_hitfx(double x, double y, double t, math::RGB color, double rot = 0.0) {
-        hitfx.push_back({x, y, t, color, 255, rot});
+    // Add a hit-flash animation at (x,y). Also spawns a FlashFX ring.
+    void add_hitfx(double x, double y, double t, math::RGB color, double rot = 0.0,
+                   double rot_speed = 0.0, const std::string& variant = "") {
+        hitfx.push_back({x, y, t, color, rot, rot_speed, variant});
+        flashes.push_back({x, y, t, color});
     }
 
+    // Add a particle burst. Pass count=-1 to use particle_count.
     void add_particle_burst(double x, double y, double t_ms, double dur_ms,
-                            math::RGB color, int count = 4) {
-        particles.emplace_back(x, y, t_ms, dur_ms, color, count);
+                            math::RGB color, int count = -1) {
+        int n = (count >= 0) ? count : particle_count;
+        particles.emplace_back(x, y, t_ms, dur_ms, color, n);
     }
 
     void update(double t, double t_ms, double hitfx_duration = 0.5) {
-        hitfx.erase(std::remove_if(hitfx.begin(), hitfx.end(),
-            [&](const HitFX& fx) { return !fx.alive(t, hitfx_duration); }),
-            hitfx.end());
-        particles.erase(std::remove_if(particles.begin(), particles.end(),
-            [&](const ParticleBurst& pb) { return !pb.alive(t_ms); }),
-            particles.end());
+        auto prune = [](auto& vec, auto pred) {
+            vec.erase(std::remove_if(vec.begin(), vec.end(), pred), vec.end());
+        };
+        prune(hitfx,     [&](const HitFX& fx)       { return !fx.alive(t, hitfx_duration); });
+        prune(particles, [&](const ParticleBurst& pb){ return !pb.alive(t_ms); });
+        prune(flashes,   [&](const FlashFX& f)       { return !f.alive(t); });
     }
 
     // Generate hold tick effects for active holds
@@ -125,13 +162,12 @@ public:
                 if (n.line_id >= 0 &&
                     n.line_id < static_cast<int>(lines.size())) {
                     auto ls = eval_line_state(lines[n.line_id], t);
-                    auto pos = note_world_pos(ls.x, ls.y, ls.rot, ls.scroll,
-                                              n, n.scroll_hit);
+                    auto pos = note_world_pos_cs(ls.x, ls.y, ls.cos_rot, ls.sin_rot,
+                                                 ls.scroll, n, n.scroll_hit);
                     math::RGB color = n.tint_hitfx_rgb.value_or(
                         math::RGB{255, 236, 160});
                     add_hitfx(pos.x, pos.y, t, color, ls.rot);
-                    add_particle_burst(pos.x, pos.y, t * 1000.0, 500.0,
-                                       color, 4);
+                    add_particle_burst(pos.x, pos.y, t * 1000.0, 500.0, color);
                 }
             }
         }

@@ -8,6 +8,13 @@
 
 namespace phigros::config {
 
+// How judge-line alpha modulates visible note alpha.
+enum class LineAlphaMode : uint8_t {
+    Off,          // never affects notes
+    NegativeOnly, // dims notes only when line alpha < 0.5 (default Phigros behaviour)
+    Always        // always multiplies note alpha by line alpha
+};
+
 struct RenderConfig {
     // Window
     int window_w = 1280;
@@ -19,10 +26,12 @@ struct RenderConfig {
     double note_scale_y = 1.0;
     double note_flow_speed_multiplier = 1.0;
     bool note_speed_mul_affects_travel = false;
+    double note_alpha = 1.0;        // Global note alpha multiplier [0,1]
 
     // Line settings
     std::optional<double> force_line_alpha01;
     std::optional<std::unordered_map<int, double>> force_line_alpha01_by_lid;
+    LineAlphaMode line_alpha_mode = LineAlphaMode::NegativeOnly;
 
     // Rendering
     double approach = 3.0;
@@ -32,7 +41,12 @@ struct RenderConfig {
     bool no_cull_enter_time = true;
     double overrender = 1.0;
     bool note_outline = false;
-    std::string line_alpha_affects_notes = "negative_only";
+
+    // Hit effects
+    bool show_hitfx = true;
+    bool show_particles = true;
+    int  particle_count = 8;         // particles per hit burst
+    double hitfx_intensity = 1.0;    // alpha multiplier for all hit effects [0,1]
 
     // Trail effect
     std::optional<double> trail_alpha;
@@ -108,6 +122,7 @@ inline RenderConfig load_config(const std::string& path) {
         auto get_d = [&](const char* k, double& v) { if (r.contains(k) && !r[k].is_null()) v = r[k].get<double>(); };
         auto get_b = [&](const char* k, bool& v) { if (r.contains(k) && !r[k].is_null()) v = r[k].get<bool>(); };
         auto get_s = [&](const char* k, std::string& v) { if (r.contains(k) && !r[k].is_null()) v = r[k].get<std::string>(); };
+        auto get_i = [&](const char* k, int& v) { if (r.contains(k) && !r[k].is_null()) v = r[k].get<int>(); };
 
         get_d("approach", cfg.approach);
         get_d("chart_speed", cfg.chart_speed);
@@ -118,9 +133,27 @@ inline RenderConfig load_config(const std::string& path) {
         get_d("note_scale_x", cfg.note_scale_x);
         get_d("note_scale_y", cfg.note_scale_y);
         get_d("note_flow_speed_multiplier", cfg.note_flow_speed_multiplier);
+        get_d("note_alpha", cfg.note_alpha);
         get_d("overrender", cfg.overrender);
         get_b("note_outline", cfg.note_outline);
-        get_s("line_alpha_affects_notes", cfg.line_alpha_affects_notes);
+        get_b("show_hitfx", cfg.show_hitfx);
+        get_b("show_particles", cfg.show_particles);
+        get_i("particle_count", cfg.particle_count);
+        get_d("hitfx_intensity", cfg.hitfx_intensity);
+
+        if (r.contains("line_alpha_affects_notes") && !r["line_alpha_affects_notes"].is_null()) {
+            std::string s = r["line_alpha_affects_notes"].get<std::string>();
+            if (s == "always")   cfg.line_alpha_mode = LineAlphaMode::Always;
+            else if (s == "off") cfg.line_alpha_mode = LineAlphaMode::Off;
+            else                 cfg.line_alpha_mode = LineAlphaMode::NegativeOnly;
+        }
+
+        // Clamp to sane ranges
+        cfg.approach       = std::max(0.1, std::min(30.0, cfg.approach));
+        cfg.chart_speed    = std::max(0.1, std::min(20.0, cfg.chart_speed));
+        cfg.note_alpha     = std::max(0.0, std::min(1.0,  cfg.note_alpha));
+        cfg.hitfx_intensity= std::max(0.0, std::min(2.0,  cfg.hitfx_intensity));
+        cfg.particle_count = std::max(0,   std::min(64,   cfg.particle_count));
 
         if (r.contains("trail_alpha") && !r["trail_alpha"].is_null()) cfg.trail_alpha = r["trail_alpha"].get<double>();
         if (r.contains("trail_frames") && !r["trail_frames"].is_null()) cfg.trail_frames = r["trail_frames"].get<int>();
@@ -160,6 +193,72 @@ inline RenderConfig load_config(const std::string& path) {
     }
 
     return cfg;
+}
+
+// Serialize a RenderConfig back to a JSON object.
+inline nlohmann::json config_to_json(const RenderConfig& cfg) {
+    using json = nlohmann::json;
+    json j;
+
+    j["window"]["w"] = cfg.window_w;
+    j["window"]["h"] = cfg.window_h;
+
+    auto& r = j["render"];
+    r["approach"]                   = cfg.approach;
+    r["chart_speed"]                = cfg.chart_speed;
+    r["expand"]                     = cfg.expand_factor;
+    r["note_scale_x"]               = cfg.note_scale_x;
+    r["note_scale_y"]               = cfg.note_scale_y;
+    r["note_flow_speed_multiplier"] = cfg.note_flow_speed_multiplier;
+    r["note_alpha"]                 = cfg.note_alpha;
+    r["note_outline"]               = cfg.note_outline;
+    r["no_cull"]                    = cfg.no_cull;
+    r["no_cull_screen"]             = cfg.no_cull_screen;
+    r["overrender"]                 = cfg.overrender;
+    r["show_hitfx"]                 = cfg.show_hitfx;
+    r["show_particles"]             = cfg.show_particles;
+    r["particle_count"]             = cfg.particle_count;
+    r["hitfx_intensity"]            = cfg.hitfx_intensity;
+    switch (cfg.line_alpha_mode) {
+        case LineAlphaMode::Always:  r["line_alpha_affects_notes"] = "always"; break;
+        case LineAlphaMode::Off:     r["line_alpha_affects_notes"] = "off"; break;
+        default:                     r["line_alpha_affects_notes"] = "negative_only"; break;
+    }
+    if (cfg.trail_alpha)       r["trail_alpha"]        = *cfg.trail_alpha;
+    if (cfg.trail_frames)      r["trail_frames"]       = *cfg.trail_frames;
+    if (cfg.trail_decay)       r["trail_decay"]        = *cfg.trail_decay;
+    if (cfg.trail_blur)        r["trail_blur"]         = *cfg.trail_blur;
+    if (cfg.trail_dim)         r["trail_dim"]          = *cfg.trail_dim;
+    if (cfg.trail_blur_ramp)   r["trail_blur_ramp"]    = *cfg.trail_blur_ramp;
+    if (cfg.trail_blend)       r["trail_blend"]        = *cfg.trail_blend;
+    if (cfg.motion_blur_samples) r["motion_blur_samples"] = *cfg.motion_blur_samples;
+    if (cfg.motion_blur_shutter) r["motion_blur_shutter"] = *cfg.motion_blur_shutter;
+
+    j["assets"]["respack"]  = cfg.respack_path;
+    if (!cfg.bg_path.empty()) j["assets"]["bg"] = cfg.bg_path;
+    j["assets"]["bg_blur"]  = cfg.bg_blur;
+    j["assets"]["bg_dim"]   = cfg.bg_dim;
+
+    j["gameplay"]["autoplay"]          = cfg.autoplay;
+    j["gameplay"]["hold_tail_tol"]     = cfg.hold_tail_tol;
+    j["gameplay"]["hold_fx_interval_ms"] = cfg.hold_fx_interval_ms;
+    j["gameplay"]["audio_offset_ms"]   = cfg.audio_offset_ms;
+
+    j["rpe"]["rpe_easing_shift"] = cfg.rpe_easing_shift;
+    j["debug"]["basic_debug"]    = cfg.basic_debug;
+    j["backend"]                 = cfg.backend;
+
+    return j;
+}
+
+// Write config to a JSON file (4-space indent).
+inline bool save_config(const std::string& path, const RenderConfig& cfg) {
+    try {
+        std::ofstream f(path);
+        if (!f.is_open()) return false;
+        f << config_to_json(cfg).dump(4) << "\n";
+        return f.good();
+    } catch (...) { return false; }
 }
 
 } // namespace phigros::config
