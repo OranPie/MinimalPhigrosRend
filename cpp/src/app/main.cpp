@@ -84,12 +84,7 @@ int main(int argc, char* argv[]) {
 
     engine::precompute_t_enter(chart.lines, chart.notes, W, H);
 
-    int playable_notes = 0;
-    for (auto& n : chart.notes) if (!n.fake) ++playable_notes;
-
-    double chart_end = 0.0;
-    for (auto& n : chart.notes) chart_end = std::max(chart_end, n.t_end);
-    chart_end += 2.0;
+    double chart_end = chart.chart_end_t + 2.0;
 
     // ── SCORE-ONLY / BENCHMARK ────────────────────────────────────────────────
     if (args.score_only) {
@@ -115,7 +110,7 @@ int main(int argc, char* argv[]) {
                 engine::hold_maintenance(st, inx, tc, HOLD_TOL, j);
                 engine::hold_finalize(st, inx, tc, HOLD_TOL, engine::Judge::BAD, j);
             }
-            return engine::compute_score(j.acc_sum, j.max_combo, playable_notes);
+            return engine::compute_score(j.acc_sum, j.max_combo, chart.playable_count);
         };
 
         if (args.benchmark) {
@@ -158,24 +153,24 @@ int main(int argc, char* argv[]) {
             engine::hold_maintenance(st, inx, tc, 0.30, j);
             engine::hold_finalize(st, inx, tc, 0.30, engine::Judge::BAD, j);
         }
-        auto sr = engine::compute_score(j.acc_sum, j.max_combo, playable_notes);
+        auto sr = engine::compute_score(j.acc_sum, j.max_combo, chart.playable_count);
         std::cout << "\n=== Score Only ===\nScore: " << sr.score
                   << "\nAccuracy: " << (sr.acc_ratio*100.0) << "%"
-                  << "\nMaxCombo: " << j.max_combo << "/" << playable_notes
-                  << "\nJudged: "   << j.judged_cnt << "/" << playable_notes << "\n";
+                  << "\nMaxCombo: " << j.max_combo << "/" << chart.playable_count
+                  << "\nJudged: "   << j.judged_cnt << "/" << chart.playable_count << "\n";
         return (sr.score == 1000000) ? 0 : 1;
     }
 
     // ── RENDERING / INTERACTIVE MODE ─────────────────────────────────────────
     std::cout << "[Render] Starting (chart_end=" << chart_end << "s, "
-              << playable_notes << " playable notes)\n";
+              << chart.playable_count << " playable notes)\n";
 
     AppContext ctx;
     ctx.init(args.chart_path, chart.offset,
              args.respack_path, args.bg_path, args.font_path, args.audio_path,
              args.headless, W, H, cfg);
 
-    GameLoop gl(ctx, args, cfg, chart, playable_notes, chart_end);
+    GameLoop gl(ctx, args, cfg, chart, chart.playable_count, chart_end);
 
 #ifdef PHIGROS_WASM
     emscripten_set_main_loop_arg(GameLoop::wasm_tick, &gl, 0, 1);
@@ -191,8 +186,8 @@ int main(int argc, char* argv[]) {
     std::cout << "\n=== " << tag << " ==="
               << "\nScore: "    << sr.score
               << "\nAccuracy: " << (sr.acc_ratio * 100.0) << "%"
-              << "\nMaxCombo: " << gl.judge.max_combo << "/" << playable_notes
-              << "\nJudged: "   << gl.judge.judged_cnt << "/" << playable_notes << "\n";
+              << "\nMaxCombo: " << gl.judge.max_combo << "/" << chart.playable_count
+              << "\nJudged: "   << gl.judge.judged_cnt << "/" << chart.playable_count << "\n";
 
     gl.finish();
     ctx.destroy();

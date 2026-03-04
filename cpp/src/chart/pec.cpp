@@ -403,6 +403,7 @@ ChartData load_pec_text(const std::string& text, int W, int H) {
     std::sort(result.notes.begin(), result.notes.end(),
               [](const Note& a, const Note& b) { return a.t_hit < b.t_hit; });
 
+    result.finalize();
     return result;
 }
 

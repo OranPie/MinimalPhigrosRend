@@ -92,6 +92,20 @@ struct ChartData {
     double offset = 0.0; // seconds
     std::vector<Line> lines;
     std::vector<Note> notes; // sorted by t_hit
+
+    // Precomputed at load time — avoids O(N) loops every build_frame() call
+    double chart_end_t    = 0.0; // max(note.t_end) over all notes
+    int    playable_count = 0;   // count of non-fake notes
+
+    // Compute chart_end_t and playable_count from notes. Call once after parsing.
+    void finalize() {
+        chart_end_t = 0.0;
+        playable_count = 0;
+        for (const auto& n : notes) {
+            if (n.t_end > chart_end_t) chart_end_t = n.t_end;
+            if (!n.fake) ++playable_count;
+        }
+    }
 };
 
 } // namespace phigros

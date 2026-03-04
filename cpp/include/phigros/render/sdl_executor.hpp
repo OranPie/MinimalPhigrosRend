@@ -4,16 +4,31 @@
 #include "phigros/app/sdl_compat.hpp"
 #include <cmath>
 #include <algorithm>
+#include <array>
 
 namespace phigros::render {
 
 // Translates a DrawList into immediate SDL draw calls.
-// Behaviorally identical to the direct SpriteBatch path — used to validate
-// that the DrawList architecture produces the same output as the old path.
+// Per-texture r/g/b/a/blend state is cached to skip redundant SDL API calls.
 struct SdlExecutor {
-    // Execute all commands in the DrawList on the given SDL_Renderer.
     static void execute(SDL_Renderer* ren, const DrawList& dl) {
-        SDL_BlendMode cur_tex_blend = SDL_BLENDMODE_BLEND;
+        // Per-texture state cache — avoids redundant set_color_mod / set_blend_mode calls
+        struct TexState {
+            SDL_Texture*  ptr   = nullptr;
+            uint8_t r=255,g=255,b=255,a=255;
+            SDL_BlendMode blend = SDL_BLENDMODE_BLEND;
+        };
+        std::array<TexState, 16> cache{};
+        int cache_sz = 0;
+
+        auto get_state = [&](SDL_Texture* p) -> TexState& {
+            for (int i = 0; i < cache_sz; ++i)
+                if (cache[i].ptr == p) return cache[i];
+            if (cache_sz < 16) { cache[cache_sz].ptr = p; return cache[cache_sz++]; }
+            // Evict slot 0 (LRU approximation — rare with <16 textures)
+            cache[0] = {p, 255, 255, 255, 255, SDL_BLENDMODE_BLEND};
+            return cache[0];
+        };
 
         for (const auto& c : dl.cmds) {
             switch (c.type) {
@@ -21,13 +36,20 @@ struct SdlExecutor {
             case DrawCmd::QuadRegion: {
                 if (!c.tex || !c.tex->tex) break;
                 const Texture& tex = *c.tex;
-                tex.set_color_mod(c.r, c.g, c.b);
-                tex.set_alpha_mod(c.a);
-                if (c.blend != cur_tex_blend) {
+                TexState& st = get_state(tex.tex);
+
+                // Only call SDL when state actually changed
+                if (c.r != st.r || c.g != st.g || c.b != st.b) {
+                    tex.set_color_mod(c.r, c.g, c.b);
+                    st.r = c.r; st.g = c.g; st.b = c.b;
+                }
+                if (c.a != st.a) {
+                    tex.set_alpha_mod(c.a);
+                    st.a = c.a;
+                }
+                if (c.blend != st.blend) {
                     tex.set_blend_mode(c.blend);
-                    cur_tex_blend = c.blend;
-                } else {
-                    tex.set_blend_mode(c.blend);
+                    st.blend = c.blend;
                 }
 
                 SDL_FRect dst;

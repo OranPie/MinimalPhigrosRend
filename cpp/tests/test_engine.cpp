@@ -27,6 +27,7 @@
 #include <cassert>
 #include <filesystem>
 #include <iomanip>
+#include <chrono>
 #include <nlohmann/json.hpp>
 
 using namespace phigros;
@@ -579,8 +580,7 @@ static bool run_autoplay(const std::string& path, int W, int H) {
         return false;
     }
 
-    int total_notes = 0;
-    for (auto& n : chart.notes) if (!n.fake) ++total_notes;
+    int total_notes = chart.playable_count;  // precomputed by finalize()
     int num_holds = 0;
     for (auto& n : chart.notes) if (!n.fake && n.kind == 3) ++num_holds;
     std::cout << "  Lines=" << chart.lines.size()
@@ -619,9 +619,7 @@ static bool run_autoplay(const std::string& path, int W, int H) {
 
     // 4. Find chart time bounds
     double t_start = chart.offset;
-    double t_end = 0.0;
-    for (auto& n : chart.notes) t_end = std::max(t_end, n.t_end);
-    t_end += 1.0; // buffer
+    double t_end = chart.chart_end_t + 1.0; // use precomputed field
 
     // 5. Run simulation at 240fps
     double fps = 240.0;
@@ -630,6 +628,11 @@ static bool run_autoplay(const std::string& path, int W, int H) {
     int max_visible = 0;
     constexpr double HOLD_TAIL_TOL = 0.30;
     constexpr double MISS_WINDOW = engine::Judge::BAD;
+
+    // For build_frame benchmark
+    config::RenderConfig cfg_bench;
+    cfg_bench.window_w = W; cfg_bench.window_h = H;
+    long long build_frame_us = 0;
 
     for (double t = t_start; t <= t_end; t += dt) {
         // NoteManager visibility update
@@ -655,11 +658,23 @@ static bool run_autoplay(const std::string& path, int W, int H) {
         effects.hold_tick_fx(states, idx_next, t, 80, chart.lines);
         effects.update(t, t * 1000.0);
 
+        // Benchmark build_frame (no rendering, pure CPU snapshot)
+        auto t0 = std::chrono::steady_clock::now();
+        auto fr = render::build_frame(t, chart, states, judge, cfg_bench);
+        auto t1 = std::chrono::steady_clock::now();
+        build_frame_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+        (void)fr;
+
         ++frame_count;
     }
 
     // 6. Verify results
     auto sr = engine::compute_score(judge.acc_sum, judge.max_combo, total_notes);
+
+    double bf_us_per_frame = frame_count > 0 ? (double)build_frame_us / frame_count : 0.0;
+    double chart_dur = t_end - t_start;
+    double total_cpu_s = (double)build_frame_us / 1e6;
+    double bf_realtime = chart_dur > 0 ? chart_dur / total_cpu_s : 0.0;
 
     std::cout << "  Frames=" << frame_count
               << "  MaxVisible=" << max_visible
@@ -667,7 +682,10 @@ static bool run_autoplay(const std::string& path, int W, int H) {
               << "  Combo=" << judge.max_combo << "/" << total_notes
               << "  Acc=" << sr.acc_ratio
               << "  Effects generated=" << (effects.hitfx.size()) << " hitfx"
-              << "\n";
+              << "\n"
+              << "  build_frame: " << std::fixed << std::setprecision(2)
+              << bf_us_per_frame << " μs/frame  ("
+              << std::setprecision(0) << bf_realtime << "× realtime)\n";
 
     // Score must be 1,000,000
     CHECK(sr.score == 1000000,

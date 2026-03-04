@@ -393,7 +393,10 @@ private:
 
     // Record into DrawList and execute via SdlExecutor.
     void render_scene_at(double t_r, const render::FrameSnapshot& fr) {
+        // Adaptive reserve: reuse last-frame command count to avoid realloc
+        static thread_local size_t s_last_dl_sz = 256;
         ctx.draw_list.clear();
+        ctx.draw_list.cmds.reserve(s_last_dl_sz + 32);
         ctx.batch.dl = &ctx.draw_list;
         ctx.hold_ren.draw(ctx.batch, ctx.respack, fr.notes, t_r);
         ctx.line_ren.draw(ctx.batch, ctx.respack.white_tex, fr.lines, W, H, cfg.expand_factor);
@@ -401,6 +404,7 @@ private:
         ctx.hitfx_ren.draw(ctx.batch, ctx.respack, effects, t_r,
                            cfg.show_hitfx, cfg.show_particles,
                            static_cast<float>(cfg.hitfx_intensity));
+        s_last_dl_sz = ctx.draw_list.cmds.size();
         ctx.batch.dl = nullptr;
         render::SdlExecutor::execute(ctx.window.ren, ctx.draw_list);
     }

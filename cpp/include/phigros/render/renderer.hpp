@@ -25,7 +25,7 @@ inline math::RGB note_type_color(int kind) {
 // Frame snapshot: computed per-frame state for all lines and visible notes
 struct LineSnapshot {
     int lid;
-    double x, y, rot, alpha01, scroll;
+    double x, y, rot, cos_rot, sin_rot, alpha01, scroll;
     math::RGB color;
 };
 
@@ -75,7 +75,8 @@ inline FrameSnapshot build_frame(
                 ? &(*cfg.force_line_alpha01_by_lid) : nullptr);
         ls_arr[i] = ls;
         frame.lines.push_back({
-            ln.lid, ls.x, ls.y, ls.rot, ls.alpha01, ls.scroll,
+            ln.lid, ls.x, ls.y, ls.rot, ls.cos_rot, ls.sin_rot,
+            ls.alpha01, ls.scroll,
             ln.color ? ln.color->eval(t) : ln.color_rgb
         });
     }
@@ -150,18 +151,20 @@ inline FrameSnapshot build_frame(
     }
     s_last_note_count = frame.notes.size();  // 6B5: update adaptive reserve hint
 
-    // Update HUD
+    // Sort by (non-hold first for z-order, then by kind) to batch same-texture notes
+    // and reduce SDL texture state thrashing in SdlExecutor
+    std::stable_sort(frame.notes.begin(), frame.notes.end(),
+        [](const NoteSnapshot& a, const NoteSnapshot& b) {
+            if (a.is_hold != b.is_hold) return a.is_hold < b.is_hold;
+            return a.kind < b.kind;
+        });
+
+    // Update HUD — use precomputed metadata to avoid O(N) loops
     auto sr = engine::compute_score(judge.acc_sum, judge.max_combo,
                                      static_cast<int>(chart.notes.size()));
-    double chart_end = 0.0;
-    for (auto& n : chart.notes)
-        chart_end = std::max(chart_end, n.t_end);
-
-    int playable = 0;
-    for (auto& n : chart.notes) if (!n.fake) ++playable;
-
     hud::update_hud(frame.hud, sr.score, sr.acc_ratio,
-                    judge.combo, judge.max_combo, t, chart_end, playable);
+                    judge.combo, judge.max_combo, t,
+                    chart.chart_end_t, chart.playable_count);
 
     return frame;
 }

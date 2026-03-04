@@ -22,8 +22,8 @@ struct LineRenderer {
             uint8_t a = static_cast<uint8_t>(ls.alpha01 * 255);
             uint8_t r = ls.color.r, g = ls.color.g, b = ls.color.b;
 
-            double tx = std::cos(ls.rot);
-            double ty = std::sin(ls.rot);
+            double tx = ls.cos_rot;
+            double ty = ls.sin_rot;
 
             double x0 = ls.x - tx * half_len;
             double y0 = ls.y - ty * half_len;
