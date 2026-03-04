@@ -39,6 +39,8 @@ struct AppArgs {
     float       compile_sample_rate = 240.0f;
     // Mods (applied to chart after load, in order)
     std::vector<std::string> mod_paths; // --mod <file.mod.json>, repeatable
+    // Chart script (declarative playlist DSL)
+    std::string script_path;             // --script <file.chartscript.json>
     // Info / utility
     bool        version_mode        = false; // --version
     bool        info_mode           = false; // --info  : print chart metadata and exit
@@ -93,6 +95,7 @@ inline AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--compile"       && i+1 < argc) { args.compile_output = argv[++i]; args.headless = true; }
         else if (a == "--sample-rate"   && i+1 < argc) args.compile_sample_rate = static_cast<float>(std::atof(argv[++i]));
         else if (a == "--mod"           && i+1 < argc) args.mod_paths.push_back(argv[++i]);
+        else if (a == "--script"        && i+1 < argc) args.script_path = argv[++i];
         else if (a == "--list-charts"   && i+1 < argc) { args.list_charts_dir = argv[++i]; args.headless = true; }
         else if (args.chart_path.empty()) args.chart_path = a;
     }
@@ -124,6 +127,12 @@ inline void print_usage(const char* prog) {
         "MODS\n"
         "  --mod <file.mod.json>     Apply a mod to the chart (repeatable, applied in order)\n"
         "                            See mods/ directory for examples and scripts/new_mod.py\n"
+        "\n"
+        "CHART SCRIPT\n"
+        "  --script <file.chartscript.json>\n"
+        "                            Run a declarative chart playlist script.\n"
+        "                            Supports sequence/shuffle/loop modes, per-item config\n"
+        "                            overrides, inline mods, filters, and auto-discovery.\n"
         "\n"
         "ASSETS\n"
         "  --config <path>           Render config JSONC file\n"

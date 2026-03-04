@@ -297,15 +297,14 @@ struct GameLoop {
         if (ctx.motion_blur.enabled()) {
             ctx.bg.draw(ctx.batch, cfg.bg_dim);
             ctx.motion_blur.begin_accumulate(ctx.window.ren);
+            double dt_chart = dt_frame * cfg.chart_speed;
             for (int i = 0; i < ctx.motion_blur.samples; ++i) {
-                double t_sub = t - dt_frame * ctx.motion_blur.shutter
-                               * (1.0 - static_cast<double>(i) / ctx.motion_blur.samples);
+                double t_sub = ctx.motion_blur.sample_time(t, dt_chart, i);
                 ctx.motion_blur.begin_subframe(ctx.window.ren);
-                // Build sub-frame snapshot only if t_sub differs
                 auto sub_fr = (t_sub == t) ? frame
                     : render::build_frame(t_sub, chart, states, judge, cfg);
                 render_scene_at(t_sub, sub_fr);
-                ctx.motion_blur.add_subframe(ctx.window.ren);
+                ctx.motion_blur.add_subframe(ctx.window.ren, ctx.motion_blur.sample_weight(i));
             }
             ctx.motion_blur.composite(ctx.window.ren);
         } else if (ctx.trail.enabled()) {

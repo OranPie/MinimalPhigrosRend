@@ -16,6 +16,7 @@
 #include "phigros/engine/simulateplay.hpp"
 #include "phigros/core/mods.hpp"
 #include "phigros/core/mod_loader.hpp"
+#include "phigros/engine/chartscript.hpp"
 #include <nlohmann/json.hpp>
 #include <iostream>
 #include <fstream>
@@ -88,7 +89,7 @@ int main(int argc, char* argv[]) {
         std::string a = argv[i];
         if (a == "--help" || a == "-h") { print_usage(argv[0]); return 0; }
     }
-    if (args.chart_path.empty() && args.list_charts_dir.empty()) {
+    if (args.chart_path.empty() && args.list_charts_dir.empty() && args.script_path.empty()) {
         print_usage(argv[0]); return 1;
     }
 
@@ -160,6 +161,121 @@ int main(int argc, char* argv[]) {
             printf("  Duration:     %.2f s\n", chart.chart_end_t - chart.offset);
             printf("  Offset:       %.3f s\n", chart.offset);
         }
+        return 0;
+    }
+
+    // ── CHART SCRIPT MODE ───────────────────────────────────────────────────
+    if (!args.script_path.empty()) {
+        std::cout << "[ChartScript] Loading: " << args.script_path << "\n";
+        chartscript::Script script;
+        try {
+            script = chartscript::load_script(args.script_path);
+            chartscript::apply_ordering(script);
+        } catch (const std::exception& e) {
+            std::cerr << "[ChartScript] Error: " << e.what() << "\n";
+            return 1;
+        }
+        chartscript::print_script_summary(script);
+
+        if (script.items.empty()) {
+            std::cerr << "[ChartScript] No items to play.\n";
+            return 1;
+        }
+
+        int repeats_done = 0;
+        int total_played = 0;
+        bool keep_going = true;
+
+        while (keep_going) {
+            for (size_t idx = 0; idx < script.items.size() && keep_going; ++idx) {
+                const auto& item = script.items[idx];
+                if (item.input.empty()) continue;
+
+                // Build per-item config
+                auto item_cfg = chartscript::build_item_config(cfg, script.defaults, item.config);
+                const int iW = item_cfg.window_w, iH = item_cfg.window_h;
+
+                // Load chart
+                std::cout << "\n[ChartScript] Playing [" << (idx + 1) << "/"
+                          << script.items.size() << "]: " << item.input;
+                if (!item.name.empty()) std::cout << " (" << item.name << ")";
+                std::cout << "\n";
+
+                ChartData item_chart;
+                try {
+                    item_chart = load_chart(item.input, item_cfg);
+                } catch (const std::exception& e) {
+                    std::cerr << "[ChartScript] Failed to load '" << item.input
+                              << "': " << e.what() << "\n";
+                    continue;
+                }
+
+                if (!item_chart.is_compiled)
+                    engine::precompute_t_enter(item_chart.lines, item_chart.notes, iW, iH);
+
+                // Apply CLI mods + per-item mods
+                for (const auto& mp : args.mod_paths) {
+                    try { mods::apply(item_chart, mods::load_mod(mp)); }
+                    catch (...) {}
+                }
+                auto item_mod = chartscript::resolve_item_mods(item);
+                if (!item_mod.ops.empty()) {
+                    std::cout << "[ChartScript] Applying " << item_mod.ops.size() << " mod(s)\n";
+                    mods::apply(item_chart, item_mod);
+                }
+
+                // Apply time window
+                double item_end = item_chart.chart_end_t + 2.0;
+                if (item.end > 0.0) item_end = std::min(item_end, item.end);
+                double duration = item_end - item.start;
+                if (duration <= 0.0) continue;
+
+                // Override args for this item
+                AppArgs item_args = args;
+                item_args.chart_path = item.input;
+                if (!item.bgm.empty()) item_args.audio_path = item.bgm;
+                if (!item.bg.empty())  item_args.bg_path = item.bg;
+                if (item.end > 0.0)    item_args.duration = duration;
+
+                // Init context and run game loop for this item
+                AppContext item_ctx;
+                item_ctx.init(item.input, item_chart.offset + item.start,
+                              item_args.respack_path, item_args.bg_path,
+                              item_args.font_path, item_args.audio_path,
+                              item_args.headless, iW, iH, item_cfg);
+
+                GameLoop gl(item_ctx, item_args, item_cfg, item_chart,
+                            item_chart.playable_count, item_end);
+
+#ifdef PHIGROS_WASM
+                emscripten_set_main_loop_arg(GameLoop::wasm_tick, &gl, 0, 1);
+                keep_going = false;
+                break;
+#else
+                while (gl.run_frame()) {}
+#endif
+                auto sr = gl.final_score();
+                std::cout << "[ChartScript] Score: " << sr.score
+                          << "  Acc: " << (sr.acc_ratio * 100.0) << "%\n";
+
+                gl.finish();
+                item_ctx.destroy();
+                ++total_played;
+
+                if (item_ctx.window.quit_requested) { keep_going = false; break; }
+            }
+
+            ++repeats_done;
+            if (script.repeat > 0 && repeats_done >= script.repeat) keep_going = false;
+            if (script.mode == chartscript::PlayMode::Shuffle && keep_going) {
+                // Re-shuffle for next loop iteration
+                unsigned seed = std::random_device{}();
+                std::mt19937 rng(seed);
+                std::shuffle(script.items.begin(), script.items.end(), rng);
+            }
+        }
+
+        std::cout << "\n[ChartScript] Done. Played " << total_played << " chart(s).\n";
         return 0;
     }
 

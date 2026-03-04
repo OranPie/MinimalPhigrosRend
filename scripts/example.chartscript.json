@@ -1,0 +1,57 @@
+// Example chart script — declarative playlist DSL for phigros_render.
+// Usage: phigros_render --script scripts/example.chartscript.json
+{
+  "version": 1,
+  "name": "Example Playlist",
+  "mode": "sequence",
+
+  // Transition between charts
+  "transition": {
+    "type": "fade",
+    "duration": 0.5
+  },
+
+  // Default config applied to all items (can be overridden per-item)
+  "defaults": {
+    "chart_speed": 1.0,
+    "trail_alpha": 0.5,
+    "trail_frames": 6,
+    "trail_decay": 0.85,
+    "trail_decay_curve": "gaussian",
+    "trail_glow": 0.3,
+    "show_hitfx": true,
+    "show_particles": true
+  },
+
+  // Auto-discover charts from a directory (alternative to manual items)
+  // Uncomment to use:
+  // "discover": {
+  //   "directory": "charts/",
+  //   "levels": ["AT", "IN"],
+  //   "recursive": true,
+  //   "sort_by": "name"
+  // },
+
+  // Manual playlist items
+  "items": [
+    {
+      "input": "charts/example/AT.json",
+      "name": "Example Chart",
+      "start": 0.0,
+      "end": 30.0,
+      // Per-item config overrides
+      "config": {
+        "chart_speed": 1.5,
+        "trail_alpha": 0.8,
+        "trail_chromatic": 1.5,
+        "motion_blur_samples": 4,
+        "motion_blur_shutter": 0.6,
+        "motion_blur_curve": "gaussian"
+      },
+      // Inline mods applied to this chart
+      "mods": [
+        { "type": "colorize", "mode": "hue", "hue_s": 0.9, "hue_v": 0.85 }
+      ]
+    }
+  ]
+}

@@ -56,10 +56,16 @@ struct RenderConfig {
     std::optional<int> trail_dim;
     std::optional<bool> trail_blur_ramp;
     std::optional<std::string> trail_blend;
+    // Enhanced trail visuals
+    std::optional<int> trail_blur_quality;       // downscale passes for blur (1-4, default 2)
+    std::optional<double> trail_chromatic;       // chromatic offset in px per age (0=off)
+    std::optional<std::string> trail_decay_curve; // "exponential" (default) or "gaussian"
+    std::optional<double> trail_glow;            // additive glow intensity (0=off, 0-1)
 
     // Motion blur
     std::optional<int> motion_blur_samples;
     std::optional<double> motion_blur_shutter;
+    std::optional<std::string> motion_blur_curve; // "uniform" (default) or "gaussian"
 
     // Assets
     std::string respack_path = "./respack.zip";
@@ -162,8 +168,13 @@ inline RenderConfig load_config(const std::string& path) {
         if (r.contains("trail_dim") && !r["trail_dim"].is_null()) cfg.trail_dim = r["trail_dim"].get<int>();
         if (r.contains("trail_blur_ramp") && !r["trail_blur_ramp"].is_null()) cfg.trail_blur_ramp = r["trail_blur_ramp"].get<bool>();
         if (r.contains("trail_blend") && !r["trail_blend"].is_null()) cfg.trail_blend = r["trail_blend"].get<std::string>();
+        if (r.contains("trail_blur_quality") && !r["trail_blur_quality"].is_null()) cfg.trail_blur_quality = r["trail_blur_quality"].get<int>();
+        if (r.contains("trail_chromatic") && !r["trail_chromatic"].is_null()) cfg.trail_chromatic = r["trail_chromatic"].get<double>();
+        if (r.contains("trail_decay_curve") && !r["trail_decay_curve"].is_null()) cfg.trail_decay_curve = r["trail_decay_curve"].get<std::string>();
+        if (r.contains("trail_glow") && !r["trail_glow"].is_null()) cfg.trail_glow = r["trail_glow"].get<double>();
         if (r.contains("motion_blur_samples") && !r["motion_blur_samples"].is_null()) cfg.motion_blur_samples = r["motion_blur_samples"].get<int>();
         if (r.contains("motion_blur_shutter") && !r["motion_blur_shutter"].is_null()) cfg.motion_blur_shutter = r["motion_blur_shutter"].get<double>();
+        if (r.contains("motion_blur_curve") && !r["motion_blur_curve"].is_null()) cfg.motion_blur_curve = r["motion_blur_curve"].get<std::string>();
     }
 
     if (j.contains("assets")) {
@@ -231,8 +242,13 @@ inline nlohmann::json config_to_json(const RenderConfig& cfg) {
     if (cfg.trail_dim)         r["trail_dim"]          = *cfg.trail_dim;
     if (cfg.trail_blur_ramp)   r["trail_blur_ramp"]    = *cfg.trail_blur_ramp;
     if (cfg.trail_blend)       r["trail_blend"]        = *cfg.trail_blend;
+    if (cfg.trail_blur_quality) r["trail_blur_quality"] = *cfg.trail_blur_quality;
+    if (cfg.trail_chromatic)   r["trail_chromatic"]    = *cfg.trail_chromatic;
+    if (cfg.trail_decay_curve) r["trail_decay_curve"]  = *cfg.trail_decay_curve;
+    if (cfg.trail_glow)        r["trail_glow"]         = *cfg.trail_glow;
     if (cfg.motion_blur_samples) r["motion_blur_samples"] = *cfg.motion_blur_samples;
     if (cfg.motion_blur_shutter) r["motion_blur_shutter"] = *cfg.motion_blur_shutter;
+    if (cfg.motion_blur_curve) r["motion_blur_curve"]  = *cfg.motion_blur_curve;
 
     j["assets"]["respack"]  = cfg.respack_path;
     if (!cfg.bg_path.empty()) j["assets"]["bg"] = cfg.bg_path;
