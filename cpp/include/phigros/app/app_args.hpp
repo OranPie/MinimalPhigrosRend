@@ -16,6 +16,7 @@ struct AppArgs {
     std::string font_path;
     std::string audio_path;
     std::string screenshot_dir;
+    double      screenshot_fps      = 0.2;   // screenshots per chart-second (default 1/5s)
     double      duration            = 0.0;
     bool        headless            = false;
     bool        score_only          = false;
@@ -63,6 +64,7 @@ inline AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--font"      && i+1 < argc) args.font_path     = argv[++i];
         else if (a == "--audio"     && i+1 < argc) args.audio_path    = argv[++i];
         else if (a == "--screenshot-dir" && i+1 < argc) args.screenshot_dir = argv[++i];
+        else if (a == "--screenshot-fps" && i+1 < argc) args.screenshot_fps = std::atof(argv[++i]);
         else if (a == "--duration"  && i+1 < argc) args.duration      = std::atof(argv[++i]);
         else if (a == "--audio-offset" && i+1 < argc) args.audio_offset_ms = std::atof(argv[++i]);
         else if (a == "--width"     && i+1 < argc) args.window_w      = std::atoi(argv[++i]);
@@ -162,7 +164,8 @@ inline void print_usage(const char* prog) {
         "\n"
         "OTHER\n"
         "  --headless                No visible window\n"
-        "  --screenshot-dir <dir>    Save PNG screenshots every 5 s\n"
+        "  --screenshot-dir <dir>    Save PNG screenshots periodically\n"
+        "  --screenshot-fps <fps>    Screenshot rate in chart-seconds (default 0.2 = every 5s)\n"
         "  --backend <name>          Renderer backend (sdl)\n"
         "  --version  (-v)           Print version and exit\n"
         "  --help     (-h)           Print this help and exit\n"

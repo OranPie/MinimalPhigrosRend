@@ -439,8 +439,9 @@ private:
     }
 
     void do_screenshot() {
-        constexpr double kInterval = 5.0;
-        int expected = static_cast<int>(t / kInterval);
+        double fps = (args.screenshot_fps > 0.0) ? args.screenshot_fps : 0.2;
+        double interval = 1.0 / fps;
+        int expected = static_cast<int>(t / interval);
         if (expected >= screenshot_counter && t >= 0.0) {
             char fname[256];
             std::snprintf(fname, sizeof(fname), "%s/frame_%04d_t%.2f.png",
