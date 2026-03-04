@@ -21,7 +21,7 @@ inline LineState eval_line_state(
     double y = line.pos_y(t);
     double rot = line.rot(t);
     double a_raw = line.alpha(t);
-    double s = line.scroll_px.integral(t);
+    double s = line.scroll_fn ? line.scroll_fn(t) : line.scroll_px.integral(t);
     double a01 = math::clamp(std::abs(a_raw), 0.0, 1.0);
 
     if (force_alpha_by_lid) {

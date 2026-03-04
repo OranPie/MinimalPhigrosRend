@@ -30,6 +30,9 @@ struct AppArgs {
     int         record_w           = 0, record_h = 0;
     double      record_start       = -1.0;
     double      record_end         = 0.0;
+    // Compile
+    std::string compile_output;    // if non-empty, compile chart to .phbc and exit
+    float       compile_sample_rate = 240.0f;
 };
 
 inline AppArgs parse_args(int argc, char* argv[]) {
@@ -69,6 +72,8 @@ inline AppArgs parse_args(int argc, char* argv[]) {
         }
         else if (a == "--record-start" && i+1 < argc) args.record_start = std::atof(argv[++i]);
         else if (a == "--record-end"   && i+1 < argc) args.record_end   = std::atof(argv[++i]);
+        else if (a == "--compile"      && i+1 < argc) { args.compile_output = argv[++i]; args.headless = true; }
+        else if (a == "--sample-rate"  && i+1 < argc) args.compile_sample_rate = static_cast<float>(std::atof(argv[++i]));
         else if (args.chart_path.empty()) args.chart_path = a;
     }
     return args;
@@ -100,6 +105,8 @@ inline void print_usage(const char* prog) {
         "  --record-resolution WxH   Recording resolution\n"
         "  --record-start <sec>      Start recording at time\n"
         "  --record-end <sec>        Stop recording at time\n"
+        "  --compile <out.phbc>      Compile chart to binary format and exit\n"
+        "  --sample-rate <Hz>        Sampling rate for --compile (default 240)\n"
     );
 }
 

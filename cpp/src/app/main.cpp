@@ -6,6 +6,8 @@
 #include "phigros/app/game_loop.hpp"
 #include "phigros/config/render_config.hpp"
 #include "phigros/chart/parser.hpp"
+#include "phigros/chart/compiler.hpp"
+#include "phigros/chart/phbc_io.hpp"
 #include "phigros/engine/kinematics.hpp"
 #include "phigros/engine/visibility.hpp"
 #include "phigros/engine/judge.hpp"
@@ -20,6 +22,7 @@
 #include <vector>
 #include <algorithm>
 #include <chrono>
+#include <iomanip>
 
 #ifdef PHIGROS_WASM
 #include <emscripten.h>
@@ -49,6 +52,13 @@ static std::string detect_format(const std::string& path) {
 
 static phigros::ChartData load_chart(const std::string& path,
                                       const phigros::config::RenderConfig& cfg) {
+    // Binary compiled chart
+    if (path.size() >= 5 && path.substr(path.size() - 5) == ".phbc") {
+        std::ifstream f(path, std::ios::binary);
+        if (!f) throw std::runtime_error("Cannot open .phbc file: " + path);
+        auto compiled = phigros::chart::read_phbc(f);
+        return compiled.to_chart_data(); // is_compiled = true → skip precompute_t_enter
+    }
     std::string fmt = detect_format(path);
     if (fmt == "rpe" || fmt == "official") {
         std::ifstream f(path);
@@ -82,9 +92,34 @@ int main(int argc, char* argv[]) {
               << " Notes=" << chart.notes.size()
               << " Offset=" << chart.offset << "s\n";
 
-    engine::precompute_t_enter(chart.lines, chart.notes, W, H);
+    if (!chart.is_compiled)
+        engine::precompute_t_enter(chart.lines, chart.notes, W, H);
 
     double chart_end = chart.chart_end_t + 2.0;
+
+    // ── COMPILE MODE ──────────────────────────────────────────────────────────
+    if (!args.compile_output.empty()) {
+        using clock = std::chrono::steady_clock;
+        std::cout << "[Compile] Sampling at " << args.compile_sample_rate << " Hz …\n";
+        auto t0 = clock::now();
+        auto compiled = phigros::chart::compile_chart(chart, args.compile_sample_rate);
+        auto t1 = clock::now();
+        double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+        double est_mb = compiled.lines.size() * compiled.sample_count * 5 * sizeof(float) / 1e6;
+        std::cout << "[Compile] Done in " << static_cast<int>(ms) << " ms"
+                  << "  samples=" << compiled.sample_count
+                  << "  lines=" << compiled.lines.size()
+                  << "  notes=" << compiled.notes.size()
+                  << "  est. size=" << std::fixed << std::setprecision(2) << est_mb << " MB\n";
+
+        std::ofstream f(args.compile_output, std::ios::binary);
+        if (!f) { std::cerr << "[Error] Cannot open output: " << args.compile_output << "\n"; return 1; }
+        phigros::chart::write_phbc(compiled, f);
+        f.flush();
+        std::cout << "[Compile] Written: " << args.compile_output << "\n";
+        return 0;
+    }
 
     // ── SCORE-ONLY / BENCHMARK ────────────────────────────────────────────────
     if (args.score_only) {

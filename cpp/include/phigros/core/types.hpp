@@ -44,6 +44,9 @@ struct Note {
 // Track callable: eval(t) → double
 using TrackFn = std::function<double(double)>;
 
+// Color callable: eval(t) → RGB (used by compiled charts to override per-line color)
+using ColorFn = std::function<math::RGB(double)>;
+
 struct Line {
     int lid = 0;
 
@@ -56,11 +59,18 @@ struct Line {
     // Scroll (integral track, owned directly)
     math::IntegralTrack scroll_px;
 
+    // Optional compiled override: if set, used instead of scroll_px.integral() in kinematics.
+    // Set by compile_chart(); not used by live source-format charts.
+    TrackFn scroll_fn;
+
     // Static color
     math::RGB color_rgb{255, 255, 255};
 
     // Extended (RPE) fields
     std::shared_ptr<math::PiecewiseColor> color;
+
+    // Optional compiled color override: if set, used instead of color / color_rgb in build_frame.
+    ColorFn compiled_color;
     std::shared_ptr<math::PiecewiseEased> scale_x;
     std::shared_ptr<math::PiecewiseEased> scale_y;
     std::shared_ptr<math::PiecewiseText> text;
@@ -96,6 +106,9 @@ struct ChartData {
     // Precomputed at load time — avoids O(N) loops every build_frame() call
     double chart_end_t    = 0.0; // max(note.t_end) over all notes
     int    playable_count = 0;   // count of non-fake notes
+
+    // True when loaded from .phbc — t_enter already baked; skip precompute_t_enter()
+    bool is_compiled = false;
 
     // Compute chart_end_t and playable_count from notes. Call once after parsing.
     void finalize() {

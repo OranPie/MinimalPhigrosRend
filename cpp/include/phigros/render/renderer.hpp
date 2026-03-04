@@ -77,7 +77,8 @@ inline FrameSnapshot build_frame(
         frame.lines.push_back({
             ln.lid, ls.x, ls.y, ls.rot, ls.cos_rot, ls.sin_rot,
             ls.alpha01, ls.scroll,
-            ln.color ? ln.color->eval(t) : ln.color_rgb
+            ln.compiled_color ? ln.compiled_color(t)
+                              : (ln.color ? ln.color->eval(t) : ln.color_rgb)
         });
     }
 

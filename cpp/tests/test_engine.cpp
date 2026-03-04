@@ -7,6 +7,8 @@
 #include "phigros/chart/official.hpp"
 #include "phigros/chart/rpe.hpp"
 #include "phigros/chart/pec.hpp"
+#include "phigros/chart/compiler.hpp"
+#include "phigros/chart/phbc_io.hpp"
 #include "phigros/engine/kinematics.hpp"
 #include "phigros/engine/judge.hpp"
 #include "phigros/engine/visibility.hpp"
@@ -20,6 +22,7 @@
 #include "phigros/io/replay.hpp"
 #include "phigros/math/tracks.hpp"
 #include <fstream>
+#include <sstream>
 #include <iostream>
 #include <string>
 #include <cmath>
@@ -41,6 +44,7 @@ static int g_pass = 0, g_fail = 0;
 
 // Forward declaration (defined after run_regression)
 static bool run_autoplay(const std::string& chart_path, int W, int H);
+static bool test_compile_roundtrip(const std::string& path, int W, int H);
 
 // ---- Format detection (same as verify_chart) ----
 static std::string detect_format(const std::string& path) {
@@ -485,7 +489,17 @@ static bool run_regression(const std::string& charts_dir) {
 
     std::cout << "\n" << std::string(80, '-') << "\n"
               << "Regression: " << pass << "/" << total << " passed\n";
-    return pass == total;
+
+    // Compile round-trip verification for every chart found
+    std::cout << "\n=== Compile + PHBC round-trip ===\n";
+    int cpass = 0, ctotal = 0;
+    for (const auto& path : chart_paths) {
+        ++ctotal;
+        if (test_compile_roundtrip(path, 1280, 720)) ++cpass;
+    }
+    std::cout << "Compile round-trip: " << cpass << "/" << ctotal << " passed\n";
+
+    return pass == total && cpass == ctotal;
 }
 static void test_effects() {
     std::cout << "\n=== Effects unit tests ===\n";
@@ -731,6 +745,94 @@ static bool run_autoplay(const std::string& path, int W, int H) {
     note_mgr.update_visibility(t_end + 5.0, 10.0);
     CHECK(note_mgr.get_visible_count() == 0,
           "No notes visible at t_end+5");
+
+    return sr.score == 1000000;
+}
+
+// ── Compile + PHBC round-trip test ───────────────────────────────────────────
+// Compile a source chart → write .phbc to memory → read back → autoplay.
+// Verifies that the compiled binary chart produces score=1,000,000.
+static bool test_compile_roundtrip(const std::string& path, int W, int H) {
+    std::cout << "\n[Compile round-trip] " << path << "\n";
+
+    // 1. Load source chart
+    ChartData src;
+    try { src = load_chart(path, W, H); }
+    catch (const std::exception& e) {
+        std::cerr << "  Load error: " << e.what() << "\n";
+        return false;
+    }
+    engine::precompute_t_enter(src.lines, src.notes, W, H);
+
+    // 2. Compile to CompiledChartData
+    auto compiled = phigros::chart::compile_chart(src, 240.0f);
+    CHECK(compiled.sample_count > 0, "compile: sample_count > 0");
+    CHECK((int)compiled.lines.size() == (int)src.lines.size(), "compile: line count preserved");
+    CHECK((int)compiled.notes.size() == (int)src.notes.size(), "compile: note count preserved");
+
+    // 3. Write to in-memory stream
+    std::ostringstream oss(std::ios::binary);
+    phigros::chart::write_phbc(compiled, oss);
+    std::string blob = oss.str();
+    CHECK(!blob.empty(), "phbc: serialized non-empty");
+    CHECK(blob.substr(0, 4) == "PHBC", "phbc: magic header 'PHBC'");
+
+    // 4. Read back
+    std::istringstream iss(blob, std::ios::binary);
+    phigros::chart::CompiledChartData reloaded;
+    try { reloaded = phigros::chart::read_phbc(iss); }
+    catch (const std::exception& e) {
+        std::cerr << "  read_phbc error: " << e.what() << "\n";
+        ++g_fail; return false;
+    }
+    CHECK(reloaded.sample_count == compiled.sample_count, "phbc round-trip: sample_count");
+    CHECK((int)reloaded.lines.size() == (int)compiled.lines.size(), "phbc round-trip: lines");
+    CHECK((int)reloaded.notes.size() == (int)compiled.notes.size(), "phbc round-trip: notes");
+    CHECK(std::abs(reloaded.offset - compiled.offset) < 1e-9, "phbc round-trip: offset");
+    CHECK(reloaded.sample_rate == compiled.sample_rate, "phbc round-trip: sample_rate");
+
+    // 5. Convert to ChartData and run autoplay — must score 1,000,000
+    ChartData chart = reloaded.to_chart_data();
+    // is_compiled = true; t_enter already baked — no precompute_t_enter needed
+
+    int total_notes = chart.playable_count;
+    if (total_notes == 0) { std::cout << "  SKIP (no playable notes)\n"; return true; }
+
+    std::vector<NoteState> states(chart.notes.size());
+    for (size_t i = 0; i < chart.notes.size(); ++i) states[i].note = &chart.notes[i];
+
+    engine::NoteManager note_mgr(&chart.notes, &states);
+    engine::SimulatePlayer sim(engine::SimMode::Conservative, 4);
+    engine::Judge judge;
+    engine::EffectManager effects;
+
+    double t_start = chart.offset;
+    double t_end   = chart.chart_end_t + 1.0;
+    constexpr double HOLD_TOL  = 0.30;
+    constexpr double MISS_WIN  = engine::Judge::BAD;
+    constexpr double DT        = 1.0 / 240.0;
+
+    for (double t = t_start; t <= t_end; t += DT) {
+        note_mgr.update_visibility(t, 10.0);
+        int idx_next = note_mgr.find_next_note_index(t);
+        sim.step(t, chart.notes, states, chart.lines, judge, W, H);
+        engine::detect_misses(states, idx_next, t, MISS_WIN, judge);
+        engine::hold_maintenance(states, idx_next, t, HOLD_TOL, judge);
+        engine::hold_finalize(states, idx_next, t, HOLD_TOL, MISS_WIN, judge);
+        effects.hold_tick_fx(states, idx_next, t, 80, chart.lines);
+        effects.update(t, t * 1000.0);
+    }
+
+    auto sr = engine::compute_score(judge.acc_sum, judge.max_combo, total_notes);
+    std::cout << "  Score=" << sr.score
+              << "  Combo=" << judge.max_combo << "/" << total_notes
+              << "  phbc_size=" << blob.size() / 1024 << " KB\n";
+
+    CHECK(sr.score == 1000000,
+          "Compiled score=1000000 (got " + std::to_string(sr.score) + ")");
+    CHECK(judge.max_combo == total_notes,
+          "Compiled max_combo=" + std::to_string(total_notes) +
+          " (got " + std::to_string(judge.max_combo) + ")");
 
     return sr.score == 1000000;
 }
