@@ -38,8 +38,8 @@ struct NoteRenderer {
             const auto& tex = respack.note_texture(ns.kind, ns.mh);
             if (!tex.valid()) continue;
 
-            double ws = base_note_w * note_scale_x;
-            double hs = base_note_h * note_scale_y;
+            double ws = base_note_w * note_scale_x * ns.size_px;
+            double hs = base_note_h * note_scale_y * ns.size_px;
 
             // Color and alpha
             uint8_t r = ns.color.r, g = ns.color.g, b = ns.color.b;

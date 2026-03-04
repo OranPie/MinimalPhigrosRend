@@ -247,7 +247,28 @@ struct GameLoop {
                 }
             }
         } else {
-            autoplay.step(t, chart.notes, states, chart.lines, judge, W, H);
+            static std::vector<int> s_hit_notes;
+            s_hit_notes.clear();
+            autoplay.step(t, chart.notes, states, chart.lines, judge, W, H, &s_hit_notes);
+            // Emit hit effects for each note judged this step (mirrors Python autoplay)
+            if (t >= 0.0 && cfg.show_hitfx) {
+                for (int i : s_hit_notes) {
+                    const auto& n = chart.notes[i];
+                    if (n.line_id < 0 || n.line_id >= static_cast<int>(chart.lines.size())) continue;
+                    auto ls = engine::eval_line_state(chart.lines[n.line_id], t,
+                        cfg.force_line_alpha01,
+                        cfg.force_line_alpha01_by_lid ? &(*cfg.force_line_alpha01_by_lid) : nullptr);
+                    auto pos = engine::note_world_pos_cs(
+                        ls.x, ls.y, ls.cos_rot, ls.sin_rot, ls.scroll, n,
+                        n.scroll_hit, false, cfg.note_flow_speed_multiplier,
+                        cfg.note_speed_mul_affects_travel, false);
+                    auto col = render::note_type_color(n.kind);
+                    effects.add_hitfx(pos.x, pos.y, t, col);
+                    if (cfg.show_particles)
+                        effects.add_particle_burst(pos.x, pos.y, t * 1000.0,
+                            ctx.respack.cfg.hitfx_duration * 1000.0, col);
+                }
+            }
         }
 
         if (t >= 0.0) {

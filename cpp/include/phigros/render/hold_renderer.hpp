@@ -29,7 +29,7 @@ struct HoldRenderer {
             const auto& tex = respack.note_texture(3, false);
             if (!tex.valid()) continue;
 
-            double ws = base_note_w * note_scale_x;
+            double ws = base_note_w * note_scale_x * ns.size_px;
 
             // Head and tail positions from snapshot
             double hx = ns.wx, hy = ns.wy;

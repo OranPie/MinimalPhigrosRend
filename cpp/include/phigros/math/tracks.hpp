@@ -55,7 +55,11 @@ private:
     void seek(double t) const {
         size_t i = cursor_;
         while (i + 1 < segs.size() && t >= segs[i].t1) ++i;
-        while (i > 0 && t < segs[i].t0) --i;
+        if (i > 0 && t < segs[i].t0) {
+            size_t lo = 0, hi = i - 1;
+            while (lo < hi) { size_t mid = lo + (hi - lo + 1) / 2; if (segs[mid].t0 <= t) lo = mid; else hi = mid - 1; }
+            i = lo;
+        }
         cursor_ = i;
     }
 };
@@ -114,7 +118,11 @@ private:
     void seek(double t) const {
         size_t i = cursor_;
         while (i + 1 < segs.size() && t >= segs[i].t1) ++i;
-        while (i > 0 && t < segs[i].t0) --i;
+        if (i > 0 && t < segs[i].t0) {
+            size_t lo = 0, hi = i - 1;
+            while (lo < hi) { size_t mid = lo + (hi - lo + 1) / 2; if (segs[mid].t0 <= t) lo = mid; else hi = mid - 1; }
+            i = lo;
+        }
         cursor_ = i;
     }
 };
@@ -170,7 +178,11 @@ private:
     void seek(double t) const {
         size_t i = cursor_;
         while (i + 1 < segs.size() && t >= segs[i].t1) ++i;
-        while (i > 0 && t < segs[i].t0) --i;
+        if (i > 0 && t < segs[i].t0) {
+            size_t lo = 0, hi = i - 1;
+            while (lo < hi) { size_t mid = lo + (hi - lo + 1) / 2; if (segs[mid].t0 <= t) lo = mid; else hi = mid - 1; }
+            i = lo;
+        }
         cursor_ = i;
     }
 };
@@ -206,7 +218,11 @@ private:
     void seek(double t) const {
         size_t i = cursor_;
         while (i + 1 < segs.size() && t >= segs[i].t1) ++i;
-        while (i > 0 && t < segs[i].t0) --i;
+        if (i > 0 && t < segs[i].t0) {
+            size_t lo = 0, hi = i - 1;
+            while (lo < hi) { size_t mid = lo + (hi - lo + 1) / 2; if (segs[mid].t0 <= t) lo = mid; else hi = mid - 1; }
+            i = lo;
+        }
         cursor_ = i;
     }
 };

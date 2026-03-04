@@ -25,7 +25,8 @@ public:
     void step(double t, const std::vector<Note>& notes,
               std::vector<NoteState>& states,
               const std::vector<Line>& lines,
-              Judge& judge, int W, int H)
+              Judge& judge, int W, int H,
+              std::vector<int>* hit_out = nullptr)
     {
         if (max_pointers_ <= 0) return;
 
@@ -59,6 +60,7 @@ public:
                 auto grade = judge.start_hold(s, t);
                 if (grade) {
                     active_holds_.insert(i);
+                    if (hit_out) hit_out->push_back(i);
                 }
             }
         }
@@ -84,6 +86,7 @@ public:
                 }
 
                 judge.try_hit(s, t);
+                if (hit_out && s.judged) hit_out->push_back(i);
             }
         }
 
@@ -105,6 +108,7 @@ public:
                 }
 
                 judge.try_hit(s, t);
+                if (hit_out && s.judged) hit_out->push_back(i);
             }
         }
     }

@@ -16,8 +16,17 @@ public:
         visible_.clear();
         if (!notes_) return;
 
-        for (size_t i = 0; i < notes_->size(); ++i) {
-            auto& note = (*notes_)[i];
+        // Binary search bounds — notes are sorted by t_hit (6B2)
+        auto lo_it = std::lower_bound(notes_->begin(), notes_->end(),
+            t - approach_time - 1.0,
+            [](const Note& n, double v) { return n.t_hit < v; });
+        auto hi_it = std::upper_bound(notes_->begin(), notes_->end(),
+            t + approach_time,
+            [](double v, const Note& n) { return v < n.t_hit; });
+
+        for (auto it = lo_it; it != hi_it; ++it) {
+            const auto& note = *it;
+            const size_t i = static_cast<size_t>(it - notes_->begin());
 
             if (cull_enter_time) {
                 if (t < note.t_enter) continue;

@@ -36,6 +36,7 @@ struct NoteSnapshot {
     double wx_tail, wy_tail; // world position (tail, for holds)
     double alpha;
     double line_rot;         // line rotation for note alignment
+    double size_px = 1.0;    // per-note size multiplier (from Note::size_px)
     math::RGB color;
     bool is_hold;
     bool judged;
@@ -142,7 +143,7 @@ inline FrameSnapshot build_frame(
 
         frame.notes.push_back({
             note.nid, note.kind, head.x, head.y,
-            wx_tail, wy_tail, note_alpha, ls.rot, color,
+            wx_tail, wy_tail, note_alpha, ls.rot, note.size_px, color,
             note.kind == 3, ns.judged, ns.miss, note.mh,
             ns.holding
         });
