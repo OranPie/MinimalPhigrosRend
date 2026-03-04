@@ -8,12 +8,16 @@
 :root {
   --bg: #0a0a0e;
   --surface: #181820;
-  --border: #333;
+  --surface2: #1e1e2a;
+  --border: #2e2e40;
   --text: #ddd;
-  --muted: #888;
+  --muted: #777;
   --accent: #4a90e2;
-  --danger: #e25454;
+  --green: #3a8a50;
+  --danger: #d45454;
+  --phi: #f0c040;
   --radius: 6px;
+  --max-w: 1280px;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { height: 100%; }
@@ -27,249 +31,327 @@ body {
   overflow-x: hidden;
 }
 
-/* ── Header ─────────────────────────────── */
-#header {
-  width: 100%;
-  max-width: 1280px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px 6px;
+/* ── Loading bar (top of page) ─────────────── */
+#progress-bar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: transparent;
+  z-index: 200;
+  display: none;
 }
-#header h1 { font-size: 1.05rem; color: var(--muted); letter-spacing: 0.03em; }
-#header span { font-size: 0.75rem; color: #555; }
+#progress-fill { height: 100%; background: var(--accent); width: 0; transition: width 0.25s; }
 
-/* ── File controls ───────────────────────── */
+/* ── Header ─────────────────────────────────── */
+#header {
+  width: 100%; max-width: var(--max-w);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px 4px;
+}
+#header h1 { font-size: 1.0rem; color: var(--muted); letter-spacing: 0.03em; }
+#ver-badge  { font-size: 0.72rem; color: #444; }
+
+/* ── File row ────────────────────────────────── */
 #file-row {
-  width: 100%;
-  max-width: 1280px;
-  display: flex;
-  gap: 8px;
-  padding: 0 12px 6px;
+  width: 100%; max-width: var(--max-w);
+  display: flex; gap: 6px;
+  padding: 4px 12px 2px;
   flex-wrap: wrap;
 }
-.file-btn {
-  flex: 1;
-  min-width: 120px;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
+.file-slot {
+  flex: 1; min-width: 110px;
+  display: flex; flex-direction: column; align-items: stretch; gap: 2px;
 }
-.file-btn label.title { font-size: 0.68rem; color: var(--muted); }
-.file-btn .badge {
-  font-size: 0.65rem;
-  color: var(--accent);
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-height: 0.9em;
-}
-.file-btn input[type=file] { display: none; }
-.file-btn .pick-btn {
-  width: 100%;
-  padding: 8px 10px;
+.file-slot .slot-label { font-size: 0.65rem; color: var(--muted); padding-left: 2px; }
+.file-slot input[type=file] { display: none; }
+.pick-btn {
+  padding: 7px 8px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   cursor: pointer;
   text-align: center;
-  transition: background 0.15s;
+  transition: border-color 0.12s, background 0.12s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.file-btn .pick-btn:hover { background: #222232; border-color: var(--accent); }
-.file-btn .pick-btn.loaded { border-color: var(--accent); color: var(--accent); }
+.pick-btn:hover                { background: var(--surface2); border-color: var(--accent); }
+.pick-btn.loaded               { border-color: var(--accent); color: var(--accent); }
 
-/* ── Action controls ─────────────────────── */
+/* Mod list below the mod slot */
+#mod-list {
+  display: flex; flex-wrap: wrap; gap: 4px; padding: 3px 12px 0;
+  width: 100%; max-width: var(--max-w);
+}
+.mod-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: #1a2a1a; border: 1px solid #2a5a2a;
+  color: #8eff9e; border-radius: 20px;
+  font-size: 0.68rem; padding: 2px 8px;
+}
+.mod-tag button {
+  background: none; border: none; color: #5a9a5a;
+  cursor: pointer; font-size: 0.75rem; line-height: 1;
+  padding: 0 1px;
+}
+.mod-tag button:hover { color: var(--danger); }
+
+/* ── Action row ──────────────────────────────── */
 #action-row {
-  width: 100%;
-  max-width: 1280px;
-  display: flex;
-  gap: 8px;
-  padding: 0 12px 8px;
-  flex-wrap: wrap;
-  align-items: center;
+  width: 100%; max-width: var(--max-w);
+  display: flex; gap: 6px;
+  padding: 6px 12px 6px;
+  flex-wrap: wrap; align-items: center;
 }
 .action-btn {
-  padding: 9px 18px;
-  border-radius: var(--radius);
-  border: none;
-  font-size: 0.88rem;
-  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: var(--radius); border: none;
+  font-size: 0.85rem; font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.15s, background 0.15s;
+  transition: background 0.12s, opacity 0.12s;
+  display: inline-flex; align-items: center; gap: 5px;
 }
-.action-btn:disabled { opacity: 0.35; cursor: default; }
+.action-btn:disabled   { opacity: 0.3; cursor: default; }
 #btn-play    { background: var(--accent); color: #fff; }
-#btn-play:not(:disabled):hover { background: #5aa0f0; }
-#btn-score   { background: #3a3a50; color: var(--text); }
-#btn-score:not(:disabled):hover { background: #4a4a60; }
-#btn-compile { background: #2e5e3a; color: #8eff9e; }
-#btn-compile:not(:disabled):hover { background: #3a7048; }
-#btn-fullscreen { background: #2a2a36; color: var(--muted); margin-left: auto; }
-#btn-fullscreen:hover { background: #3a3a46; color: var(--text); }
+#btn-play:not(:disabled):hover    { background: #5aa0f5; }
+#btn-score   { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+#btn-score:not(:disabled):hover   { background: #2a2a40; }
+#btn-compile { background: #1e3e26; color: #8eff9e; border: 1px solid #2a5a2a; }
+#btn-compile:not(:disabled):hover { background: #243e2c; }
+#btn-fullscreen {
+  margin-left: auto; background: transparent;
+  color: var(--muted); border: 1px solid var(--border);
+  padding: 8px 12px;
+}
+#btn-fullscreen:hover { background: var(--surface); color: var(--text); }
 
 /* Volume */
 #vol-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.75rem;
-  color: var(--muted);
+  display: flex; align-items: center; gap: 5px;
+  font-size: 0.72rem; color: var(--muted);
 }
-#vol-wrap input[type=range] {
-  width: 80px;
-  accent-color: var(--accent);
-  cursor: pointer;
+#vol-wrap input[type=range] { width: 72px; accent-color: var(--accent); cursor: pointer; }
+#vol-label { min-width: 2.6em; }
+
+/* Running spinner */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  display: inline-block; width: 12px; height: 12px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
 }
 
-/* ── Canvas ──────────────────────────────── */
-#canvas-container {
+/* ── Canvas container ────────────────────────── */
+#canvas-wrap {
   position: relative;
-  width: 100%;
-  max-width: 1280px;
+  width: 100%; max-width: var(--max-w);
   aspect-ratio: 16/9;
   border-radius: var(--radius);
   overflow: hidden;
   flex-shrink: 0;
+  background: #000;
 }
 canvas {
-  width: 100%;
-  height: 100%;
+  width: 100%; height: 100%;
   display: block;
-  background: #000;
-  touch-action: none;
-  outline: none;
+  touch-action: none; outline: none;
 }
 
-/* ── Info panel ──────────────────────────── */
-#info-panel {
-  width: 100%;
-  max-width: 1280px;
-  padding: 6px 14px;
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  min-height: 28px;
-}
-.info-item { font-size: 0.72rem; color: var(--muted); }
-.info-item span { color: var(--text); font-weight: 600; }
-
-/* ── Status bar ──────────────────────────── */
-#status-bar {
-  width: 100%;
-  max-width: 1280px;
-  padding: 4px 14px 10px;
-  font-size: 0.78rem;
-  color: var(--muted);
-  min-height: 1.4em;
-}
-#status-bar.error { color: var(--danger); }
-#progress-bar {
-  width: 100%;
-  height: 2px;
-  background: var(--border);
+/* ── Score overlay ────────────────────────────── */
+#score-overlay {
+  position: absolute; inset: 0;
   display: none;
+  align-items: center; justify-content: center;
+  background: rgba(5, 5, 12, 0.80);
+  backdrop-filter: blur(6px);
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+  z-index: 10;
+  animation: fadeIn 0.3s ease;
 }
-#progress-fill { height: 100%; background: var(--accent); width: 0; transition: width 0.3s; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+#score-overlay .grade {
+  font-size: 4rem; font-weight: 900; line-height: 1;
+  letter-spacing: -0.02em;
+}
+.grade-phi { color: var(--phi); text-shadow: 0 0 30px rgba(240,192,64,0.6); }
+.grade-v   { color: #d0a0ff; text-shadow: 0 0 20px rgba(200,120,255,0.5); }
+.grade-s   { color: #a0d0ff; }
+.grade-a   { color: #a0ffa0; }
+.grade-b   { color: #ffe080; }
+.grade-c   { color: #ff9060; }
+.grade-f   { color: var(--danger); }
+#score-overlay .score-num {
+  font-size: 2.2rem; font-weight: 700;
+  letter-spacing: 0.04em; color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+#score-overlay .combo-str {
+  font-size: 0.95rem; color: var(--muted);
+}
+#score-overlay .dismiss-hint {
+  margin-top: 12px; font-size: 0.68rem; color: #444;
+}
 
-/* ── Drop zone ───────────────────────────── */
+/* ── Info strip ───────────────────────────────── */
+#info-strip {
+  width: 100%; max-width: var(--max-w);
+  display: flex; gap: 0; flex-wrap: nowrap; overflow-x: auto;
+  padding: 4px 12px 0;
+  scrollbar-width: none;
+}
+#info-strip::-webkit-scrollbar { display: none; }
+.info-chip {
+  display: none;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 12px;
+  border-right: 1px solid var(--border);
+  gap: 1px;
+}
+.info-chip:last-child { border-right: none; }
+.info-chip .ic-label { font-size: 0.6rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.info-chip .ic-val   { font-size: 0.82rem; font-weight: 600; color: var(--text); }
+
+/* ── Status bar ───────────────────────────────── */
+#status-bar {
+  width: 100%; max-width: var(--max-w);
+  padding: 4px 14px 6px;
+  font-size: 0.75rem; color: var(--muted);
+  min-height: 1.4em;
+  display: flex; align-items: center; gap: 6px;
+}
+#status-bar.error .status-text { color: var(--danger); }
+#status-bar.ok    .status-text { color: #6edd90; }
+
+/* ── Log panel ────────────────────────────────── */
+#log-wrap {
+  width: 100%; max-width: var(--max-w);
+  padding: 0 12px 8px;
+}
+details.log-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+details.log-panel summary {
+  padding: 5px 10px;
+  font-size: 0.72rem; color: var(--muted);
+  cursor: pointer; user-select: none;
+  list-style: none;
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface);
+}
+details.log-panel summary::-webkit-details-marker { display: none; }
+details.log-panel summary::after {
+  content: '▸';
+  font-size: 0.65rem; color: var(--muted);
+  transition: transform 0.15s;
+}
+details.log-panel[open] summary::after { transform: rotate(90deg); }
+#log-lines {
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 6px 10px;
+  font-size: 0.68rem;
+  font-family: 'SF Mono', 'Consolas', monospace;
+  color: #6a8a6a;
+  line-height: 1.5;
+  background: #0c0c10;
+  scrollbar-width: thin;
+  scrollbar-color: #333 #0c0c10;
+}
+#log-lines .log-err { color: #c06060; }
+#log-lines .log-ok  { color: #60b060; }
+#log-lines .log-mod { color: #80a0ff; }
+
+/* ── Drop zone ─────────────────────────────────── */
 #drop-zone {
-  position: fixed;
-  inset: 0;
-  background: rgba(74,144,226,0.25);
+  position: fixed; inset: 0;
+  background: rgba(74,144,226,0.18);
   border: 3px dashed var(--accent);
   display: none;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 12px;
-  font-size: 1.4rem;
-  color: #fff;
-  z-index: 100;
-  pointer-events: none;
-  backdrop-filter: blur(4px);
+  align-items: center; justify-content: center;
+  flex-direction: column; gap: 10px;
+  font-size: 1.3rem; color: #fff;
+  z-index: 100; pointer-events: none;
+  backdrop-filter: blur(6px);
 }
-#drop-zone p { font-size: 0.9rem; color: rgba(255,255,255,0.7); }
+#drop-zone p { font-size: 0.85rem; color: rgba(255,255,255,0.6); }
 
-/* ── Touch hints ─────────────────────────── */
-#touch-hints {
-  display: none;
-  padding: 4px 14px;
-  font-size: 0.68rem;
-  color: #555;
-  text-align: center;
-}
-
-/* ── Mobile adjustments ──────────────────── */
-@media (max-width: 600px) {
-  #header h1 { font-size: 0.9rem; }
-  .file-btn { min-width: 100px; }
-  .action-btn { padding: 11px 14px; font-size: 0.85rem; }
-  #touch-hints { display: block; }
-  #vol-wrap input[type=range] { width: 60px; }
-}
-
-/* ── Keyboard shortcut hint ──────────────── */
-#kb-hints {
-  padding: 4px 14px 8px;
-  font-size: 0.68rem;
-  color: #444;
+/* ── Bottom hints ──────────────────────────────── */
+#hints-bar {
+  width: 100%; max-width: var(--max-w);
+  padding: 4px 14px 10px;
+  font-size: 0.65rem; color: #3a3a50;
   text-align: center;
 }
 kbd {
-  background: #222;
-  border: 1px solid #444;
-  border-radius: 3px;
-  padding: 1px 5px;
-  font-size: 0.7em;
-  color: #888;
+  background: #1c1c28; border: 1px solid #333;
+  border-radius: 3px; padding: 1px 5px;
+  font-size: 0.68em; color: #666;
+}
+
+/* ── Mobile ─────────────────────────────────────── */
+@media (max-width: 600px) {
+  .file-slot { min-width: 90px; }
+  .action-btn { padding: 10px 12px; font-size: 0.82rem; }
+  #hints-bar .kb-hints { display: none; }
+  #hints-bar .touch-hints { display: inline; }
+}
+@media (min-width: 601px) {
+  #hints-bar .touch-hints { display: none; }
 }
 </style>
 </head>
 <body>
+
+<div id="progress-bar"><div id="progress-fill"></div></div>
 
 <div id="header">
   <h1>🎵 Phigros Chart Renderer</h1>
   <span id="ver-badge">v1.0.0-dev</span>
 </div>
 
-<div id="progress-bar"><div id="progress-fill"></div></div>
-
+<!-- File loaders -->
 <div id="file-row">
-  <div class="file-btn" id="fb-chart">
-    <label class="title">Chart</label>
-    <button class="pick-btn" onclick="document.getElementById('chart-file').click()">
-      📄 .json / .zip / .phbc
-    </button>
-    <input type="file" id="chart-file" accept=".json,.zip,.phbc">
-    <div class="badge" id="badge-chart"></div>
+  <div class="file-slot" id="fs-chart">
+    <span class="slot-label">Chart</span>
+    <button class="pick-btn" onclick="document.getElementById('fi-chart').click()">📄 .json / .zip / .phbc</button>
+    <input type="file" id="fi-chart" accept=".json,.zip,.phbc">
   </div>
-  <div class="file-btn" id="fb-respack">
-    <label class="title">Respack</label>
-    <button class="pick-btn" onclick="document.getElementById('respack-file').click()">
-      🎨 respack.zip
-    </button>
-    <input type="file" id="respack-file" accept=".zip">
-    <div class="badge" id="badge-respack"></div>
+  <div class="file-slot" id="fs-respack">
+    <span class="slot-label">Respack</span>
+    <button class="pick-btn" onclick="document.getElementById('fi-respack').click()">🎨 respack.zip</button>
+    <input type="file" id="fi-respack" accept=".zip">
   </div>
-  <div class="file-btn" id="fb-audio">
-    <label class="title">Audio</label>
-    <button class="pick-btn" onclick="document.getElementById('audio-file').click()">
-      🎵 .ogg / .mp3 / .wav
-    </button>
-    <input type="file" id="audio-file" accept=".ogg,.mp3,.wav,.flac">
-    <div class="badge" id="badge-audio"></div>
+  <div class="file-slot" id="fs-audio">
+    <span class="slot-label">Audio</span>
+    <button class="pick-btn" onclick="document.getElementById('fi-audio').click()">🎵 .ogg / .mp3</button>
+    <input type="file" id="fi-audio" accept=".ogg,.mp3,.wav,.flac">
+  </div>
+  <div class="file-slot" id="fs-mod">
+    <span class="slot-label">Mod</span>
+    <button class="pick-btn" onclick="document.getElementById('fi-mod').click()">⚙ + .mod.json</button>
+    <input type="file" id="fi-mod" accept=".json,.mod.json" multiple>
   </div>
 </div>
 
+<!-- Loaded mod tags -->
+<div id="mod-list"></div>
+
+<!-- Actions -->
 <div id="action-row">
   <button class="action-btn" id="btn-play"    disabled>▶ Play</button>
-  <button class="action-btn" id="btn-score"   disabled>🏆 Score Only</button>
-  <button class="action-btn" id="btn-compile" disabled>⚡ Compile → .phbc</button>
+  <button class="action-btn" id="btn-score"   disabled>🏆 Score</button>
+  <button class="action-btn" id="btn-compile" disabled>⚡ → .phbc</button>
   <div id="vol-wrap">
     🔊 <input type="range" id="vol-slider" min="0" max="100" value="80">
     <span id="vol-label">80%</span>
@@ -277,38 +359,66 @@ kbd {
   <button class="action-btn" id="btn-fullscreen">⛶</button>
 </div>
 
-<div id="canvas-container">
+<!-- Canvas + score overlay -->
+<div id="canvas-wrap">
   <canvas id="canvas" tabindex="1"></canvas>
+
+  <div id="score-overlay" onclick="hideScoreOverlay()">
+    <div class="grade" id="so-grade">φ</div>
+    <div class="score-num" id="so-score">1,000,000</div>
+    <div class="combo-str" id="so-combo">Full Combo · 0/0</div>
+    <div class="dismiss-hint">click to dismiss</div>
+  </div>
 </div>
 
-<div id="info-panel">
-  <div class="info-item" id="info-format" style="display:none">Format <span id="iv-format">—</span></div>
-  <div class="info-item" id="info-lines"  style="display:none">Lines <span id="iv-lines">—</span></div>
-  <div class="info-item" id="info-notes"  style="display:none">Notes <span id="iv-notes">—</span></div>
-  <div class="info-item" id="info-dur"    style="display:none">Duration <span id="iv-dur">—</span></div>
+<!-- Chart info strip -->
+<div id="info-strip">
+  <div class="info-chip" id="ic-format"><span class="ic-label">Format</span><span class="ic-val" id="iv-format">—</span></div>
+  <div class="info-chip" id="ic-lines"> <span class="ic-label">Lines</span> <span class="ic-val" id="iv-lines">—</span></div>
+  <div class="info-chip" id="ic-notes"> <span class="ic-label">Notes</span> <span class="ic-val" id="iv-notes">—</span></div>
+  <div class="info-chip" id="ic-dur">   <span class="ic-label">Duration</span><span class="ic-val" id="iv-dur">—</span></div>
+  <div class="info-chip" id="ic-mods">  <span class="ic-label">Mods</span>  <span class="ic-val" id="iv-mods">—</span></div>
 </div>
 
-<div id="status-bar">Loading engine…</div>
-
-<div id="touch-hints">
-  👆 Tap notes · 👆👆 Multi-touch supported · Double-tap canvas for fullscreen
-</div>
-<div id="kb-hints">
-  <kbd>Space</kbd> pause · <kbd>R</kbd> restart · <kbd>Esc</kbd> quit · <kbd>F</kbd> fullscreen
+<!-- Status bar -->
+<div id="status-bar">
+  <span id="status-icon"></span>
+  <span class="status-text" id="status-text">Loading engine…</span>
 </div>
 
+<!-- Log panel -->
+<div id="log-wrap">
+  <details class="log-panel" id="log-panel">
+    <summary><span>Engine log</span></summary>
+    <div id="log-lines"></div>
+  </details>
+</div>
+
+<!-- Bottom hints -->
+<div id="hints-bar">
+  <span class="kb-hints">
+    <kbd>Space</kbd> pause · <kbd>R</kbd> restart · <kbd>Esc</kbd> quit · <kbd>F</kbd> fullscreen
+  </span>
+  <span class="touch-hints">
+    👆 Tap notes · 👆👆 Multi-touch · Double-tap = fullscreen
+  </span>
+</div>
+
+<!-- Drag overlay -->
 <div id="drop-zone">
   <div>📂 Drop files here</div>
-  <p>Chart (.json/.zip/.phbc) · Respack (.zip) · Audio (.ogg/.mp3)</p>
+  <p>Chart · Respack · Audio · Mod (.mod.json)</p>
 </div>
 
 <script>
-// ── State ────────────────────────────────────────────────────────────────
-var loadedFiles  = { chart: null, respack: null, audio: null };
-var engineReady  = false;
-var lastOutput   = [];
+// ── State ──────────────────────────────────────────────────────────────────
+var loadedFiles = { chart: null, respack: null, audio: null };
+var loadedMods  = [];   // [{name, path}]
+var engineReady = false;
+var isRunning   = false;
+var lastOutput  = [];
 
-// ── Emscripten Module ─────────────────────────────────────────────────────
+// ── Emscripten Module ──────────────────────────────────────────────────────
 var Module = {
   canvas: document.getElementById('canvas'),
   noInitialRun: true,
@@ -316,111 +426,188 @@ var Module = {
   print: function(line) {
     console.log(line);
     lastOutput.push(line);
-    // Parse info lines like "[Info] …" and display them
+    appendLog(line, 'log-ok');
     parseOutputLine(line);
   },
 
   printErr: function(line) {
     console.warn(line);
-    if (line.match(/error|failed/i)) {
-      setStatus('⚠ ' + line, true);
-    }
+    appendLog(line, 'log-err');
+    if (line.match(/error|failed/i)) setStatus('⚠ ' + line, 'error');
   },
 
   onRuntimeInitialized: function() {
     try { FS.mkdir('/data'); } catch(e) {}
     engineReady = true;
-    setStatus('Engine ready — drop or load a chart file to begin');
+    // Show version in badge
+    var v = typeof PHIGROS_VERSION !== 'undefined' ? PHIGROS_VERSION : '1.0.0-dev';
+    document.getElementById('ver-badge').textContent = 'v' + v;
+    setStatus('Engine ready — load a chart to begin', 'ok');
     updateButtons();
   },
 
   setStatus: function(msg) {
     if (!msg) return;
-    var m = msg.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+    var m = msg.match(/\((\d+(?:\.\d+)?)\/(\d+)\)/);
     if (m) {
-      var pct = (parseFloat(m[2]) / parseFloat(m[4]) * 100).toFixed(0);
+      var pct = (parseFloat(m[1]) / parseFloat(m[2]) * 100).toFixed(0);
       showProgress(pct);
-      setStatus('Loading: ' + pct + '%');
-    } else if (msg.indexOf('Running…') >= 0 || msg === '') {
+      setStatus('Loading… ' + pct + '%');
+    } else if (!msg || msg.indexOf('Running') >= 0) {
       hideProgress();
     } else {
       setStatus(msg);
     }
   },
 
-  monitorRunDependencies: function(left) {
-    if (left === 0) { hideProgress(); }
-  },
-
+  monitorRunDependencies: function(left) { if (left === 0) hideProgress(); },
   arguments: []
 };
 
-// ── UI helpers ───────────────────────────────────────────────────────────
-function setStatus(msg, isError) {
-  var el = document.getElementById('status-bar');
-  el.textContent = msg;
-  el.className = isError ? 'error' : '';
-}
-
+// ── Progress bar ────────────────────────────────────────────────────────────
 function showProgress(pct) {
   var bar = document.getElementById('progress-bar');
   bar.style.display = 'block';
   document.getElementById('progress-fill').style.width = pct + '%';
 }
-
 function hideProgress() {
   document.getElementById('progress-bar').style.display = 'none';
   document.getElementById('progress-fill').style.width = '0';
 }
 
-function setBadge(type, name) {
-  var el = document.getElementById('badge-' + type);
-  if (el) el.textContent = name || '';
-  var btn = document.querySelector('#fb-' + type + ' .pick-btn');
-  if (btn) btn.classList.toggle('loaded', !!name);
+// ── Status bar ───────────────────────────────────────────────────────────────
+function setStatus(msg, type) {
+  var bar  = document.getElementById('status-bar');
+  var icon = document.getElementById('status-icon');
+  var text = document.getElementById('status-text');
+  bar.className = type || '';
+  text.textContent = msg;
+  icon.innerHTML = (type === 'running') ? '<span class="spinner"></span>' : '';
 }
 
+// ── Log panel ─────────────────────────────────────────────────────────────────
+function appendLog(line, cls) {
+  var el = document.getElementById('log-lines');
+  var div = document.createElement('div');
+  div.className = cls || '';
+  // Colour-classify
+  if (line.match(/\[Mod\]/))   div.className = 'log-mod';
+  else if (line.match(/Score:|Combo:|Pass/)) div.className = 'log-ok';
+  else if (line.match(/error|fail/i))        div.className = 'log-err';
+  div.textContent = line;
+  el.appendChild(div);
+  // Keep last 200 lines
+  while (el.childNodes.length > 200) el.removeChild(el.firstChild);
+  // Auto-scroll if already open
+  if (document.getElementById('log-panel').open) el.scrollTop = el.scrollHeight;
+}
+function clearLog() {
+  document.getElementById('log-lines').innerHTML = '';
+}
+
+// ── Buttons ───────────────────────────────────────────────────────────────────
 function updateButtons() {
-  var hasChart = !!loadedFiles.chart;
-  document.getElementById('btn-play').disabled    = !hasChart || !engineReady;
-  document.getElementById('btn-score').disabled   = !hasChart || !engineReady;
-  document.getElementById('btn-compile').disabled = !hasChart || !engineReady;
+  var ok = !isRunning && !!loadedFiles.chart && engineReady;
+  document.getElementById('btn-play').disabled    = !ok;
+  document.getElementById('btn-score').disabled   = !ok;
+  document.getElementById('btn-compile').disabled = !ok;
+}
+function setRunning(v) {
+  isRunning = v;
+  updateButtons();
 }
 
-function showChartInfo(format, lines, notes, dur) {
-  if (format) { document.getElementById('info-format').style.display = ''; document.getElementById('iv-format').textContent = format; }
-  if (lines)  { document.getElementById('info-lines').style.display  = ''; document.getElementById('iv-lines').textContent  = lines; }
-  if (notes)  { document.getElementById('info-notes').style.display  = ''; document.getElementById('iv-notes').textContent  = notes; }
-  if (dur)    { document.getElementById('info-dur').style.display    = ''; document.getElementById('iv-dur').textContent    = dur; }
+// ── Info strip ─────────────────────────────────────────────────────────────────
+function setInfoChip(id, val) {
+  if (!val) return;
+  var chip = document.getElementById('ic-' + id);
+  if (chip) chip.style.display = 'flex';
+  var span = document.getElementById('iv-' + id);
+  if (span) span.textContent = val;
+}
+function clearInfoChips() {
+  ['format','lines','notes','dur','mods'].forEach(function(k) {
+    var c = document.getElementById('ic-' + k);
+    if (c) c.style.display = 'none';
+  });
+}
+function updateModsChip() {
+  if (loadedMods.length > 0) {
+    setInfoChip('mods', loadedMods.length + ' mod' + (loadedMods.length > 1 ? 's' : ''));
+  } else {
+    var c = document.getElementById('ic-mods');
+    if (c) c.style.display = 'none';
+  }
 }
 
 function parseOutputLine(line) {
-  // Parse: "  Lines:        24"
   var mL = line.match(/Lines:\s+(\d+)/);
-  var mN = line.match(/Notes:\s+(\d+)/);
+  var mN = line.match(/Notes:\s+(\d+\s*\(\d+ playable[^)]*\)|\d+)/);
   var mD = line.match(/Duration:\s+([\d.]+)\s*s/);
-  var mF = line.match(/Format:\s+(.+)/);
-  if (mL) showChartInfo(null, mL[1], null, null);
-  if (mN) showChartInfo(null, null, mN[1], null);
-  if (mD) showChartInfo(null, null, null, mD[1] + 's');
-  if (mF) showChartInfo(mF[1].trim(), null, null, null);
+  var mF = line.match(/Format:\s+(\S+)/);
+  var mSc = line.match(/^Score:\s+(\d+)/);
+  var mCo = line.match(/^MaxCombo:\s+(\d+\/\d+)/);
+  if (mL)  setInfoChip('lines',  mL[1]);
+  if (mN)  setInfoChip('notes',  mN[1]);
+  if (mD)  setInfoChip('dur',    mD[1] + 's');
+  if (mF)  setInfoChip('format', mF[1]);
+  if (mSc) pendingScore.score  = parseInt(mSc[1], 10);
+  if (mCo) pendingScore.combo  = mCo[1];
 }
 
-// ── File handling ─────────────────────────────────────────────────────────
+// ── Score overlay ─────────────────────────────────────────────────────────────
+var pendingScore = { score: null, combo: null };
+
+function gradeFor(score) {
+  if (score >= 1000000) return ['φ',   'grade-phi'];
+  if (score >=  960000) return ['V',   'grade-v'];
+  if (score >=  920000) return ['S',   'grade-s'];
+  if (score >=  880000) return ['A',   'grade-a'];
+  if (score >=  820000) return ['B',   'grade-b'];
+  if (score >=  700000) return ['C',   'grade-c'];
+  return                       ['F',   'grade-f'];
+}
+function showScoreOverlay(score, combo) {
+  var ov  = document.getElementById('score-overlay');
+  var g   = gradeFor(score);
+  document.getElementById('so-grade').textContent  = g[0];
+  document.getElementById('so-grade').className    = 'grade ' + g[1];
+  document.getElementById('so-score').textContent  = score.toLocaleString();
+  var fc  = (combo && combo.split('/')[0] === combo.split('/')[1]);
+  document.getElementById('so-combo').textContent  =
+    (fc ? 'Full Combo · ' : '') + (combo || '');
+  ov.style.display = 'flex';
+}
+function hideScoreOverlay() {
+  document.getElementById('score-overlay').style.display = 'none';
+}
+
+// ── File writing ──────────────────────────────────────────────────────────────
 function writeToFS(path, data) {
   var dir = path.substring(0, path.lastIndexOf('/'));
   if (dir && dir !== '/') { try { FS.mkdirTree(dir); } catch(e) {} }
   FS.writeFile(path, data);
 }
+function bufferOrWrite(path, data) {
+  if (engineReady) {
+    writeToFS(path, data);
+  } else {
+    var prev = Module.onRuntimeInitialized;
+    Module.onRuntimeInitialized = function() {
+      if (prev) prev();
+      writeToFS(path, data);
+    };
+  }
+}
 
 function detectType(file) {
-  var ext = file.name.split('.').pop().toLowerCase();
-  if (ext === 'phbc') return 'chart';
-  if (ext === 'json') return 'chart';
-  if (ext === 'zip') {
-    if (file.name.match(/respack|resource|skin/i)) return 'respack';
+  var n   = file.name.toLowerCase();
+  var ext = n.split('.').pop();
+  if (ext === 'phbc' || ext === 'json') {
+    if (n.endsWith('.mod.json')) return 'mod';
     return 'chart';
   }
+  if (ext === 'zip') return n.match(/respack|resource|skin/i) ? 'respack' : 'chart';
   if (['ogg','mp3','wav','flac'].indexOf(ext) >= 0) return 'audio';
   return 'chart';
 }
@@ -433,81 +620,117 @@ function handleFile(file, forceType) {
   reader.onload = function(e) {
     var data = new Uint8Array(e.target.result);
     var path = '/data/' + file.name;
-    if (engineReady) {
-      writeToFS(path, data);
+    bufferOrWrite(path, data);
+
+    if (type === 'mod') {
+      loadedMods.push({ name: file.name.replace(/\.mod\.json$|\.json$/, ''), path: path });
+      renderModTags();
+      updateModsChip();
+      setStatus('Added mod: ' + file.name);
     } else {
-      // Buffer until runtime is ready
-      Module.onRuntimeInitialized = (function(orig, _path, _data) {
-        return function() { orig && orig(); try { FS.mkdir('/data'); } catch(e) {} writeToFS(_path, _data); };
-      })(Module.onRuntimeInitialized, path, data);
+      loadedFiles[type] = path;
+      // Update slot button label
+      var btn = document.querySelector('#fs-' + type + ' .pick-btn');
+      if (btn) { btn.textContent = '✓ ' + file.name; btn.classList.add('loaded'); }
+      if (type === 'chart') clearInfoChips();
+      setStatus('Loaded ' + type + ': ' + file.name);
     }
-    loadedFiles[type] = path;
-    setBadge(type, file.name);
-    setStatus('Loaded ' + type + ': ' + file.name);
     updateButtons();
   };
-  reader.onerror = function() { setStatus('Read error: ' + file.name, true); };
+  reader.onerror = function() { setStatus('Read error: ' + file.name, 'error'); };
   reader.readAsArrayBuffer(file);
 }
 
-// ── Run helpers ───────────────────────────────────────────────────────────
+// ── Mod tag list ───────────────────────────────────────────────────────────────
+function renderModTags() {
+  var list = document.getElementById('mod-list');
+  list.innerHTML = '';
+  loadedMods.forEach(function(m, i) {
+    var tag = document.createElement('span');
+    tag.className = 'mod-tag';
+    tag.innerHTML = '⚙ ' + escapeHtml(m.name) +
+      '<button title="Remove" onclick="removeMod(' + i + ')">×</button>';
+    list.appendChild(tag);
+  });
+}
+function removeMod(i) {
+  loadedMods.splice(i, 1);
+  renderModTags();
+  updateModsChip();
+}
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Engine run ─────────────────────────────────────────────────────────────────
 function buildArgs(mode) {
   var args = [loadedFiles.chart];
   if (loadedFiles.respack) { args.push('--respack'); args.push(loadedFiles.respack); }
   if (loadedFiles.audio)   { args.push('--audio');   args.push(loadedFiles.audio);   }
-  if (mode === 'score')    { args.push('--score-only'); }
-  if (mode === 'compile')  {
-    var out = '/data/out.phbc';
-    args.push('--compile'); args.push(out);
-    args.push('--score-only');
-  }
+  loadedMods.forEach(function(m) { args.push('--mod'); args.push(m.path); });
+  if (mode === 'score')   { args.push('--score-only'); }
+  if (mode === 'compile') { args.push('--compile'); args.push('/data/out.phbc'); args.push('--score-only'); }
   return args;
 }
 
 function runEngine(mode) {
-  if (!engineReady || !loadedFiles.chart) return;
+  if (!engineReady || !loadedFiles.chart || isRunning) return;
+  clearLog();
   lastOutput = [];
-  var args = buildArgs(mode);
-  setStatus(mode === 'score' ? 'Scoring…' : mode === 'compile' ? 'Compiling…' : 'Rendering…');
-  try {
-    Module.callMain(args);
-    if (mode === 'compile') offerPhbcDownload();
-  } catch(e) {
-    if (e && e.message !== 'unwind') setStatus('Error: ' + e.message, true);
-  }
+  pendingScore = { score: null, combo: null };
+  hideScoreOverlay();
+
+  setRunning(true);
+  var label = { play: 'Rendering…', score: 'Scoring…', compile: 'Compiling…' }[mode];
+  setStatus(label, 'running');
+
+  // Use setTimeout so the UI updates before the synchronous engine call
+  setTimeout(function() {
+    try {
+      Module.callMain(buildArgs(mode));
+    } catch(e) {
+      if (e && e.message !== 'unwind') setStatus('Error: ' + e.message, 'error');
+    }
+    setRunning(false);
+
+    if (mode === 'score' && pendingScore.score !== null) {
+      showScoreOverlay(pendingScore.score, pendingScore.combo);
+      setStatus('Score: ' + pendingScore.score.toLocaleString(), 'ok');
+    } else if (mode === 'compile') {
+      offerPhbcDownload();
+    } else {
+      setStatus('Done', 'ok');
+    }
+  }, 20);
 }
 
 function offerPhbcDownload() {
   try {
-    var data = FS.readFile('/data/out.phbc');
-    var blob = new Blob([data], { type: 'application/octet-stream' });
-    var url  = URL.createObjectURL(blob);
-    var a    = document.createElement('a');
-    var name = (loadedFiles.chart || 'chart').split('/').pop().replace(/\.\w+$/, '') + '.phbc';
+    var data  = FS.readFile('/data/out.phbc');
+    var blob  = new Blob([data], { type: 'application/octet-stream' });
+    var url   = URL.createObjectURL(blob);
+    var a     = document.createElement('a');
+    var name  = (loadedFiles.chart || 'chart').split('/').pop().replace(/\.\w+$/, '') + '.phbc';
     a.href = url; a.download = name; a.click();
-    setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
-    setStatus('Downloaded ' + name);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 15000);
+    setStatus('Downloaded ' + name, 'ok');
   } catch(e) {
-    setStatus('Compile download failed: ' + e.message, true);
+    setStatus('Compile error: ' + e.message, 'error');
   }
 }
 
-// ── Volume (best-effort: call exported C fn if available) ─────────────────
+// ── Volume ──────────────────────────────────────────────────────────────────────
 function applyVolume(v) {
-  try {
-    if (Module._phigros_set_volume) Module._phigros_set_volume(v / 100.0);
-  } catch(e) {}
+  try { if (Module._phigros_set_volume) Module._phigros_set_volume(v / 100.0); } catch(e) {}
 }
 
-// ── Event wiring ──────────────────────────────────────────────────────────
-document.getElementById('chart-file').addEventListener('change', function(e) {
-  handleFile(e.target.files[0], 'chart');
-});
-document.getElementById('respack-file').addEventListener('change', function(e) {
-  handleFile(e.target.files[0], 'respack');
-});
-document.getElementById('audio-file').addEventListener('change', function(e) {
-  handleFile(e.target.files[0], 'audio');
+// ── Event wiring ────────────────────────────────────────────────────────────────
+document.getElementById('fi-chart').addEventListener('change',   function(e) { handleFile(e.target.files[0], 'chart');   });
+document.getElementById('fi-respack').addEventListener('change', function(e) { handleFile(e.target.files[0], 'respack'); });
+document.getElementById('fi-audio').addEventListener('change',   function(e) { handleFile(e.target.files[0], 'audio');   });
+document.getElementById('fi-mod').addEventListener('change', function(e) {
+  Array.from(e.target.files).forEach(function(f) { handleFile(f, 'mod'); });
+  e.target.value = '';  // allow re-selecting same file
 });
 
 document.getElementById('btn-play').addEventListener('click',    function() { runEngine('play');    });
@@ -525,43 +748,33 @@ document.getElementById('btn-fullscreen').addEventListener('click', toggleFullsc
 var lastTap = 0;
 document.getElementById('canvas').addEventListener('touchend', function(e) {
   var now = Date.now();
-  if (now - lastTap < 320) { e.preventDefault(); toggleFullscreen(); }
+  if (now - lastTap < 300) { e.preventDefault(); toggleFullscreen(); }
   lastTap = now;
 });
 
 function toggleFullscreen() {
-  var el = document.getElementById('canvas-container');
+  var el   = document.getElementById('canvas-wrap');
   var isFs = document.fullscreenElement || document.webkitFullscreenElement;
-  if (isFs) {
-    (document.exitFullscreen || document.webkitExitFullscreen || function(){}).call(document);
-  } else {
-    (el.requestFullscreen || el.webkitRequestFullscreen || function(){}).call(el);
-  }
+  if (isFs) (document.exitFullscreen || document.webkitExitFullscreen || function(){}).call(document);
+  else      (el.requestFullscreen    || el.webkitRequestFullscreen    || function(){}).call(el);
 }
 
-// ── Drag & drop ───────────────────────────────────────────────────────────
+// ── Drag & drop ──────────────────────────────────────────────────────────────────
 var dragDepth = 0;
-document.addEventListener('dragenter', function(e) {
-  e.preventDefault(); dragDepth++;
-  document.getElementById('drop-zone').style.display = 'flex';
-});
-document.addEventListener('dragleave', function(e) {
-  dragDepth = Math.max(0, dragDepth - 1);
-  if (!dragDepth) document.getElementById('drop-zone').style.display = 'none';
-});
-document.addEventListener('dragover', function(e) { e.preventDefault(); });
+document.addEventListener('dragenter', function(e) { e.preventDefault(); dragDepth++; document.getElementById('drop-zone').style.display = 'flex'; });
+document.addEventListener('dragleave', function() { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) document.getElementById('drop-zone').style.display = 'none'; });
+document.addEventListener('dragover',  function(e) { e.preventDefault(); });
 document.addEventListener('drop', function(e) {
-  e.preventDefault();
-  dragDepth = 0;
+  e.preventDefault(); dragDepth = 0;
   document.getElementById('drop-zone').style.display = 'none';
   Array.from(e.dataTransfer.files).forEach(function(f) { handleFile(f); });
 });
 
-// ── Responsive canvas ─────────────────────────────────────────────────────
+// ── Responsive canvas ─────────────────────────────────────────────────────────────
 function resizeCanvas() {
-  var ct  = document.getElementById('canvas-container');
-  var w   = Math.min(ct.clientWidth, 1920);
-  var h   = Math.min(Math.round(w * 9 / 16), 1080);
+  var ct = document.getElementById('canvas-wrap');
+  var w  = Math.min(ct.clientWidth, 1920);
+  var h  = Math.min(Math.round(w * 9 / 16), 1080);
   Module.canvas.width  = w;
   Module.canvas.height = h;
 }
