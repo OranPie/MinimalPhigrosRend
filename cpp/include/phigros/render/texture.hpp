@@ -3,6 +3,7 @@
 #include <string>
 #include <cstdint>
 #include <vector>
+#include <memory>
 
 extern "C" {
     unsigned char* stbi_load_from_memory(const unsigned char*, int, int*, int*, int*, int);
@@ -15,6 +16,8 @@ namespace phigros::render {
 struct Texture {
     SDL_Texture* tex = nullptr;
     int w = 0, h = 0;
+    // Optional: raw RGBA pixels kept for backends that can't read GPU textures (e.g. bgfx)
+    std::shared_ptr<std::vector<uint8_t>> pixel_data;
 
     bool valid() const { return tex != nullptr; }
 
@@ -57,6 +60,17 @@ struct Texture {
         uint8_t* pixels = stbi_load_from_memory(data, len, &w, &h, &ch, 4);
         if (!pixels) return {};
         auto tex = from_rgba(ren, pixels, w, h);
+        stbi_image_free(pixels);
+        return tex;
+    }
+
+    // Same as from_memory but retains pixel data for bgfx/backend upload.
+    static Texture from_memory_cached(SDL_Renderer* ren, const uint8_t* data, int len) {
+        int w, h, ch;
+        uint8_t* pixels = stbi_load_from_memory(data, len, &w, &h, &ch, 4);
+        if (!pixels) return {};
+        auto tex = from_rgba(ren, pixels, w, h);
+        tex.pixel_data = std::make_shared<std::vector<uint8_t>>(pixels, pixels + (size_t)w * h * 4);
         stbi_image_free(pixels);
         return tex;
     }

@@ -180,7 +180,7 @@ inline std::vector<uint8_t> zip_extract(mz_zip_archive& zip, const char* name) {
 inline render::Texture load_tex_from_zip(mz_zip_archive& zip, SDL_Renderer* ren, const char* name) {
     auto data = zip_extract(zip, name);
     if (data.empty()) return {};
-    return render::Texture::from_memory(ren, data.data(), static_cast<int>(data.size()));
+    return render::Texture::from_memory_cached(ren, data.data(), static_cast<int>(data.size()));
 }
 
 inline Respack load_respack(SDL_Renderer* ren, const std::string& zip_path) {

@@ -30,6 +30,9 @@ struct MotionBlurRenderer {
 
     void init(SDL_Renderer* ren, int w, int h, const config::RenderConfig& cfg) {
         if (!cfg.motion_blur_samples.has_value()) return;
+#ifdef __EMSCRIPTEN__
+        return;  // SDL_TEXTUREACCESS_TARGET not reliably available on WebGL
+#endif
         _enabled = true;
         samples = std::max(1, cfg.motion_blur_samples.value_or(4));
         shutter = cfg.motion_blur_shutter.value_or(0.5);

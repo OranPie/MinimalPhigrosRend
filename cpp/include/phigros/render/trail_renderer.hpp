@@ -39,6 +39,9 @@ struct TrailRenderer {
 
     void init(SDL_Renderer* ren, int w, int h, const config::RenderConfig& cfg) {
         if (!cfg.trail_alpha.has_value()) return;
+#ifdef __EMSCRIPTEN__
+        return;  // SDL_TEXTUREACCESS_TARGET not reliably available on WebGL
+#endif
         _enabled = true;
         alpha   = cfg.trail_alpha.value_or(0.6);
         decay   = cfg.trail_decay.value_or(0.85);

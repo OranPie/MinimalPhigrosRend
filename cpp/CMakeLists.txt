@@ -142,6 +142,7 @@ elseif(EMSCRIPTEN)
         "SHELL:-s EXPORTED_FUNCTIONS=['_main','_malloc','_free']"
         "SHELL:-s INVOKE_RUN=0"
         "SHELL:-s FORCE_FILESYSTEM=1"
+        "SHELL:--preload-file respack.zip"
         "SHELL:--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html"
     )
 else()

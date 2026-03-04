@@ -28,24 +28,23 @@ struct BgfxExecutor {
         renderer.init(nullptr, w, h);
     }
 
-    bgfx::TextureHandle get_bgfx_tex(SDL_Texture* sdl_tex) {
-        if (!sdl_tex) return BGFX_INVALID_HANDLE;
-        auto it = tex_cache.find(sdl_tex);
+    bgfx::TextureHandle get_bgfx_tex(const Texture* t) {
+        if (!t || !t->tex) return BGFX_INVALID_HANDLE;
+        auto it = tex_cache.find(t->tex);
         if (it != tex_cache.end()) return it->second;
 
-        // Lazy upload: read pixels from SDL (only works for STATIC/STREAMING textures)
-        int w = 0, h = 0;
-        SDL_QueryTexture(sdl_tex, nullptr, nullptr, &w, &h);
+        // Upload from pixel cache (populated during respack load via from_memory_cached)
+        if (!t->pixel_data || t->pixel_data->empty()) return BGFX_INVALID_HANDLE;
+        int w = t->w, h = t->h;
         if (w <= 0 || h <= 0) return BGFX_INVALID_HANDLE;
 
-        std::vector<uint8_t> pixels(w * h * 4, 0);
-        const bgfx::Memory* mem = bgfx::copy(pixels.data(), w * h * 4);
+        const bgfx::Memory* mem = bgfx::copy(t->pixel_data->data(), (uint32_t)(w * h * 4));
         bgfx::TextureHandle bh = bgfx::createTexture2D(
             (uint16_t)w, (uint16_t)h, false, 1,
             bgfx::TextureFormat::RGBA8,
             BGFX_TEXTURE_NONE | BGFX_SAMPLER_NONE, mem);
 
-        tex_cache[sdl_tex] = bh;
+        tex_cache[t->tex] = bh;
         return bh;
     }
 
@@ -56,7 +55,7 @@ struct BgfxExecutor {
             case DrawCmd::Quad:
             case DrawCmd::QuadRegion: {
                 if (!c.tex) break;
-                bgfx::TextureHandle bh = get_bgfx_tex(c.tex->tex);
+                bgfx::TextureHandle bh = get_bgfx_tex(c.tex);
                 if (!bgfx::isValid(bh)) {
                     // Fallback: skip (texture not uploadable via lock)
                     break;
