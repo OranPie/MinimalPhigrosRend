@@ -92,7 +92,12 @@ endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_engine.cpp")
     add_executable(test_engine tests/test_engine.cpp)
-    target_link_libraries(test_engine PRIVATE phigros_core_lib)
+    target_link_libraries(test_engine PRIVATE phigros_core_lib vendor_miniz)
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_parser.cpp")
+    add_executable(test_parser tests/test_parser.cpp)
+    target_link_libraries(test_parser PRIVATE phigros_core_lib vendor_miniz)
 endif()
 
 # --- Vendor libraries (stb, miniz, miniaudio) ---

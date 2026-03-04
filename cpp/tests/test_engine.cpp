@@ -2,7 +2,7 @@
 // Validates: visibility, note manager, hold system, miss detection,
 //            simulate play, effects, mods — end-to-end autoplay verification.
 //
-// Usage: test_engine <chart_path> [W] [H]
+// Usage: test_engine [--auto-discover <charts_dir>] <chart_path> [W] [H]
 
 #include "phigros/chart/official.hpp"
 #include "phigros/chart/rpe.hpp"
@@ -16,12 +16,17 @@
 #include "phigros/engine/effects.hpp"
 #include "phigros/core/mods.hpp"
 #include "phigros/config/render_config.hpp"
+#include "phigros/render/renderer.hpp"
+#include "phigros/io/replay.hpp"
+#include "phigros/math/tracks.hpp"
 #include <fstream>
 #include <iostream>
 #include <string>
 #include <cmath>
 #include <cstdlib>
 #include <cassert>
+#include <filesystem>
+#include <iomanip>
 #include <nlohmann/json.hpp>
 
 using namespace phigros;
@@ -32,6 +37,9 @@ static int g_pass = 0, g_fail = 0;
     if (!(cond)) { ++g_fail; std::cerr << "  FAIL: " << msg << "\n"; } \
     else { ++g_pass; } \
 } while(0)
+
+// Forward declaration (defined after run_regression)
+static bool run_autoplay(const std::string& chart_path, int W, int H);
 
 // ---- Format detection (same as verify_chart) ----
 static std::string detect_format(const std::string& path) {
@@ -76,7 +84,408 @@ static ChartData load_chart(const std::string& path, int W, int H) {
     throw std::runtime_error("Unknown format: " + path);
 }
 
-// ---- Unit test: effects ----
+// ---- 6A2: Kinematics precision tests ----
+static void test_kinematics() {
+    std::cout << "\n=== Kinematics precision tests ===\n";
+    using namespace phigros::math;
+    using namespace phigros::engine;
+
+    // --- PiecewiseEased: single linear segment [0,1]: 0→1 ---
+    {
+        PiecewiseEased pe({EasedSeg{0.0, 1.0, 0.0, 1.0, 0, 0.0, 1.0}}, 0.0);
+        CHECK(std::abs(pe.eval(-0.1) - 0.0) < 1e-9, "PE: before start → v0");
+        CHECK(std::abs(pe.eval(0.0)  - 0.0) < 1e-9, "PE: at t0 → v0");
+        CHECK(std::abs(pe.eval(0.5)  - 0.5) < 1e-9, "PE: midpoint → 0.5 (linear)");
+        CHECK(std::abs(pe.eval(1.0)  - 1.0) < 1e-9, "PE: at t1 → v1");
+        CHECK(std::abs(pe.eval(1.5)  - 1.0) < 1e-9, "PE: after end → v1");
+    }
+
+    // --- PiecewiseEased seek backward (6B4 regression) ---
+    {
+        std::vector<EasedSeg> segs;
+        for (int i = 0; i < 10; ++i)
+            segs.push_back(EasedSeg{double(i), double(i+1), double(i), double(i+1), 0, 0.0, 1.0});
+        PiecewiseEased pe(segs, 0.0);
+        CHECK(std::abs(pe.eval(9.5) - 9.5) < 1e-9, "PE: forward seek to 9.5");
+        CHECK(std::abs(pe.eval(0.5) - 0.5) < 1e-9, "PE: backward seek to 0.5");
+        CHECK(std::abs(pe.eval(5.5) - 5.5) < 1e-9, "PE: mid-seek to 5.5");
+    }
+
+    // --- IntegralTrack: two-segment ramp 0→100 at [0,1] and 100→0 at [1,2] ---
+    {
+        // Segment 0: t=[0,1], v0=0,  v1=100, prefix=0
+        // Segment 1: t=[1,2], v0=100,v1=0,   prefix=50 (= 0.5*(0+100)*1)
+        Seg1D s0{0.0, 1.0, 0.0,   100.0, 0.0};
+        Seg1D s1{1.0, 2.0, 100.0, 0.0,   50.0};
+        IntegralTrack track({s0, s1});
+        // integral(0.5): dt=0.5,u=0.5,vt=50 → 0+0.5*(0+50)*0.5 = 12.5
+        CHECK(std::abs(track.integral(0.5) - 12.5) < 1e-9, "Integral ramp: integral(0.5)=12.5");
+        // integral(1.0): at segment end → prefix1 = 50
+        CHECK(std::abs(track.integral(1.0) - 50.0) < 1e-9, "Integral ramp: integral(1.0)=50");
+        // integral(1.5): dt=0.5,u=0.5,vt=50 → 50+0.5*(100+50)*0.5 = 87.5
+        CHECK(std::abs(track.integral(1.5) - 87.5) < 1e-9, "Integral ramp: integral(1.5)=87.5");
+        // integral(2.0): at seg1 end → 50+0.5*(100+0)*1 = 100
+        CHECK(std::abs(track.integral(2.0) - 100.0) < 1e-9, "Integral ramp: integral(2.0)=100");
+        // backward seek
+        CHECK(std::abs(track.integral(0.5) - 12.5) < 1e-9, "Integral: backward seek to 0.5");
+    }
+
+    // --- note_world_pos geometry (rot=0) ---
+    {
+        Note note{};
+        note.above = true; note.x_local_px = 50.0; note.y_offset_px = 0.0;
+        note.kind = 1; note.speed_mul = 1.0;
+        // scroll_target - scroll_now = 100, flow_mul = 1
+        // rot=0: tx=1,ty=0,nx=0,ny=1 → wx=50, wy=100
+        auto pos = note_world_pos(0.0, 0.0, 0.0, /*scroll_now=*/0.0, note, /*scroll_target=*/100.0);
+        CHECK(std::abs(pos.x - 50.0) < 1e-9, "note_world_pos rot=0: wx=50");
+        CHECK(std::abs(pos.y - 100.0) < 1e-9, "note_world_pos rot=0: wy=100");
+    }
+
+    // --- note_world_pos geometry (rot=pi/2) ---
+    {
+        Note note{};
+        note.above = true; note.x_local_px = 50.0; note.y_offset_px = 0.0;
+        note.kind = 1; note.speed_mul = 1.0;
+        // rot=pi/2: tx=0,ty=1,nx=-1,ny=0 → wx=0*50+(-1)*100=-100, wy=1*50+0*100=50
+        auto pos = note_world_pos(0.0, 0.0, M_PI / 2.0, 0.0, note, 100.0);
+        CHECK(std::abs(pos.x - (-100.0)) < 1e-6, "note_world_pos rot=pi/2: wx=-100");
+        CHECK(std::abs(pos.y - 50.0) < 1e-6, "note_world_pos rot=pi/2: wy=50");
+    }
+
+    // --- note_world_pos_cs matches note_world_pos ---
+    {
+        Note note{};
+        note.above = true; note.x_local_px = 30.0; note.y_offset_px = 5.0;
+        note.kind = 1; note.speed_mul = 1.0;
+        double rot = 0.7;
+        auto pos1 = note_world_pos(10.0, 20.0, rot, 5.0, note, 55.0);
+        auto pos2 = note_world_pos_cs(10.0, 20.0, std::cos(rot), std::sin(rot), 5.0, note, 55.0);
+        CHECK(std::abs(pos1.x - pos2.x) < 1e-9, "note_world_pos_cs: x matches");
+        CHECK(std::abs(pos1.y - pos2.y) < 1e-9, "note_world_pos_cs: y matches");
+    }
+}
+
+// ---- 6A3: Judge boundary tests ----
+static void test_judge_boundaries() {
+    std::cout << "\n=== Judge boundary tests ===\n";
+    using namespace phigros;
+
+    // Helper: create a fresh judge + NoteState at t_note
+    auto make_state = [](double t_note) -> NoteState {
+        static Note n{};
+        n.t_hit = t_note; n.kind = 1; n.fake = false;
+        NoteState ns{};
+        ns.note = &n;
+        return ns;
+    };
+
+    constexpr double T = 1.0; // note hit time
+
+    // PERFECT at exactly ±PERFECT boundary (use 0.001 inside to avoid FP edge)
+    {
+        engine::Judge j;
+        auto ns = make_state(T);
+        auto g = j.try_hit(ns, T + engine::Judge::PERFECT - 0.001);
+        CHECK(g.has_value() && *g == "PERFECT", "Judge: PERFECT at +boundary");
+        CHECK(std::abs(j.acc_sum - 1.0) < 1e-9, "acc_sum += 1.0 for PERFECT");
+        CHECK(j.max_combo == 1, "combo == 1 after PERFECT");
+    }
+    {
+        engine::Judge j;
+        auto ns = make_state(T);
+        auto g = j.try_hit(ns, T - engine::Judge::PERFECT + 0.001);
+        CHECK(g.has_value() && *g == "PERFECT", "Judge: PERFECT at -boundary");
+    }
+
+    // GOOD: just past PERFECT (PERFECT+ε), and at GOOD boundary (0.001 inside)
+    {
+        engine::Judge j;
+        auto ns = make_state(T);
+        auto g = j.try_hit(ns, T + engine::Judge::PERFECT + 0.001);
+        CHECK(g.has_value() && *g == "GOOD", "Judge: GOOD at PERFECT+0.001");
+        CHECK(std::abs(j.acc_sum - 0.6) < 1e-9, "acc_sum += 0.6 for GOOD");
+    }
+    {
+        engine::Judge j;
+        auto ns = make_state(T);
+        auto g = j.try_hit(ns, T + engine::Judge::GOOD - 0.001);
+        CHECK(g.has_value() && *g == "GOOD", "Judge: GOOD inside GOOD boundary");
+    }
+
+    // BAD: just past GOOD (GOOD+ε), at BAD boundary
+    {
+        engine::Judge j;
+        auto ns = make_state(T);
+        auto g = j.try_hit(ns, T + engine::Judge::GOOD + 0.001);
+        CHECK(g.has_value() && *g == "BAD", "Judge: BAD at GOOD+0.001");
+        CHECK(std::abs(j.acc_sum - 0.0) < 1e-9, "acc_sum += 0.0 for BAD");
+    }
+    {
+        engine::Judge j;
+        auto ns = make_state(T);
+        auto g = j.try_hit(ns, T + engine::Judge::BAD);
+        CHECK(g.has_value() && *g == "BAD", "Judge: BAD at BAD boundary");
+    }
+
+    // MISS territory: past BAD window → try_hit returns nullopt
+    {
+        engine::Judge j;
+        auto ns = make_state(T);
+        auto g = j.try_hit(ns, T + engine::Judge::BAD + 0.001);
+        CHECK(!g.has_value(), "Judge: nullopt past BAD window");
+    }
+
+    // Score formula: 3-note perfect play
+    {
+        engine::Judge j;
+        for (int i = 0; i < 3; ++i) {
+            j.bump(); j.acc_sum += 1.0; ++j.judged_cnt;
+        }
+        auto sr = engine::compute_score(j.acc_sum, j.max_combo, 3);
+        CHECK(sr.score == 1000000, "Score formula: 3 PERFECTs = 1,000,000");
+    }
+
+    // Score formula: 1 GOOD out of 1 → 960000
+    {
+        engine::Judge j;
+        j.bump(); j.acc_sum += 0.6; ++j.judged_cnt;
+        auto sr = engine::compute_score(j.acc_sum, j.max_combo, 1);
+        // 900000 * 0.6/1 + 100000 * (1==1 ? 1 : 1/1) = 540000+100000=640000
+        // Actually: combo_r = max_combo/total = 1/1 = 1.0
+        // score = round(900000 * 0.6 + 100000 * 1.0) = 640000
+        CHECK(sr.score == 640000, "Score formula: 1 GOOD = 640000");
+    }
+}
+
+// ---- 6A4: Replay round-trip test ----
+static void test_replay_roundtrip() {
+    std::cout << "\n=== Replay round-trip test ===\n";
+
+    phigros::io::ReplayWriter writer;
+    // Record 3 events
+    writer.record(1.0f, 0, "PERFECT");
+    writer.record(2.0f, 1, "GOOD");
+    writer.record(3.0f, 2, "BAD");
+
+    CHECK(writer.events.size() == 3, "Writer has 3 events");
+
+    // Write to temp file
+    std::string tmp_path = "/tmp/phigros_test_replay.rep";
+    bool saved = writer.save(tmp_path, 0xDEADBEEF);
+    CHECK(saved, "Replay save() succeeded");
+
+    // Load back
+    phigros::io::ReplayPlayer player;
+    bool loaded = player.load(tmp_path);
+    CHECK(loaded, "Replay load() succeeded");
+    CHECK(player.events.size() == 3, "Loaded 3 events");
+
+    if (player.events.size() == 3) {
+        CHECK(std::abs(player.events[0].t - 1.0f) < 1e-5f, "Event 0: t=1.0");
+        CHECK(player.events[0].note_idx == 0, "Event 0: note_idx=0");
+        CHECK(phigros::io::u8_to_grade(player.events[0].grade) == "PERFECT",
+              "Event 0: grade=PERFECT");
+
+        CHECK(std::abs(player.events[1].t - 2.0f) < 1e-5f, "Event 1: t=2.0");
+        CHECK(player.events[1].note_idx == 1, "Event 1: note_idx=1");
+        CHECK(phigros::io::u8_to_grade(player.events[1].grade) == "GOOD",
+              "Event 1: grade=GOOD");
+
+        CHECK(std::abs(player.events[2].t - 3.0f) < 1e-5f, "Event 2: t=3.0");
+        CHECK(player.events[2].note_idx == 2, "Event 2: note_idx=2");
+        CHECK(phigros::io::u8_to_grade(player.events[2].grade) == "BAD",
+              "Event 2: grade=BAD");
+    }
+
+    std::remove(tmp_path.c_str());
+    std::cout << "  Temp replay file cleaned up\n";
+}
+
+// ---- 6A6: Edge case tests ----
+static void test_edge_cases() {
+    std::cout << "\n=== Edge case tests ===\n";
+    using namespace phigros;
+
+    const int W = 1280, H = 720;
+
+    // Helper: wrap a PiecewiseEased into a TrackFn
+    auto make_track = [](math::PiecewiseEased pe) -> TrackFn {
+        return [t = std::move(pe)](double x) mutable { return t.eval(x); };
+    };
+
+    // --- Zero-note chart: no crash ---
+    {
+        ChartData chart;
+        Line ln; ln.lid = 0;
+        ln.pos_x = make_track(math::PiecewiseEased({}, 0.5 * W));
+        ln.pos_y = make_track(math::PiecewiseEased({}, 0.5 * H));
+        ln.rot   = make_track(math::PiecewiseEased({}, 0.0));
+        ln.alpha = make_track(math::PiecewiseEased({}, 1.0));
+        chart.lines.push_back(std::move(ln));
+
+        engine::Judge judge;
+        config::RenderConfig cfg;
+        cfg.window_w = W; cfg.window_h = H;
+        std::vector<NoteState> states;
+
+        auto frame = render::build_frame(0.0, chart, states, judge, cfg);
+        CHECK(frame.notes.empty(), "Zero-note chart: no notes in frame");
+        CHECK(frame.lines.size() == 1, "Zero-note chart: 1 line in frame");
+
+        engine::NoteManager nm(&chart.notes, &states);
+        nm.update_visibility(0.0, 1.0);
+        CHECK(nm.get_visible_count() == 0, "Zero-note: visible_count=0");
+
+        auto sr = engine::compute_score(0.0, 0, 0);
+        // Zero notes: both acc_r and combo_r are 0 → score=0 (trivially passing: no notes to judge)
+        CHECK(sr.score == 0, "Zero-note chart: score=0 (no notes to judge)");
+    }
+
+    // --- Out-of-range line_id in build_frame: no crash ---
+    {
+        ChartData chart;
+        Line ln; ln.lid = 0;
+        ln.pos_x = make_track(math::PiecewiseEased({}, 0.5 * W));
+        ln.pos_y = make_track(math::PiecewiseEased({}, 0.5 * H));
+        ln.rot   = make_track(math::PiecewiseEased({}, 0.0));
+        ln.alpha = make_track(math::PiecewiseEased({}, 1.0));
+        chart.lines.push_back(std::move(ln));
+
+        Note note{}; note.nid = 0; note.line_id = 99; // out of range
+        note.kind = 1; note.t_hit = 0.5; note.t_end = 0.5;
+        note.above = true; note.scroll_hit = 0; note.scroll_end = 0;
+        note.alpha01 = 1.0;
+        chart.notes.push_back(note);
+
+        engine::Judge judge;
+        config::RenderConfig cfg;
+        cfg.window_w = W; cfg.window_h = H;
+        std::vector<NoteState> states(1);
+        states[0].note = &chart.notes[0];
+
+        auto frame = render::build_frame(0.5, chart, states, judge, cfg);
+        CHECK(frame.notes.empty(), "Out-of-range line_id: note skipped gracefully");
+    }
+
+    // --- Zero scroll speed: precompute_t_enter → t_enter = -1e9 (always visible) ---
+    {
+        ChartData chart;
+        Line ln; ln.lid = 0;
+        ln.pos_x = make_track(math::PiecewiseEased({}, 0.5 * W));
+        ln.pos_y = make_track(math::PiecewiseEased({}, 0.5 * H));
+        ln.rot   = make_track(math::PiecewiseEased({}, 0.0));
+        ln.alpha = make_track(math::PiecewiseEased({}, 1.0));
+        // scroll_px empty → always 0 speed
+        chart.lines.push_back(std::move(ln));
+
+        Note note{}; note.nid = 0; note.line_id = 0; note.t_hit = 5.0; note.t_end = 5.0;
+        note.above = true; note.x_local_px = 0; note.scroll_hit = 0; note.scroll_end = 0;
+        note.kind = 1; note.size_px = 64; note.alpha01 = 1.0;
+        chart.notes.push_back(note);
+
+        engine::precompute_t_enter(chart.lines, chart.notes, W, H);
+        CHECK(chart.notes[0].t_enter <= -1e8, "Zero scroll: t_enter=-1e9 (always visible)");
+    }
+
+    // --- Single note: PERFECT hit scores 1,000,000 ---
+    {
+        ChartData chart;
+        Line ln; ln.lid = 0;
+        ln.pos_x = make_track(math::PiecewiseEased({}, 0.5 * W));
+        ln.pos_y = make_track(math::PiecewiseEased({}, 0.5 * H));
+        ln.rot   = make_track(math::PiecewiseEased({}, 0.0));
+        ln.alpha = make_track(math::PiecewiseEased({}, 1.0));
+        chart.lines.push_back(std::move(ln));
+
+        Note note{}; note.nid = 0; note.line_id = 0; note.kind = 1;
+        note.t_hit = 1.0; note.t_end = 1.0; note.above = true; note.alpha01 = 1.0;
+        chart.notes.push_back(note);
+
+        engine::Judge judge;
+        std::vector<NoteState> states(1);
+        states[0].note = &chart.notes[0];
+        auto g = judge.try_hit(states[0], 1.0);
+        CHECK(g.has_value() && *g == "PERFECT", "Single note: PERFECT hit at exact time");
+        auto sr = engine::compute_score(judge.acc_sum, judge.max_combo, 1);
+        CHECK(sr.score == 1000000, "Single note PERFECT: score=1,000,000");
+    }
+}
+
+// ---- 6A5: Auto-discover and run all charts in a directory ----
+static bool run_regression(const std::string& charts_dir) {
+    namespace fs = std::filesystem;
+    std::cout << "\n=== Regression: discovering charts in " << charts_dir << " ===\n";
+
+    std::vector<std::string> chart_paths;
+    try {
+        for (const auto& entry : fs::recursive_directory_iterator(charts_dir)) {
+            if (entry.is_regular_file() && entry.path().filename() == "IN.json")
+                chart_paths.push_back(entry.path().string());
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Directory error: " << e.what() << "\n";
+        return false;
+    }
+
+    if (chart_paths.empty()) {
+        std::cerr << "No IN.json files found in: " << charts_dir << "\n";
+        return false;
+    }
+
+    std::sort(chart_paths.begin(), chart_paths.end());
+    std::cout << "Found " << chart_paths.size() << " charts\n\n";
+
+    // Print table header
+    std::cout << std::left
+              << std::setw(45) << "Chart"
+              << std::setw(8)  << "Notes"
+              << std::setw(12) << "Score"
+              << std::setw(12) << "Speed"
+              << "Status\n"
+              << std::string(80, '-') << "\n";
+
+    int pass = 0, total = 0;
+    for (const auto& path : chart_paths) {
+        ++total;
+        // Get chart name from path
+        std::string name = fs::path(path).parent_path().filename().string();
+        if (name.size() > 42) name = name.substr(0, 39) + "...";
+
+        ChartData chart;
+        try { chart = load_chart(path, 1280, 720); }
+        catch (const std::exception& e) {
+            std::cout << std::left << std::setw(45) << name
+                      << "LOAD ERROR: " << e.what() << "\n";
+            continue;
+        }
+
+        int total_notes = 0;
+        for (auto& n : chart.notes) if (!n.fake) ++total_notes;
+
+        auto t0 = std::chrono::high_resolution_clock::now();
+        bool ok = run_autoplay(path, 1280, 720);
+        auto t1 = std::chrono::high_resolution_clock::now();
+        double elapsed = std::chrono::duration<double>(t1 - t0).count();
+
+        // Compute chart duration for speed calc
+        double chart_dur = 0;
+        for (auto& n : chart.notes) chart_dur = std::max(chart_dur, n.t_end);
+        double speed = elapsed > 0 ? chart_dur / elapsed : 0;
+
+        if (ok) ++pass;
+
+        std::cout << std::left << std::setw(45) << name
+                  << std::setw(8)  << total_notes
+                  << std::setw(12) << (ok ? "1000000" : "FAIL")
+                  << std::setw(12) << (std::to_string((int)speed) + "x")
+                  << (ok ? "PASS" : "FAIL") << "\n";
+    }
+
+    std::cout << "\n" << std::string(80, '-') << "\n"
+              << "Regression: " << pass << "/" << total << " passed\n";
+    return pass == total;
+}
 static void test_effects() {
     std::cout << "\n=== Effects unit tests ===\n";
 
@@ -314,6 +723,18 @@ int main(int argc, char* argv[]) {
     // Run unit tests first
     test_effects();
     test_mods();
+    test_kinematics();
+    test_judge_boundaries();
+    test_replay_roundtrip();
+    test_edge_cases();
+
+    // Auto-discover mode: --auto-discover <dir>
+    if (argc >= 3 && std::string(argv[1]) == "--auto-discover") {
+        bool reg_ok = run_regression(argv[2]);
+        std::cout << "\n=== Total checks: " << g_pass << " passed, "
+                  << g_fail << " failed ===\n";
+        return (g_fail > 0 || !reg_ok) ? 1 : 0;
+    }
 
     // Then run autoplay on provided charts
     if (argc < 2) {
