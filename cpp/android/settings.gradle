@@ -1,0 +1,2 @@
+rootProject.name = "PhigrosRenderer"
+include ':app'

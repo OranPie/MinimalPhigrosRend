@@ -1,0 +1,59 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'org.phigros.renderer'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "org.phigros.renderer"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0-dev"
+
+        externalNativeBuild {
+            cmake {
+                // Build all 4 ABIs for maximum device coverage
+                abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+                arguments "-DUSE_BGFX=OFF",
+                          "-DUSE_SDL3=OFF",
+                          "-DPHIGROS_ANDROID_LIB=ON",
+                          "-DANDROID_STL=c++_shared"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "../../CMakeLists.txt"   // points to cpp/CMakeLists.txt
+            version "3.22.0+"
+        }
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/jniLibs']
+            assets.srcDirs = ['src/main/assets']
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    // SDL2 Android AAR — hosted on JitPack (SDL2 official gradle distribution)
+    // implementation 'org.libsdl.app:SDL2:2.30.0'
+    // If not available, copy SDL2 Android Java sources from SDL2/android-project/app/src/main/java
+}

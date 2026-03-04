@@ -128,6 +128,13 @@ target_include_directories(phigros_render PRIVATE
     "${VENDOR_DIR}/miniaudio"
 )
 
+# Platform detection macro (used by platform.hpp / sdl_compat.hpp)
+if(ANDROID)
+    target_compile_definitions(phigros_render PRIVATE PHIGROS_MOBILE=1 PHIGROS_ANDROID=1 PHIGROS_TOUCH_INPUT=1)
+elseif(IOS)
+    target_compile_definitions(phigros_render PRIVATE PHIGROS_MOBILE=1 PHIGROS_IOS=1 PHIGROS_TOUCH_INPUT=1)
+endif()
+
 if(SDL_VERSION EQUAL 3)
     target_link_libraries(phigros_render PRIVATE
         phigros_core_lib vendor_stb vendor_miniz vendor_miniaudio
@@ -138,20 +145,30 @@ elseif(EMSCRIPTEN)
     target_link_libraries(phigros_render PRIVATE
         phigros_core_lib vendor_stb vendor_miniz vendor_miniaudio
     )
+    # SDL2 port is built into Emscripten SDK
     target_compile_options(phigros_render PRIVATE "SHELL:-s USE_SDL=2")
-    target_compile_definitions(phigros_render PRIVATE PHIGROS_SDL2=1 PHIGROS_WASM=1)
+    target_compile_definitions(phigros_render PRIVATE PHIGROS_SDL2=1 PHIGROS_WASM=1 PHIGROS_TOUCH_INPUT=1)
     set_target_properties(phigros_render PROPERTIES SUFFIX ".js")
     target_link_options(phigros_render PRIVATE
         "SHELL:-s USE_SDL=2"
         "SHELL:-s USE_WEBGL2=1"
         "SHELL:-s ALLOW_MEMORY_GROWTH=1"
-        "SHELL:-s EXPORTED_RUNTIME_METHODS=['FS','callMain','cwrap']"
-        "SHELL:-s EXPORTED_FUNCTIONS=['_main','_malloc','_free']"
+        "SHELL:-s MAXIMUM_MEMORY=512mb"
+        "SHELL:-s EXPORTED_RUNTIME_METHODS=[\"FS\",\"callMain\",\"cwrap\",\"UTF8ToString\"]"
+        "SHELL:-s EXPORTED_FUNCTIONS=[\"_main\",\"_malloc\",\"_free\"]"
         "SHELL:-s INVOKE_RUN=0"
         "SHELL:-s FORCE_FILESYSTEM=1"
-        "SHELL:--preload-file respack.zip"
+        "SHELL:-s ENVIRONMENT=web"
+        "SHELL:-s ASSERTIONS=0"
+        "SHELL:-O3"
         "SHELL:--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html"
     )
+    # Only preload respack.zip if it exists at configure time
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../respack.zip")
+        target_link_options(phigros_render PRIVATE
+            "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/../respack.zip@/respack.zip"
+        )
+    endif()
 else()
     target_include_directories(phigros_render PRIVATE ${SDL2_INCLUDE_DIRS})
     target_link_libraries(phigros_render PRIVATE

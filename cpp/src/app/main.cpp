@@ -77,13 +77,90 @@ int main(int argc, char* argv[]) {
     using namespace phigros::app;
 
     auto args = parse_args(argc, argv);
-    if (args.chart_path.empty()) { print_usage(argv[0]); return 1; }
 
-    // Load config; CLI --audio-offset overrides config value
+    // ── Early exit modes ──────────────────────────────────────────────────────
+    if (args.version_mode) {
+        printf("phigros-renderer v" PHIGROS_VERSION "\n");
+        return 0;
+    }
+    for (int i = 1; i < argc; ++i) {
+        std::string a = argv[i];
+        if (a == "--help" || a == "-h") { print_usage(argv[0]); return 0; }
+    }
+    if (args.chart_path.empty() && args.list_charts_dir.empty()) {
+        print_usage(argv[0]); return 1;
+    }
+
+    // ── List-charts mode ──────────────────────────────────────────────────────
+    if (!args.list_charts_dir.empty()) {
+        namespace fs = std::filesystem;
+        int count = 0;
+        printf("%-50s %-10s %-10s\n", "Chart", "Format", "Path");
+        printf("%s\n", std::string(80, '-').c_str());
+        try {
+            for (const auto& e : fs::recursive_directory_iterator(args.list_charts_dir)) {
+                if (!e.is_regular_file()) continue;
+                auto ext = e.path().extension().string();
+                std::string fmt;
+                if (ext == ".phbc") fmt = "phbc";
+                else if (ext == ".json") fmt = "json";
+                else if (ext == ".pec")  fmt = "pec";
+                else continue;
+                std::string name = e.path().parent_path().filename().string();
+                if (name.size() > 47) name = name.substr(0,44) + "...";
+                printf("%-50s %-10s %s\n", name.c_str(), fmt.c_str(),
+                       e.path().string().c_str());
+                ++count;
+            }
+        } catch (const std::exception& e2) {
+            std::cerr << "[Error] " << e2.what() << "\n"; return 1;
+        }
+        printf("\n%d chart(s) found.\n", count);
+        return 0;
+    }
+
+    // ── Load config; apply CLI overrides ──────────────────────────────────────
     config::RenderConfig cfg;
     if (!args.config_path.empty()) cfg = config::load_config(args.config_path);
     if (args.audio_offset_ms != 0.0) cfg.audio_offset_ms = args.audio_offset_ms;
+    if (args.window_w > 0) cfg.window_w = args.window_w;
+    if (args.window_h > 0) cfg.window_h = args.window_h;
     const int W = cfg.window_w, H = cfg.window_h;
+
+    // ── Info mode (no full parse) ─────────────────────────────────────────────
+    if (args.info_mode) {
+        const std::string& p = args.chart_path;
+        if (p.size() >= 5 && p.substr(p.size()-5) == ".phbc") {
+            std::ifstream f(p, std::ios::binary);
+            if (!f) { std::cerr << "[Error] Cannot open: " << p << "\n"; return 1; }
+            auto compiled = phigros::chart::read_phbc(f);
+            f.seekg(0, std::ios::end);
+            double mb = static_cast<double>(f.tellg()) / 1e6;
+            double dur = compiled.chart_end_t - compiled.offset;
+            printf("[Info] %s\n", p.c_str());
+            printf("  Format:       .phbc v1\n");
+            printf("  Lines:        %d\n", (int)compiled.lines.size());
+            printf("  Notes:        %d  (%d playable)\n",
+                   (int)compiled.notes.size(), compiled.playable_count);
+            printf("  Duration:     %.2f s\n", dur);
+            printf("  Sample rate:  %.0f Hz\n", (double)compiled.sample_rate);
+            printf("  Samples:      %d\n", compiled.sample_count);
+            printf("  File size:    %.2f MB\n", mb);
+        } else {
+            auto chart = load_chart(p, cfg);
+            engine::precompute_t_enter(chart.lines, chart.notes, W, H);
+            int holds = 0;
+            for (auto& n : chart.notes) if (!n.fake && n.kind == 3) ++holds;
+            printf("[Info] %s\n", p.c_str());
+            printf("  Format:       %s\n", detect_format(p).c_str());
+            printf("  Lines:        %d\n", (int)chart.lines.size());
+            printf("  Notes:        %d  (%d playable, %d holds)\n",
+                   (int)chart.notes.size(), chart.playable_count, holds);
+            printf("  Duration:     %.2f s\n", chart.chart_end_t - chart.offset);
+            printf("  Offset:       %.3f s\n", chart.offset);
+        }
+        return 0;
+    }
 
     // Load chart
     std::cout << "[Chart] Loading: " << args.chart_path << "\n";

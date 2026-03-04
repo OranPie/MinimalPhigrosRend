@@ -5,146 +5,565 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>Phigros Renderer</title>
 <style>
+:root {
+  --bg: #0a0a0e;
+  --surface: #181820;
+  --border: #333;
+  --text: #ddd;
+  --muted: #888;
+  --accent: #4a90e2;
+  --danger: #e25454;
+  --radius: 6px;
+}
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #0a0a0e; color: #eee; font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
-h1 { margin: 16px 0 8px; font-size: 1.2rem; color: #aaa; }
-#controls { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; justify-content: center; }
-.ctrl-group { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.ctrl-group label { font-size: 0.7rem; color: #888; }
-#controls button, #controls input[type=file], #controls select { padding: 6px 12px; border-radius: 4px; border: 1px solid #444; background: #222; color: #ddd; font-size: 0.85rem; cursor: pointer; }
-#controls button:hover { background: #333; }
-#controls button:disabled { opacity: 0.4; cursor: default; }
-#canvas-container { position: relative; width: 100%; max-width: 1280px; aspect-ratio: 16/9; }
-canvas { width: 100%; height: 100%; display: block; background: #000; border-radius: 4px; touch-action: none; }
-#status { margin-top: 8px; font-size: 0.8rem; color: #888; min-height: 1.2em; }
-#drop-zone { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,100,255,0.3); display: none; align-items: center; justify-content: center; font-size: 2rem; color: #fff; z-index: 100; pointer-events: none; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-x: hidden;
+}
+
+/* ── Header ─────────────────────────────── */
+#header {
+  width: 100%;
+  max-width: 1280px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px 6px;
+}
+#header h1 { font-size: 1.05rem; color: var(--muted); letter-spacing: 0.03em; }
+#header span { font-size: 0.75rem; color: #555; }
+
+/* ── File controls ───────────────────────── */
+#file-row {
+  width: 100%;
+  max-width: 1280px;
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 6px;
+  flex-wrap: wrap;
+}
+.file-btn {
+  flex: 1;
+  min-width: 120px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.file-btn label.title { font-size: 0.68rem; color: var(--muted); }
+.file-btn .badge {
+  font-size: 0.65rem;
+  color: var(--accent);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-height: 0.9em;
+}
+.file-btn input[type=file] { display: none; }
+.file-btn .pick-btn {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s;
+}
+.file-btn .pick-btn:hover { background: #222232; border-color: var(--accent); }
+.file-btn .pick-btn.loaded { border-color: var(--accent); color: var(--accent); }
+
+/* ── Action controls ─────────────────────── */
+#action-row {
+  width: 100%;
+  max-width: 1280px;
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.action-btn {
+  padding: 9px 18px;
+  border-radius: var(--radius);
+  border: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+}
+.action-btn:disabled { opacity: 0.35; cursor: default; }
+#btn-play    { background: var(--accent); color: #fff; }
+#btn-play:not(:disabled):hover { background: #5aa0f0; }
+#btn-score   { background: #3a3a50; color: var(--text); }
+#btn-score:not(:disabled):hover { background: #4a4a60; }
+#btn-compile { background: #2e5e3a; color: #8eff9e; }
+#btn-compile:not(:disabled):hover { background: #3a7048; }
+#btn-fullscreen { background: #2a2a36; color: var(--muted); margin-left: auto; }
+#btn-fullscreen:hover { background: #3a3a46; color: var(--text); }
+
+/* Volume */
+#vol-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+#vol-wrap input[type=range] {
+  width: 80px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ── Canvas ──────────────────────────────── */
+#canvas-container {
+  position: relative;
+  width: 100%;
+  max-width: 1280px;
+  aspect-ratio: 16/9;
+  border-radius: var(--radius);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #000;
+  touch-action: none;
+  outline: none;
+}
+
+/* ── Info panel ──────────────────────────── */
+#info-panel {
+  width: 100%;
+  max-width: 1280px;
+  padding: 6px 14px;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  min-height: 28px;
+}
+.info-item { font-size: 0.72rem; color: var(--muted); }
+.info-item span { color: var(--text); font-weight: 600; }
+
+/* ── Status bar ──────────────────────────── */
+#status-bar {
+  width: 100%;
+  max-width: 1280px;
+  padding: 4px 14px 10px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  min-height: 1.4em;
+}
+#status-bar.error { color: var(--danger); }
+#progress-bar {
+  width: 100%;
+  height: 2px;
+  background: var(--border);
+  display: none;
+}
+#progress-fill { height: 100%; background: var(--accent); width: 0; transition: width 0.3s; }
+
+/* ── Drop zone ───────────────────────────── */
+#drop-zone {
+  position: fixed;
+  inset: 0;
+  background: rgba(74,144,226,0.25);
+  border: 3px dashed var(--accent);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 1.4rem;
+  color: #fff;
+  z-index: 100;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+}
+#drop-zone p { font-size: 0.9rem; color: rgba(255,255,255,0.7); }
+
+/* ── Touch hints ─────────────────────────── */
+#touch-hints {
+  display: none;
+  padding: 4px 14px;
+  font-size: 0.68rem;
+  color: #555;
+  text-align: center;
+}
+
+/* ── Mobile adjustments ──────────────────── */
+@media (max-width: 600px) {
+  #header h1 { font-size: 0.9rem; }
+  .file-btn { min-width: 100px; }
+  .action-btn { padding: 11px 14px; font-size: 0.85rem; }
+  #touch-hints { display: block; }
+  #vol-wrap input[type=range] { width: 60px; }
+}
+
+/* ── Keyboard shortcut hint ──────────────── */
+#kb-hints {
+  padding: 4px 14px 8px;
+  font-size: 0.68rem;
+  color: #444;
+  text-align: center;
+}
+kbd {
+  background: #222;
+  border: 1px solid #444;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 0.7em;
+  color: #888;
+}
 </style>
 </head>
 <body>
-<h1>Phigros Chart Renderer</h1>
-<div id="controls">
-  <div class="ctrl-group">
-    <label>Chart (.json/.zip)</label>
-    <input type="file" id="chart-file" accept=".json,.zip">
-  </div>
-  <div class="ctrl-group">
-    <label>Respack (.zip)</label>
-    <input type="file" id="respack-file" accept=".zip">
-  </div>
-  <div class="ctrl-group">
-    <label>Audio (.ogg/.mp3/.wav)</label>
-    <input type="file" id="audio-file" accept=".ogg,.mp3,.wav,.flac">
-  </div>
-  <button id="btn-play" disabled>▶ Play</button>
-  <button id="btn-fullscreen">⛶ Fullscreen</button>
+
+<div id="header">
+  <h1>🎵 Phigros Chart Renderer</h1>
+  <span id="ver-badge">v1.0.0-dev</span>
 </div>
+
+<div id="progress-bar"><div id="progress-fill"></div></div>
+
+<div id="file-row">
+  <div class="file-btn" id="fb-chart">
+    <label class="title">Chart</label>
+    <button class="pick-btn" onclick="document.getElementById('chart-file').click()">
+      📄 .json / .zip / .phbc
+    </button>
+    <input type="file" id="chart-file" accept=".json,.zip,.phbc">
+    <div class="badge" id="badge-chart"></div>
+  </div>
+  <div class="file-btn" id="fb-respack">
+    <label class="title">Respack</label>
+    <button class="pick-btn" onclick="document.getElementById('respack-file').click()">
+      🎨 respack.zip
+    </button>
+    <input type="file" id="respack-file" accept=".zip">
+    <div class="badge" id="badge-respack"></div>
+  </div>
+  <div class="file-btn" id="fb-audio">
+    <label class="title">Audio</label>
+    <button class="pick-btn" onclick="document.getElementById('audio-file').click()">
+      🎵 .ogg / .mp3 / .wav
+    </button>
+    <input type="file" id="audio-file" accept=".ogg,.mp3,.wav,.flac">
+    <div class="badge" id="badge-audio"></div>
+  </div>
+</div>
+
+<div id="action-row">
+  <button class="action-btn" id="btn-play"    disabled>▶ Play</button>
+  <button class="action-btn" id="btn-score"   disabled>🏆 Score Only</button>
+  <button class="action-btn" id="btn-compile" disabled>⚡ Compile → .phbc</button>
+  <div id="vol-wrap">
+    🔊 <input type="range" id="vol-slider" min="0" max="100" value="80">
+    <span id="vol-label">80%</span>
+  </div>
+  <button class="action-btn" id="btn-fullscreen">⛶</button>
+</div>
+
 <div id="canvas-container">
   <canvas id="canvas" tabindex="1"></canvas>
 </div>
-<div id="status">Loading engine…</div>
-<div id="drop-zone">Drop chart / respack / audio file here</div>
+
+<div id="info-panel">
+  <div class="info-item" id="info-format" style="display:none">Format <span id="iv-format">—</span></div>
+  <div class="info-item" id="info-lines"  style="display:none">Lines <span id="iv-lines">—</span></div>
+  <div class="info-item" id="info-notes"  style="display:none">Notes <span id="iv-notes">—</span></div>
+  <div class="info-item" id="info-dur"    style="display:none">Duration <span id="iv-dur">—</span></div>
+</div>
+
+<div id="status-bar">Loading engine…</div>
+
+<div id="touch-hints">
+  👆 Tap notes · 👆👆 Multi-touch supported · Double-tap canvas for fullscreen
+</div>
+<div id="kb-hints">
+  <kbd>Space</kbd> pause · <kbd>R</kbd> restart · <kbd>Esc</kbd> quit · <kbd>F</kbd> fullscreen
+</div>
+
+<div id="drop-zone">
+  <div>📂 Drop files here</div>
+  <p>Chart (.json/.zip/.phbc) · Respack (.zip) · Audio (.ogg/.mp3)</p>
+</div>
 
 <script>
-var loadedFiles = { chart: null, respack: null, audio: null };
+// ── State ────────────────────────────────────────────────────────────────
+var loadedFiles  = { chart: null, respack: null, audio: null };
+var engineReady  = false;
+var lastOutput   = [];
 
+// ── Emscripten Module ─────────────────────────────────────────────────────
 var Module = {
   canvas: document.getElementById('canvas'),
-  print: function(t) { console.log(t); },
-  printErr: function(t) { console.error(t); },
   noInitialRun: true,
+
+  print: function(line) {
+    console.log(line);
+    lastOutput.push(line);
+    // Parse info lines like "[Info] …" and display them
+    parseOutputLine(line);
+  },
+
+  printErr: function(line) {
+    console.warn(line);
+    if (line.match(/error|failed/i)) {
+      setStatus('⚠ ' + line, true);
+    }
+  },
+
   onRuntimeInitialized: function() {
     try { FS.mkdir('/data'); } catch(e) {}
-    document.getElementById('status').textContent = 'Engine ready — load a chart to begin';
-    updatePlayBtn();
+    engineReady = true;
+    setStatus('Engine ready — drop or load a chart file to begin');
+    updateButtons();
   },
+
+  setStatus: function(msg) {
+    if (!msg) return;
+    var m = msg.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+    if (m) {
+      var pct = (parseFloat(m[2]) / parseFloat(m[4]) * 100).toFixed(0);
+      showProgress(pct);
+      setStatus('Loading: ' + pct + '%');
+    } else if (msg.indexOf('Running…') >= 0 || msg === '') {
+      hideProgress();
+    } else {
+      setStatus(msg);
+    }
+  },
+
+  monitorRunDependencies: function(left) {
+    if (left === 0) { hideProgress(); }
+  },
+
   arguments: []
 };
 
-function setStatus(msg) { document.getElementById('status').textContent = msg; }
+// ── UI helpers ───────────────────────────────────────────────────────────
+function setStatus(msg, isError) {
+  var el = document.getElementById('status-bar');
+  el.textContent = msg;
+  el.className = isError ? 'error' : '';
+}
 
+function showProgress(pct) {
+  var bar = document.getElementById('progress-bar');
+  bar.style.display = 'block';
+  document.getElementById('progress-fill').style.width = pct + '%';
+}
+
+function hideProgress() {
+  document.getElementById('progress-bar').style.display = 'none';
+  document.getElementById('progress-fill').style.width = '0';
+}
+
+function setBadge(type, name) {
+  var el = document.getElementById('badge-' + type);
+  if (el) el.textContent = name || '';
+  var btn = document.querySelector('#fb-' + type + ' .pick-btn');
+  if (btn) btn.classList.toggle('loaded', !!name);
+}
+
+function updateButtons() {
+  var hasChart = !!loadedFiles.chart;
+  document.getElementById('btn-play').disabled    = !hasChart || !engineReady;
+  document.getElementById('btn-score').disabled   = !hasChart || !engineReady;
+  document.getElementById('btn-compile').disabled = !hasChart || !engineReady;
+}
+
+function showChartInfo(format, lines, notes, dur) {
+  if (format) { document.getElementById('info-format').style.display = ''; document.getElementById('iv-format').textContent = format; }
+  if (lines)  { document.getElementById('info-lines').style.display  = ''; document.getElementById('iv-lines').textContent  = lines; }
+  if (notes)  { document.getElementById('info-notes').style.display  = ''; document.getElementById('iv-notes').textContent  = notes; }
+  if (dur)    { document.getElementById('info-dur').style.display    = ''; document.getElementById('iv-dur').textContent    = dur; }
+}
+
+function parseOutputLine(line) {
+  // Parse: "  Lines:        24"
+  var mL = line.match(/Lines:\s+(\d+)/);
+  var mN = line.match(/Notes:\s+(\d+)/);
+  var mD = line.match(/Duration:\s+([\d.]+)\s*s/);
+  var mF = line.match(/Format:\s+(.+)/);
+  if (mL) showChartInfo(null, mL[1], null, null);
+  if (mN) showChartInfo(null, null, mN[1], null);
+  if (mD) showChartInfo(null, null, null, mD[1] + 's');
+  if (mF) showChartInfo(mF[1].trim(), null, null, null);
+}
+
+// ── File handling ─────────────────────────────────────────────────────────
 function writeToFS(path, data) {
   var dir = path.substring(0, path.lastIndexOf('/'));
-  if (dir) { try { FS.mkdirTree(dir); } catch(e) {} }
+  if (dir && dir !== '/') { try { FS.mkdirTree(dir); } catch(e) {} }
   FS.writeFile(path, data);
 }
 
-function detectFileType(file) {
+function detectType(file) {
   var ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'phbc') return 'chart';
   if (ext === 'json') return 'chart';
   if (ext === 'zip') {
     if (file.name.match(/respack|resource|skin/i)) return 'respack';
-    return 'chart'; // assume chart zip by default
+    return 'chart';
   }
   if (['ogg','mp3','wav','flac'].indexOf(ext) >= 0) return 'audio';
   return 'chart';
 }
 
 function handleFile(file, forceType) {
-  var type = forceType || detectFileType(file);
+  if (!file) return;
+  var type = forceType || detectType(file);
+  setStatus('Reading ' + file.name + '…');
   var reader = new FileReader();
   reader.onload = function(e) {
     var data = new Uint8Array(e.target.result);
     var path = '/data/' + file.name;
-    writeToFS(path, data);
+    if (engineReady) {
+      writeToFS(path, data);
+    } else {
+      // Buffer until runtime is ready
+      Module.onRuntimeInitialized = (function(orig, _path, _data) {
+        return function() { orig && orig(); try { FS.mkdir('/data'); } catch(e) {} writeToFS(_path, _data); };
+      })(Module.onRuntimeInitialized, path, data);
+    }
     loadedFiles[type] = path;
+    setBadge(type, file.name);
     setStatus('Loaded ' + type + ': ' + file.name);
-    updatePlayBtn();
+    updateButtons();
   };
+  reader.onerror = function() { setStatus('Read error: ' + file.name, true); };
   reader.readAsArrayBuffer(file);
 }
 
-function updatePlayBtn() {
-  var btn = document.getElementById('btn-play');
-  btn.disabled = !loadedFiles.chart || !Module.calledRun && !Module.onRuntimeInitialized;
-  if (loadedFiles.chart) btn.disabled = false;
-}
-
-function startRender() {
-  if (!loadedFiles.chart) return;
+// ── Run helpers ───────────────────────────────────────────────────────────
+function buildArgs(mode) {
   var args = [loadedFiles.chart];
   if (loadedFiles.respack) { args.push('--respack'); args.push(loadedFiles.respack); }
-  if (loadedFiles.audio)   { args.push('--audio');   args.push(loadedFiles.audio); }
-  setStatus('Rendering…');
-  try { Module.callMain(args); }
-  catch(e) { setStatus('Error: ' + e.message); }
+  if (loadedFiles.audio)   { args.push('--audio');   args.push(loadedFiles.audio);   }
+  if (mode === 'score')    { args.push('--score-only'); }
+  if (mode === 'compile')  {
+    var out = '/data/out.phbc';
+    args.push('--compile'); args.push(out);
+    args.push('--score-only');
+  }
+  return args;
 }
 
-// File inputs
+function runEngine(mode) {
+  if (!engineReady || !loadedFiles.chart) return;
+  lastOutput = [];
+  var args = buildArgs(mode);
+  setStatus(mode === 'score' ? 'Scoring…' : mode === 'compile' ? 'Compiling…' : 'Rendering…');
+  try {
+    Module.callMain(args);
+    if (mode === 'compile') offerPhbcDownload();
+  } catch(e) {
+    if (e && e.message !== 'unwind') setStatus('Error: ' + e.message, true);
+  }
+}
+
+function offerPhbcDownload() {
+  try {
+    var data = FS.readFile('/data/out.phbc');
+    var blob = new Blob([data], { type: 'application/octet-stream' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    var name = (loadedFiles.chart || 'chart').split('/').pop().replace(/\.\w+$/, '') + '.phbc';
+    a.href = url; a.download = name; a.click();
+    setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+    setStatus('Downloaded ' + name);
+  } catch(e) {
+    setStatus('Compile download failed: ' + e.message, true);
+  }
+}
+
+// ── Volume (best-effort: call exported C fn if available) ─────────────────
+function applyVolume(v) {
+  try {
+    if (Module._phigros_set_volume) Module._phigros_set_volume(v / 100.0);
+  } catch(e) {}
+}
+
+// ── Event wiring ──────────────────────────────────────────────────────────
 document.getElementById('chart-file').addEventListener('change', function(e) {
-  if (e.target.files[0]) handleFile(e.target.files[0], 'chart');
+  handleFile(e.target.files[0], 'chart');
 });
 document.getElementById('respack-file').addEventListener('change', function(e) {
-  if (e.target.files[0]) handleFile(e.target.files[0], 'respack');
+  handleFile(e.target.files[0], 'respack');
 });
 document.getElementById('audio-file').addEventListener('change', function(e) {
-  if (e.target.files[0]) handleFile(e.target.files[0], 'audio');
+  handleFile(e.target.files[0], 'audio');
 });
-document.getElementById('btn-play').addEventListener('click', startRender);
 
-// Drag & drop
-document.addEventListener('dragover', function(e) { e.preventDefault(); document.getElementById('drop-zone').style.display = 'flex'; });
-document.addEventListener('dragleave', function(e) { if (!e.relatedTarget) document.getElementById('drop-zone').style.display = 'none'; });
+document.getElementById('btn-play').addEventListener('click',    function() { runEngine('play');    });
+document.getElementById('btn-score').addEventListener('click',   function() { runEngine('score');   });
+document.getElementById('btn-compile').addEventListener('click', function() { runEngine('compile'); });
+
+document.getElementById('vol-slider').addEventListener('input', function() {
+  document.getElementById('vol-label').textContent = this.value + '%';
+  applyVolume(parseInt(this.value, 10));
+});
+
+document.getElementById('btn-fullscreen').addEventListener('click', toggleFullscreen);
+
+// Double-tap canvas for fullscreen
+var lastTap = 0;
+document.getElementById('canvas').addEventListener('touchend', function(e) {
+  var now = Date.now();
+  if (now - lastTap < 320) { e.preventDefault(); toggleFullscreen(); }
+  lastTap = now;
+});
+
+function toggleFullscreen() {
+  var el = document.getElementById('canvas-container');
+  var isFs = document.fullscreenElement || document.webkitFullscreenElement;
+  if (isFs) {
+    (document.exitFullscreen || document.webkitExitFullscreen || function(){}).call(document);
+  } else {
+    (el.requestFullscreen || el.webkitRequestFullscreen || function(){}).call(el);
+  }
+}
+
+// ── Drag & drop ───────────────────────────────────────────────────────────
+var dragDepth = 0;
+document.addEventListener('dragenter', function(e) {
+  e.preventDefault(); dragDepth++;
+  document.getElementById('drop-zone').style.display = 'flex';
+});
+document.addEventListener('dragleave', function(e) {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (!dragDepth) document.getElementById('drop-zone').style.display = 'none';
+});
+document.addEventListener('dragover', function(e) { e.preventDefault(); });
 document.addEventListener('drop', function(e) {
   e.preventDefault();
+  dragDepth = 0;
   document.getElementById('drop-zone').style.display = 'none';
-  for (var i = 0; i < e.dataTransfer.files.length; i++) {
-    handleFile(e.dataTransfer.files[i]);
-  }
+  Array.from(e.dataTransfer.files).forEach(function(f) { handleFile(f); });
 });
 
-// Fullscreen
-document.getElementById('btn-fullscreen').addEventListener('click', function() {
-  var c = document.getElementById('canvas');
-  if (c.requestFullscreen) c.requestFullscreen();
-  else if (c.webkitRequestFullscreen) c.webkitRequestFullscreen();
-});
-
-// Responsive canvas
+// ── Responsive canvas ─────────────────────────────────────────────────────
 function resizeCanvas() {
-  var ct = document.getElementById('canvas-container');
-  var w = ct.clientWidth;
-  Module.canvas.width = Math.min(w, 1920);
-  Module.canvas.height = Math.min(Math.round(w * 9 / 16), 1080);
+  var ct  = document.getElementById('canvas-container');
+  var w   = Math.min(ct.clientWidth, 1920);
+  var h   = Math.min(Math.round(w * 9 / 16), 1080);
+  Module.canvas.width  = w;
+  Module.canvas.height = h;
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
