@@ -9,6 +9,18 @@
 #define PHIGROS_SDL_EVENT_QUIT       SDL_EVENT_QUIT
 #define PHIGROS_SDL_EVENT_KEY_DOWN   SDL_EVENT_KEY_DOWN
 #define PHIGROS_SDL_EVENT_WINDOW_RESIZED SDL_EVENT_WINDOW_RESIZED
+#define PHIGROS_SDL_MOUSE_DOWN   SDL_EVENT_MOUSE_BUTTON_DOWN
+#define PHIGROS_SDL_MOUSE_UP     SDL_EVENT_MOUSE_BUTTON_UP
+#define PHIGROS_SDL_MOUSE_MOVE   SDL_EVENT_MOUSE_MOTION
+#define PHIGROS_SDL_FINGER_DOWN  SDL_EVENT_FINGER_DOWN
+#define PHIGROS_SDL_FINGER_UP    SDL_EVENT_FINGER_UP
+#define PHIGROS_SDL_FINGER_MOVE  SDL_EVENT_FINGER_MOTION
+#define PHIGROS_FINGER_ID(e)     ((e).tfinger.fingerID)
+#define PHIGROS_MOUSE_X(e)       static_cast<float>((e).button.x)
+#define PHIGROS_MOUSE_Y(e)       static_cast<float>((e).button.y)
+#define PHIGROS_MOTION_X(e)      static_cast<float>((e).motion.x)
+#define PHIGROS_MOTION_Y(e)      static_cast<float>((e).motion.y)
+#define PHIGROS_KEY_SCANCODE(e)  ((e).key.scancode)
 
 namespace phigros::app::sdl {
 
@@ -121,6 +133,18 @@ inline bool handle_event_window_resized(const SDL_Event& e, int& w, int& h) {
 
 #define PHIGROS_SDL_EVENT_QUIT       SDL_QUIT
 #define PHIGROS_SDL_EVENT_KEY_DOWN   SDL_KEYDOWN
+#define PHIGROS_SDL_MOUSE_DOWN   SDL_MOUSEBUTTONDOWN
+#define PHIGROS_SDL_MOUSE_UP     SDL_MOUSEBUTTONUP
+#define PHIGROS_SDL_MOUSE_MOVE   SDL_MOUSEMOTION
+#define PHIGROS_SDL_FINGER_DOWN  SDL_FINGERDOWN
+#define PHIGROS_SDL_FINGER_UP    SDL_FINGERUP
+#define PHIGROS_SDL_FINGER_MOVE  SDL_FINGERMOTION
+#define PHIGROS_FINGER_ID(e)     ((e).tfinger.fingerId)
+#define PHIGROS_MOUSE_X(e)       static_cast<float>((e).button.x)
+#define PHIGROS_MOUSE_Y(e)       static_cast<float>((e).button.y)
+#define PHIGROS_MOTION_X(e)      static_cast<float>((e).motion.x)
+#define PHIGROS_MOTION_Y(e)      static_cast<float>((e).motion.y)
+#define PHIGROS_KEY_SCANCODE(e)  ((e).key.keysym.scancode)
 
 namespace phigros::app::sdl {
 

@@ -36,6 +36,9 @@
 #include "phigros/render/trail_renderer.hpp"
 #include "phigros/render/motion_blur.hpp"
 
+#include "phigros/app/input_manager.hpp"
+#include "phigros/engine/manual_judge.hpp"
+#include "phigros/io/replay.hpp"
 #include <nlohmann/json.hpp>
 #include <iostream>
 #include <fstream>
@@ -118,6 +121,9 @@ struct AppArgs {
     bool score_only = false;
     bool benchmark = false;
     int benchmark_iterations = 10;
+    bool play_mode = false;           // --play: interactive input via mouse/touch
+    std::string save_replay_path;     // --save-replay <file.rep>
+    std::string play_replay_path;     // --play-replay <file.rep>
     std::string backend = "sdl"; // "sdl" or "bgfx"
     // Recording options
     std::string record_output;             // --record output.mp4
@@ -144,6 +150,9 @@ static AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--score-only") { args.score_only = true; args.headless = true; }
         else if (a == "--benchmark") { args.benchmark = true; args.score_only = true; args.headless = true; }
         else if (a == "--benchmark-iterations" && i + 1 < argc) args.benchmark_iterations = std::atoi(argv[++i]);
+        else if (a == "--play") args.play_mode = true;
+        else if (a == "--save-replay" && i + 1 < argc) args.save_replay_path = argv[++i];
+        else if (a == "--play-replay" && i + 1 < argc) args.play_replay_path = argv[++i];
         else if (a == "--backend" && i + 1 < argc) args.backend = argv[++i];
         else if (a == "--record" && i + 1 < argc) {
             args.record_output = argv[++i];
@@ -182,6 +191,9 @@ int main(int argc, char* argv[]) {
                   << "  --score-only              Engine-only scoring (fastest)\n"
                   << "  --benchmark               Benchmark engine performance\n"
                   << "  --benchmark-iterations N  Number of benchmark runs (default 10)\n"
+                  << "  --play                    Interactive mode (mouse/touch input)\n"
+                  << "  --save-replay <file.rep>  Save replay from --play session\n"
+                  << "  --play-replay <file.rep>  Replay a saved replay file\n"
                   << "  --record <output.mp4>     Record video\n"
                   << "  --record-preset <name>    fast|balanced|quality|archive\n"
                   << "  --record-codec <codec>    libx264|libx265|libvpx-vp9\n"
@@ -221,6 +233,26 @@ int main(int argc, char* argv[]) {
 
     phigros::engine::EffectManager effects;
     int idx_next = 0; // scanning cursor for note processing
+
+    // Interactive / replay mode setup
+    bool is_play_mode = args.play_mode || !args.play_replay_path.empty();
+    phigros::app::InputManager input_mgr;
+    phigros::engine::ManualJudge manual_judge;
+    phigros::io::ReplayWriter replay_writer;
+    phigros::io::ReplayPlayer replay_player;
+
+    if (!args.play_replay_path.empty()) {
+        if (!replay_player.load(args.play_replay_path)) {
+            std::cerr << "[Replay] Failed to load: " << args.play_replay_path << "\n";
+            return 1;
+        }
+        std::cout << "[Replay] Loaded: " << args.play_replay_path
+                  << " (" << replay_player.events.size() << " events)\n";
+    }
+
+    bool paused = false;
+    bool result_shown = false;
+    double result_t = 0.0;
 
     // Chart end time
     double chart_end = 0.0;
@@ -483,7 +515,37 @@ int main(int argc, char* argv[]) {
             }
 
             window.poll_events();
+
+            // Play mode: process input events and check control keys
+            if (is_play_mode) {
+                input_mgr.begin_frame();
+                for (const auto& e : window.last_events) {
+                    input_mgr.process_event(e, W, H);
+                    if (e.type == PHIGROS_SDL_EVENT_KEY_DOWN) {
+                        auto sc = PHIGROS_KEY_SCANCODE(e);
+                        if (sc == SDL_SCANCODE_SPACE) paused = !paused;
+                        if (sc == SDL_SCANCODE_R) {
+                            // Restart: reset all state
+                            t = -1.0;
+                            for (size_t i = 0; i < states.size(); ++i) {
+                                states[i] = phigros::NoteState{};
+                                states[i].note = &chart.notes[i];
+                            }
+                            judge = phigros::engine::Judge{};
+                            effects = phigros::engine::EffectManager{};
+                            manual_judge = phigros::engine::ManualJudge{};
+                            replay_player.cursor = 0;
+                            result_shown = false;
+                            if (has_audio) { audio.destroy(); audio.init(); audio.load_bgm(audio_path, chart.offset); }
+                            started_audio = false;
+                        }
+                    }
+                }
+                input_mgr.end_frame(dt_frame);
+            }
         }
+
+        if (paused) return true;
 
         // Advance time
         if (has_audio && started_audio) {
@@ -502,11 +564,53 @@ int main(int argc, char* argv[]) {
 
         // Auto-quit conditions
         if (args.duration > 0 && t >= args.duration) return false;
-        if (t > chart_end) return false;
-        if (has_audio && started_audio && audio.is_at_end() && t > 1.0) return false;
+        if (t > chart_end) {
+            // Play/replay mode: show result screen briefly before exit
+            if (is_play_mode && !result_shown) {
+                result_shown = true;
+                result_t = phigros::app::Window::get_time_sec();
+            }
+            if (!is_play_mode) return false;
+        }
+        if (result_shown && phigros::app::Window::get_time_sec() - result_t > 3.0) return false;
+        if (has_audio && started_audio && audio.is_at_end() && t > 1.0) {
+            if (is_play_mode && !result_shown) { result_shown = true; result_t = phigros::app::Window::get_time_sec(); }
+            if (!is_play_mode) return false;
+        }
 
         // === ENGINE UPDATE (every sim tick) ===
-        autoplay.step(t, chart.notes, states, chart.lines, judge, W, H);
+        if (is_play_mode) {
+            // Manual / replay judgment
+            if (!result_shown && t >= 0.0) {
+                if (replay_player.enabled()) {
+                    // Replay playback: apply recorded judgments
+                    replay_player.tick(t, chart.notes, states, judge,
+                        [&](int nidx, float ft, const std::string& g) {
+                            for (const auto& ns : phigros::render::build_frame(
+                                    ft, chart, states, judge, cfg).notes) {
+                                if (ns.nid == nidx) {
+                                    effects.add_hitfx(ns.wx, ns.wy, ft, ns.color);
+                                    effects.add_particle_burst(ns.wx, ns.wy, ft*1000.0, 500.0, ns.color, 4);
+                                    break;
+                                }
+                            }
+                        });
+                } else {
+                    // Build frame once for ManualJudge spatial lookup
+                    auto mj_frame = phigros::render::build_frame(t, chart, states, judge, cfg);
+                    // Wire replay recording callback
+                    manual_judge.on_judgment = [&](int nidx, float ft, const std::string& g) {
+                        if (!args.save_replay_path.empty())
+                            replay_writer.record(ft, (uint32_t)nidx, g);
+                    };
+                    manual_judge.process_frame(input_mgr, mj_frame,
+                        chart.notes, states, judge, effects, t, W, H);
+                    input_mgr.flush_released();
+                }
+            }
+        } else {
+            autoplay.step(t, chart.notes, states, chart.lines, judge, W, H);
+        }
 
         if (t >= 0.0) {
             idx_next = find_idx_next(t);
@@ -570,6 +674,14 @@ int main(int argc, char* argv[]) {
         }
 
         hud_renderer.draw(batch, frame.hud, fps_display);
+
+        // Result screen overlay (play/replay mode, after chart ends)
+        if (result_shown) {
+            double fade = std::min(1.0, (phigros::app::Window::get_time_sec() - result_t) * 2.0);
+            uint8_t ov_a = static_cast<uint8_t>(fade * 160);
+            batch.draw_rect(0, 0, W, H, 0, 0, 0, ov_a);
+        }
+
         window.end_frame();
 
         // Video recording: capture frame before present
@@ -627,11 +739,24 @@ int main(int argc, char* argv[]) {
     // Final results
     auto sr = phigros::engine::compute_score(
         judge.acc_sum, judge.max_combo, playable_notes);
-    std::cout << "\n=== Render Complete ===" << std::endl;
+    std::string mode_tag = is_play_mode
+        ? (replay_player.enabled() ? "Replay Complete" : "Play Complete")
+        : "Render Complete";
+    std::cout << "\n=== " << mode_tag << " ===" << std::endl;
     std::cout << "Score: " << sr.score << std::endl;
     std::cout << "Accuracy: " << (sr.acc_ratio * 100.0) << "%" << std::endl;
     std::cout << "MaxCombo: " << judge.max_combo << "/" << playable_notes << std::endl;
     std::cout << "Judged: " << judge.judged_cnt << "/" << playable_notes << std::endl;
+
+    // Save replay if requested
+    if (!args.save_replay_path.empty() && !replay_writer.events.empty()) {
+        uint32_t hash = phigros::io::chart_path_hash(args.chart_path);
+        if (replay_writer.save(args.save_replay_path, hash))
+            std::cout << "[Replay] Saved: " << args.save_replay_path
+                      << " (" << replay_writer.events.size() << " events)\n";
+        else
+            std::cerr << "[Replay] Save failed: " << args.save_replay_path << "\n";
+    }
 
     // Finalize recording
     if (is_recording) {

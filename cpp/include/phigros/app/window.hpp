@@ -3,6 +3,7 @@
 #include <string>
 #include <stdexcept>
 #include <cstring>
+#include <vector>
 
 namespace phigros::app {
 
@@ -12,6 +13,7 @@ struct Window {
     int w = 1280, h = 720;
     bool quit_requested = false;
     bool resized = false;
+    std::vector<SDL_Event> last_events;  // all events from last poll_events()
 
     void init(int width, int height, const std::string& title = "Phigros Renderer",
               bool headless = false) {
@@ -33,7 +35,9 @@ struct Window {
     void poll_events() {
         SDL_Event e;
         resized = false;
+        last_events.clear();
         while (SDL_PollEvent(&e)) {
+            last_events.push_back(e);
             if (sdl::handle_event_quit(e)) quit_requested = true;
             if (sdl::handle_event_key_escape(e)) quit_requested = true;
             sdl::handle_event_window_resized(e, w, h);
