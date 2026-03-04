@@ -102,6 +102,14 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_parser.cpp")
     target_link_libraries(test_parser PRIVATE phigros_core_lib vendor_miniz)
 endif()
 
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/bench.cpp")
+    add_executable(bench tests/bench.cpp)
+    target_link_libraries(bench PRIVATE phigros_core_lib vendor_miniz)
+    if(UNIX AND NOT APPLE)
+        target_link_libraries(bench PRIVATE stdc++fs)
+    endif()
+endif()
+
 # --- Vendor libraries (stb, miniz, miniaudio) ---
 add_library(vendor_stb STATIC src/vendor/vendor_impl.cpp)
 target_include_directories(vendor_stb PUBLIC "${VENDOR_DIR}/stb")
