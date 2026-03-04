@@ -44,6 +44,9 @@
 | `chart_speed` | float | `1.0` | 回放速度倍率，范围限制 `[0.1, 20]`。 |
 | `expand` | float | `1.0` | 摄像机缩放 / 游戏区域扩展系数。 |
 | `overrender` | float | `1.0` | 屏外裁剪边距的超渲染倍率。 |
+| `no_cull` | bool | `false` | 禁用所有音符裁剪（每帧渲染全部音符）。 |
+| `no_cull_screen` | bool | `false` | 仅禁用屏幕边界裁剪（保留进入时刻裁剪）。 |
+| `no_cull_enter_time` | bool | `true` | 设为 `false` 时，跳过尚未到达 `t_enter` 时刻的音符（优化高密度谱面）。默认 `true` 保留所有已进入判定窗口的音符，无论其屏幕位置如何。 |
 | `note_scale_x` | float | `2.5` | 音符水平尺寸倍率。 |
 | `note_scale_y` | float | `1.0` | 音符垂直尺寸倍率。 |
 | `note_flow_speed_multiplier` | float | `1.0` | 单个音符滚动速度倍率。 |

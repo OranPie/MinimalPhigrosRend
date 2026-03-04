@@ -43,6 +43,9 @@ All options are loaded from a JSONC file (JSON with `//` and `#` line comments).
 | `chart_speed` | float | `1.0` | Playback speed multiplier. Clamped `[0.1, 20]`. |
 | `expand` | float | `1.0` | Camera zoom/playfield expansion factor. |
 | `overrender` | float | `1.0` | Overdraw factor for offscreen culling margin. |
+| `no_cull` | bool | `false` | Disable all note culling (render every note every frame). |
+| `no_cull_screen` | bool | `false` | Disable screen-boundary culling only (keep t_enter culling). |
+| `no_cull_enter_time` | bool | `true` | When `false`, skip notes whose `t_enter` has not yet been reached (optimises dense charts). Default `true` keeps all notes that have entered the judge window regardless of screen position. |
 | `note_scale_x` | float | `2.5` | Horizontal note size multiplier. |
 | `note_scale_y` | float | `1.0` | Vertical note size multiplier. |
 | `note_flow_speed_multiplier` | float | `1.0` | Per-note scroll speed multiplier. |
