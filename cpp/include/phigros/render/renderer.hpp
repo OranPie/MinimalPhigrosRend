@@ -75,9 +75,13 @@ inline FrameSnapshot build_frame(
     FrameSnapshot frame;
     frame.t = t;
 
-    // Evaluate all line states — use stack array (6B5: no heap alloc per call)
+    // Evaluate all line states.
+    // Fast path: stack storage for charts <= 256 lines.
+    // Fallback: heap storage for larger charts (avoids silently dropping notes).
     std::array<engine::LineState, 256> ls_arr{};
-    const size_t n_lines = std::min(chart.lines.size(), size_t(256));
+    std::vector<engine::LineState> ls_heap;
+    const size_t n_lines = chart.lines.size();
+    if (n_lines > ls_arr.size()) ls_heap.resize(n_lines);
     frame.lines.reserve(n_lines);
     for (size_t i = 0; i < n_lines; ++i) {
         auto& ln = chart.lines[i];
@@ -85,7 +89,8 @@ inline FrameSnapshot build_frame(
             ln, t, cfg.force_line_alpha01,
             cfg.force_line_alpha01_by_lid
                 ? &(*cfg.force_line_alpha01_by_lid) : nullptr);
-        ls_arr[i] = ls;
+        if (i < ls_arr.size()) ls_arr[i] = ls;
+        else                   ls_heap[i] = ls;
         frame.lines.push_back({
             ln.lid, ls.x, ls.y, ls.rot, ls.cos_rot, ls.sin_rot,
             ls.alpha01, ls.scroll,
@@ -109,7 +114,9 @@ inline FrameSnapshot build_frame(
         if (ns.miss) return;
         if (note.t_end < t - 0.5) return;
         if (note.line_id < 0 || note.line_id >= static_cast<int>(n_lines)) return;
-        const auto& ls = ls_arr[note.line_id];
+        const auto& ls = (static_cast<size_t>(note.line_id) < ls_arr.size())
+            ? ls_arr[note.line_id]
+            : ls_heap[note.line_id];
 
         auto head = engine::note_world_pos_cs(
             ls.x, ls.y, ls.cos_rot, ls.sin_rot, ls.scroll, note,
