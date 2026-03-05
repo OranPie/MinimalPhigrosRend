@@ -43,6 +43,7 @@ struct NoteSnapshot {
     bool miss;
     bool mh;                 // multi-hit flag
     bool holding = false;    // true while a hold note is actively held
+    bool draw_hold_head = true; // false when holding and respack holdKeepHead=false
 };
 
 struct FrameSnapshot {
@@ -113,7 +114,8 @@ inline FrameSnapshot build_frame(
         auto head = engine::note_world_pos_cs(
             ls.x, ls.y, ls.cos_rot, ls.sin_rot, ls.scroll, note,
             note.scroll_hit, false, flow_mul,
-            cfg.note_speed_mul_affects_travel, false);
+            cfg.note_speed_mul_affects_travel,
+            note.kind == 3 && ns.holding);  // clamp head to line while holding
 
         double wx_tail = head.x, wy_tail = head.y;
         if (note.kind == 3) {
@@ -142,7 +144,8 @@ inline FrameSnapshot build_frame(
             note.nid, note.kind, head.x, head.y,
             wx_tail, wy_tail, note_alpha, ls.rot, note.size_px, color,
             note.kind == 3, ns.judged, ns.miss, note.mh,
-            ns.holding
+            ns.holding,
+            !(note.kind == 3 && ns.holding)  // draw_hold_head: hide head sprite while holding
         });
     };
 

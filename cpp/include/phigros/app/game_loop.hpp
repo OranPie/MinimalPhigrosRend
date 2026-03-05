@@ -265,7 +265,7 @@ struct GameLoop {
                     auto pos = engine::note_world_pos_cs(
                         ls.x, ls.y, ls.cos_rot, ls.sin_rot, ls.scroll, n,
                         n.scroll_hit, false, cfg.note_flow_speed_multiplier,
-                        cfg.note_speed_mul_affects_travel, false);
+                        cfg.note_speed_mul_affects_travel, n.kind == 3);  // holds clamp to line
                     auto col = render::note_type_color(n.kind);
                     effects.add_hitfx(pos.x, pos.y, t, col);
                     if (cfg.show_particles)

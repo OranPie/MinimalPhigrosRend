@@ -299,6 +299,48 @@ kbd {
   font-size: 0.68em; color: #666;
 }
 
+/* ── Settings panel ──────────────────────────────── */
+#cfg-wrap { width: 100%; max-width: var(--max-w); }
+details.cfg-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 0 12px 6px;
+}
+details.cfg-panel summary {
+  padding: 6px 10px;
+  font-size: 0.75rem; font-weight: 600; color: var(--muted);
+  cursor: pointer; user-select: none;
+  display: flex; align-items: center; justify-content: space-between;
+  list-style: none;
+}
+details.cfg-panel summary::-webkit-details-marker { display: none; }
+details.cfg-panel summary::after { content: '›'; font-size: 1rem; transition: transform 0.15s; }
+details.cfg-panel[open] summary::after { transform: rotate(90deg); }
+.cfg-inner {
+  padding: 6px 10px 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  gap: 4px 10px;
+}
+.cfg-group-label {
+  grid-column: 1/-1;
+  font-size: 0.63rem; font-weight: 700;
+  color: var(--muted); text-transform: uppercase; letter-spacing: .5px;
+  padding-top: 6px;
+}
+.cfg-inner label {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 0.72rem; color: var(--text); gap: 6px;
+}
+.cfg-inner label input[type=number],
+.cfg-inner label select {
+  width: 72px; padding: 3px 5px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 3px; color: var(--text); font-size: 0.72rem;
+}
+.cfg-inner label input[type=checkbox] { width: auto; }
+
 /* ── Mobile ─────────────────────────────────────── */
 @media (max-width: 600px) {
   .file-slot { min-width: 90px; }
@@ -337,6 +379,11 @@ kbd {
     <button class="pick-btn" onclick="document.getElementById('fi-audio').click()">🎵 .ogg / .mp3</button>
     <input type="file" id="fi-audio" accept=".ogg,.mp3,.wav,.flac">
   </div>
+  <div class="file-slot" id="fs-bg">
+    <span class="slot-label">BG</span>
+    <button class="pick-btn" onclick="document.getElementById('fi-bg').click()">🖼 background</button>
+    <input type="file" id="fi-bg" accept=".png,.jpg,.jpeg,.webp">
+  </div>
   <div class="file-slot" id="fs-mod">
     <span class="slot-label">Mod</span>
     <button class="pick-btn" onclick="document.getElementById('fi-mod').click()">⚙ + .mod.json</button>
@@ -357,6 +404,43 @@ kbd {
     <span id="vol-label">80%</span>
   </div>
   <button class="action-btn" id="btn-fullscreen">⛶</button>
+</div>
+
+<!-- Settings panel -->
+<div id="cfg-wrap">
+  <details class="cfg-panel" id="cfg-panel">
+    <summary>⚙ Settings</summary>
+    <div class="cfg-inner">
+      <div class="cfg-group-label">Render</div>
+      <label><span>Expand factor</span><input type="number" id="s-expand" value="1" min="0.1" step="0.1"></label>
+      <label><span>Note scale X</span><input type="number" id="s-nsx" value="2.5" min="0.1" step="0.1"></label>
+      <label><span>Note scale Y</span><input type="number" id="s-nsy" value="1" min="0.1" step="0.1"></label>
+      <label><span>Approach</span><input type="number" id="s-approach" value="3" min="0.1" step="0.1"></label>
+      <label><span>Chart speed</span><input type="number" id="s-speed" value="1" min="0.1" step="0.1"></label>
+      <label><span>Note alpha</span><input type="number" id="s-nalpha" value="1" min="0" max="1" step="0.05"></label>
+      <div class="cfg-group-label">Visual</div>
+      <label><span>Note outline</span><input type="checkbox" id="s-outline"></label>
+      <label><span>Hit effects</span><input type="checkbox" id="s-hitfx" checked></label>
+      <label><span>Particles</span><input type="checkbox" id="s-particles" checked></label>
+      <label><span>Hitfx intensity</span><input type="number" id="s-hitfx-int" value="1" min="0" max="2" step="0.1"></label>
+      <label><span>Line alpha mode</span>
+        <select id="s-line-alpha">
+          <option value="negative_only">Negative only</option>
+          <option value="off">Off (fix invisible notes)</option>
+          <option value="always">Always</option>
+        </select>
+      </label>
+      <div class="cfg-group-label">Background</div>
+      <label><span>Dim (0–255)</span><input type="number" id="s-bgdim" value="120" min="0" max="255" step="1"></label>
+      <label><span>Blur radius</span><input type="number" id="s-bgblur" value="10" min="0" step="1"></label>
+      <div class="cfg-group-label">Audio</div>
+      <label><span>Offset (ms)</span><input type="number" id="s-offset" value="0" step="1"></label>
+      <div class="cfg-group-label">Culling</div>
+      <label><span>Disable all culling</span><input type="checkbox" id="s-no-cull"></label>
+      <label><span>Disable screen culling</span><input type="checkbox" id="s-no-cull-screen"></label>
+      <label><span>Disable enter-time culling</span><input type="checkbox" id="s-no-cull-enter" checked></label>
+    </div>
+  </details>
 </div>
 
 <!-- Canvas + score overlay -->
@@ -412,7 +496,7 @@ kbd {
 
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
-var loadedFiles = { chart: null, respack: null, audio: null };
+var loadedFiles = { chart: null, respack: null, audio: null, bg: null };
 var loadedMods  = [];   // [{name, path}]
 var engineReady = false;
 var isRunning   = false;
@@ -619,6 +703,7 @@ function detectType(file) {
   }
   if (ext === 'zip') return n.match(/respack|resource|skin/i) ? 'respack' : 'chart';
   if (['ogg','mp3','wav','flac'].indexOf(ext) >= 0) return 'audio';
+  if (['png','jpg','jpeg','webp'].indexOf(ext) >= 0) return 'bg';
   return 'chart';
 }
 
@@ -672,11 +757,58 @@ function escapeHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// ── Config writer ──────────────────────────────────────────────────────────
+function writeConfig() {
+  if (!engineReady) return;
+  var n = function(id) { var v = parseFloat(document.getElementById(id).value); return isNaN(v) ? 0 : v; };
+  var b = function(id) { return document.getElementById(id).checked; };
+  var s = function(id) { return document.getElementById(id).value; };
+  var canvas = Module.canvas;
+  var cfg = {
+    window: { w: canvas.width, h: canvas.height },
+    render: {
+      expand:                    n('s-expand'),
+      note_scale_x:              n('s-nsx'),
+      note_scale_y:              n('s-nsy'),
+      approach:                  n('s-approach'),
+      chart_speed:               n('s-speed'),
+      note_alpha:                n('s-nalpha'),
+      note_outline:              b('s-outline'),
+      show_hitfx:                b('s-hitfx'),
+      show_particles:            b('s-particles'),
+      hitfx_intensity:           n('s-hitfx-int'),
+      line_alpha_affects_notes:  s('s-line-alpha'),
+      no_cull:                   b('s-no-cull'),
+      no_cull_screen:            b('s-no-cull-screen'),
+      no_cull_enter_time:        b('s-no-cull-enter')
+    },
+    assets: {
+      respack: './respack.zip',
+      bg_blur: n('s-bgblur'),
+      bg_dim:  n('s-bgdim')
+    },
+    gameplay: {
+      autoplay:            true,
+      audio_offset_ms:     n('s-offset'),
+      hold_tail_tol:       0.8,
+      hold_fx_interval_ms: 200
+    }
+  };
+  var enc = new TextEncoder();
+  writeToFS('/data/render.json', enc.encode(JSON.stringify(cfg)));
+}
+
 // ── Engine run ─────────────────────────────────────────────────────────────────
 function buildArgs(mode) {
-  var args = [loadedFiles.chart];
+  writeConfig();
+  var canvas = Module.canvas;
+  var args = [loadedFiles.chart,
+    '--width',  String(canvas.width),
+    '--height', String(canvas.height),
+    '--config', '/data/render.json'];
   if (loadedFiles.respack) { args.push('--respack'); args.push(loadedFiles.respack); }
   if (loadedFiles.audio)   { args.push('--audio');   args.push(loadedFiles.audio);   }
+  if (loadedFiles.bg)      { args.push('--bg');      args.push(loadedFiles.bg);      }
   loadedMods.forEach(function(m) { args.push('--mod'); args.push(m.path); });
   if (mode === 'score')   { args.push('--score-only'); }
   if (mode === 'compile') { args.push('--compile'); args.push('/data/out.phbc'); args.push('--score-only'); }
@@ -763,16 +895,38 @@ async function autoLoadFromURL() {
       }
     } catch(e) { /* no respack, fine */ }
 
-    // Fetch audio if specified
+    // Fetch audio — audio_url (zip/direct URL) takes precedence over audio (relative)
+    var audioUrl = params.get('audio_url');
     var audioPath = params.get('audio');
-    if (audioPath) {
-      var aRes = await fetch('/asset/' + audioPath);
-      if (aRes.ok) {
-        var aData = new Uint8Array(await aRes.arrayBuffer());
-        var aName = audioPath.split('/').pop();
-        writeToFS('/data/' + aName, aData);
-        loadedFiles.audio = '/data/' + aName;
-      }
+    var resolvedAudioUrl = audioUrl || (audioPath ? '/asset/' + audioPath : null);
+    if (resolvedAudioUrl) {
+      try {
+        var aRes = await fetch(resolvedAudioUrl);
+        if (aRes.ok) {
+          var aData = new Uint8Array(await aRes.arrayBuffer());
+          var aName = resolvedAudioUrl.split('/').pop();
+          writeToFS('/data/' + aName, aData);
+          loadedFiles.audio = '/data/' + aName;
+          var ab = document.querySelector('#fs-audio .pick-btn');
+          if (ab) { ab.textContent = '✓ ' + aName; ab.classList.add('loaded'); }
+        }
+      } catch(e) { /* no audio, fine */ }
+    }
+
+    // Fetch bg image if specified
+    var bgUrl = params.get('bg_url');
+    if (bgUrl) {
+      try {
+        var bgRes = await fetch(bgUrl);
+        if (bgRes.ok) {
+          var bgData = new Uint8Array(await bgRes.arrayBuffer());
+          var bgName = bgUrl.split('/').pop();
+          writeToFS('/data/' + bgName, bgData);
+          loadedFiles.bg = '/data/' + bgName;
+          var bb = document.querySelector('#fs-bg .pick-btn');
+          if (bb) { bb.textContent = '✓ ' + bgName; bb.classList.add('loaded'); }
+        }
+      } catch(e) { /* no bg, fine */ }
     }
 
     updateButtons();
@@ -791,6 +945,7 @@ async function autoLoadFromURL() {
 document.getElementById('fi-chart').addEventListener('change',   function(e) { handleFile(e.target.files[0], 'chart');   });
 document.getElementById('fi-respack').addEventListener('change', function(e) { handleFile(e.target.files[0], 'respack'); });
 document.getElementById('fi-audio').addEventListener('change',   function(e) { handleFile(e.target.files[0], 'audio');   });
+document.getElementById('fi-bg').addEventListener('change',      function(e) { handleFile(e.target.files[0], 'bg');      });
 document.getElementById('fi-mod').addEventListener('change', function(e) {
   Array.from(e.target.files).forEach(function(f) { handleFile(f, 'mod'); });
   e.target.value = '';  // allow re-selecting same file

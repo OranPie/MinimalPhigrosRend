@@ -20,6 +20,7 @@ import subprocess
 import threading
 import time
 import uuid
+import zipfile
 from pathlib import Path
 
 try:
@@ -63,21 +64,45 @@ def discover_charts(charts_dir: Path = _CHARTS) -> list[dict]:
         for jf in jsons:
             diff = _parse_diff(jf.stem)
             results.append({
-                "id":      f"{folder.name}/{jf.name}",
-                "name":    folder.name,
-                "diff":    diff,
-                "sort":    DIFF_ORDER.get(diff, 99),
-                "path":    str(jf),
-                "rel":     f"charts/{folder.name}/{jf.name}",
-                "audio":   str(audio) if audio else "",
-                "bg_url":  f"/asset/{folder.name}/{bg.name}" if bg else "",
+                "id":        f"{folder.name}/{jf.name}",
+                "name":      folder.name,
+                "diff":      diff,
+                "sort":      DIFF_ORDER.get(diff, 99),
+                "path":      str(jf),
+                "rel":       f"charts/{folder.name}/{jf.name}",
+                "audio":     str(audio) if audio else "",
+                "bg":        str(bg) if bg else "",
+                "bg_url":    f"/asset/{folder.name}/{bg.name}" if bg else "",
+                "audio_url": "",
             })
-    for zf in sorted(charts_dir.glob("*.zip")):
-        results.append({
-            "id": zf.name, "name": zf.stem, "diff": "", "sort": 99,
-            "path": str(zf), "rel": f"charts/{zf.name}",
-            "audio": "", "bg_url": "",
-        })
+    for zf_path in sorted(charts_dir.glob("*.zip")):
+        try:
+            with zipfile.ZipFile(zf_path) as zf:
+                names = zf.namelist()
+        except Exception:
+            continue
+        jsons      = sorted(n for n in names if n.endswith(".json") and "/" not in n)
+        audio_name = next((n for n in names if n.lower().endswith((".ogg", ".mp3", ".wav", ".flac"))), None)
+        bg_name    = next((n for n in names if n.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))), None)
+        if not jsons:
+            continue
+        for jname in jsons:
+            diff = _parse_diff(Path(jname).stem)
+            results.append({
+                "id":        f"{zf_path.name}/{jname}",
+                "name":      zf_path.stem,
+                "diff":      diff,
+                "sort":      DIFF_ORDER.get(diff, 99),
+                "path":      str(zf_path),
+                "rel":       f"charts/{zf_path.name}/{jname}",
+                "audio":     "",
+                "bg":        "",
+                "bg_url":    f"/zip-asset/{zf_path.name}/{bg_name}" if bg_name else "",
+                "audio_url": f"/zip-asset/{zf_path.name}/{audio_name}" if audio_name else "",
+                "zip_chart": jname,
+                "zip_audio": audio_name or "",
+                "zip_bg":    bg_name or "",
+            })
     return results
 
 # ── Job management ─────────────────────────────────────────────────────────────
@@ -107,7 +132,24 @@ class Job:
     def _build_cmd(self) -> list[str]:
         cfg   = self.cfg
         chart = self.chart
-        cmd   = [str(_BIN), chart["path"], "--headless"]
+
+        # Resolve chart, audio, bg paths (extract from zip if needed)
+        chart_path = chart["path"]
+        audio_path = chart.get("audio", "")
+        bg_path    = chart.get("bg", "")
+
+        if chart.get("zip_chart"):
+            with zipfile.ZipFile(chart_path) as zf:
+                zf.extract(chart["zip_chart"], self._workdir)
+                chart_path = str(Path(self._workdir) / chart["zip_chart"])
+                if chart.get("zip_audio"):
+                    zf.extract(chart["zip_audio"], self._workdir)
+                    audio_path = str(Path(self._workdir) / chart["zip_audio"])
+                if chart.get("zip_bg"):
+                    zf.extract(chart["zip_bg"], self._workdir)
+                    bg_path = str(Path(self._workdir) / chart["zip_bg"])
+
+        cmd = [str(_BIN), chart_path, "--headless"]
 
         if self.mode == "preview":
             cmd += ["--screenshot-dir", self._workdir,
@@ -125,8 +167,10 @@ class Job:
 
         if _RESPACK.exists():
             cmd += ["--respack", str(_RESPACK)]
-        if chart.get("audio"):
-            cmd += ["--audio", chart["audio"]]
+        if audio_path:
+            cmd += ["--audio", audio_path]
+        if bg_path:
+            cmd += ["--bg", bg_path]
         if cfg.get("width") and cfg.get("height"):
             cmd += ["--width", str(cfg["width"]), "--height", str(cfg["height"])]
         if cfg.get("expand", 1.0) != 1.0:
@@ -263,6 +307,24 @@ def asset(rel: str):
         return send_file(str(p))
     return "not found", 404
 
+@app.route("/zip-asset/<zipname>/<path:filename>")
+def zip_asset(zipname: str, filename: str):
+    """Serve a file from inside a zip chart package."""
+    zf_path = _CHARTS / zipname
+    if not zf_path.is_file():
+        return "not found", 404
+    try:
+        with zipfile.ZipFile(zf_path) as zf:
+            data = zf.read(filename)
+        ext  = Path(filename).suffix.lower()
+        mime = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+                ".mp3": "audio/mpeg", ".ogg": "audio/ogg", ".wav": "audio/wav",
+                ".flac": "audio/flac", ".json": "application/json"
+               }.get(ext, "application/octet-stream")
+        return Response(data, mimetype=mime)
+    except Exception:
+        return "not found", 404
+
 # ── WASM browser rendering ─────────────────────────────────────────────────────
 @app.route("/wasm")
 def wasm_player():
@@ -285,10 +347,23 @@ def wasm_file(filename: str):
 
 @app.route("/chart-data/<path:rel>")
 def chart_data(rel: str):
-    """Serve raw chart JSON for WASM player to fetch."""
+    """Serve raw chart JSON for WASM player to fetch (also handles zip-internal files)."""
     p = _CHARTS / rel
     if p.exists() and p.is_file():
         return send_file(str(p), mimetype="application/json")
+    # Handle zip-internal chart: rel = "Name.zip/inner.json"
+    parts = Path(rel).parts
+    for i in range(len(parts)):
+        candidate = _CHARTS / Path(*parts[:i+1])
+        if candidate.suffix == ".zip" and candidate.is_file():
+            inner = str(Path(*parts[i+1:])) if i + 1 < len(parts) else ""
+            if inner:
+                try:
+                    with zipfile.ZipFile(candidate) as zf:
+                        data = zf.read(inner)
+                    return Response(data, mimetype="application/json")
+                except Exception:
+                    pass
     return "not found", 404
 
 @app.route("/respack-data")
@@ -635,12 +710,17 @@ function selectChart(c) {
 
 function openWasmPlayer() {
   if (!activeChart) return;
-  // Build relative chart path from charts/ dir
-  const chartRel = activeChart.path.replace(/.*charts\//, '');
+  // Use rel (relative to charts/) for the chart-data endpoint
+  const chartRel = activeChart.rel.replace(/^charts\//, '');
   let url = `/wasm?chart=${encodeURIComponent(chartRel)}`;
-  if (activeChart.audio) {
+  if (activeChart.audio_url) {
+    url += `&audio_url=${encodeURIComponent(activeChart.audio_url)}`;
+  } else if (activeChart.audio) {
     const audioRel = activeChart.audio.replace(/.*charts\//, '');
     url += `&audio=${encodeURIComponent(audioRel)}`;
+  }
+  if (activeChart.bg_url) {
+    url += `&bg_url=${encodeURIComponent(activeChart.bg_url)}`;
   }
   window.open(url, '_blank');
 }

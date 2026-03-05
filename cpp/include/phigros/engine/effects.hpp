@@ -163,7 +163,8 @@ public:
                     n.line_id < static_cast<int>(lines.size())) {
                     auto ls = eval_line_state(lines[n.line_id], t);
                     auto pos = note_world_pos_cs(ls.x, ls.y, ls.cos_rot, ls.sin_rot,
-                                                 ls.scroll, n, n.scroll_hit);
+                                                 ls.scroll, n, n.scroll_hit,
+                                                 false, 1.0, false, true);  // hold_keep_head=true → line position
                     math::RGB color = n.tint_hitfx_rgb.value_or(
                         math::RGB{255, 236, 160});
                     add_hitfx(pos.x, pos.y, t, color, ls.rot);

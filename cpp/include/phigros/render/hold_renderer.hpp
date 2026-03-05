@@ -104,7 +104,8 @@ struct HoldRenderer {
                 }
             }
 
-            // 3. Head (at head end)
+            // 3. Head (at head end) — hidden while holding unless respack holdKeepHead=true
+            if (ns.draw_hold_head || respack.cfg.hold_keep_head)
             {
                 double cx = hx - ux * head_screen_h * 0.5;
                 double cy = hy - uy * head_screen_h * 0.5;
