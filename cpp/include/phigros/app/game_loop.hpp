@@ -28,6 +28,10 @@
 #include <string>
 #include <algorithm>
 #include <filesystem>
+
+#ifdef PHIGROS_WASM
+#include <emscripten.h>
+#endif
 #include <iostream>
 #include <cmath>
 

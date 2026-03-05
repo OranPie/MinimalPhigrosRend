@@ -99,43 +99,22 @@ inline FrameSnapshot build_frame(
     static thread_local size_t s_last_note_count = 32;
     frame.notes.reserve(s_last_note_count + 8);
 
-    auto lo_it = std::lower_bound(chart.notes.begin(), chart.notes.end(),
-        t - MAX_HOLD_SEC,
-        [](const Note& n, double v) { return n.t_hit < v; });
-    auto hi_it = std::upper_bound(chart.notes.begin(), chart.notes.end(),
-        t + cfg.approach * 2.0,
-        [](double v, const Note& n) { return v < n.t_hit; });
+    // Helper: emit one note into the frame snapshot (shared by normal + early paths)
+    auto emit_note = [&](size_t i) {
+        const auto& note = chart.notes[i];
+        const auto& ns   = states[i];
 
-    for (auto it = lo_it; it != hi_it; ++it) {
-        const size_t i = static_cast<size_t>(it - chart.notes.begin());
-        const auto& note = *it;
-
-        // Optional time-based culling via precomputed t_enter (disabled by default).
-        // Enable with no_cull_enter_time = false in config.
-        // t_enter must have been computed with the same expand_factor as cfg.expand_factor.
-        if (!cfg.no_cull_enter_time) {
-            if (t < note.t_enter) continue;
-        }
-        auto& ns = states[i];
-
-        // Skip judged non-holds and missed notes past their time
-        if (ns.judged && note.kind != 3) continue;
-        if (ns.miss) continue;
-
-        // Skip holds whose tail already passed (lower bound is conservative)
-        if (note.t_end < t - 0.5) continue;
-
-        if (note.line_id < 0 || note.line_id >= static_cast<int>(n_lines))
-            continue;
+        if (ns.judged && note.kind != 3) return;
+        if (ns.miss) return;
+        if (note.t_end < t - 0.5) return;
+        if (note.line_id < 0 || note.line_id >= static_cast<int>(n_lines)) return;
         const auto& ls = ls_arr[note.line_id];
 
-        // Head position — use precomputed cos/sin (6B3)
         auto head = engine::note_world_pos_cs(
             ls.x, ls.y, ls.cos_rot, ls.sin_rot, ls.scroll, note,
             note.scroll_hit, false, flow_mul,
             cfg.note_speed_mul_affects_travel, false);
 
-        // Tail position (holds)
         double wx_tail = head.x, wy_tail = head.y;
         if (note.kind == 3) {
             auto tail = engine::note_world_pos_cs(
@@ -147,8 +126,6 @@ inline FrameSnapshot build_frame(
         }
 
         auto color = note_type_color(note.kind);
-
-        // Apply line_alpha_affects_notes scaling
         double note_alpha = note.alpha01 * cfg.note_alpha;
         switch (cfg.line_alpha_mode) {
         case config::LineAlphaMode::Always:
@@ -167,7 +144,50 @@ inline FrameSnapshot build_frame(
             note.kind == 3, ns.judged, ns.miss, note.mh,
             ns.holding
         });
+    };
+
+    // Normal approach window: notes with t_hit in [t-12, t+approach*2]
+    auto lo_it = std::lower_bound(chart.notes.begin(), chart.notes.end(),
+        t - MAX_HOLD_SEC,
+        [](const Note& n, double v) { return n.t_hit < v; });
+    auto hi_it = std::upper_bound(chart.notes.begin(), chart.notes.end(),
+        t + cfg.approach * 2.0,
+        [](double v, const Note& n) { return v < n.t_hit; });
+
+    for (auto it = lo_it; it != hi_it; ++it) {
+        const size_t i = static_cast<size_t>(it - chart.notes.begin());
+        const auto& note = *it;
+
+        // Optional time-based culling via precomputed t_enter (disabled by default).
+        // Enable with no_cull_enter_time = false in config.
+        // t_enter must have been computed with the same expand_factor as cfg.expand_factor.
+        if (!cfg.no_cull_enter_time) {
+            if (t < note.t_enter) continue;
+        }
+        emit_note(i);
     }
+
+    // Early visible notes ("acting notes"): notes outside the normal approach window
+    // that should be drawn because their t_enter is much earlier than t_hit.
+    // These are typically notes on lines with speed=0 segments ("release" pattern).
+    if (!chart.early_notes.empty()) {
+        // Track which indices were already emitted by the normal loop
+        // (early_notes entries whose t_hit falls in the normal window are already handled)
+        double normal_lo = (lo_it != chart.notes.end()) ? lo_it->t_hit : 1e18;
+        double normal_hi = (hi_it != chart.notes.begin()) ? (hi_it - 1)->t_hit : -1e18;
+
+        for (size_t idx : chart.early_notes) {
+            const auto& note = chart.notes[idx];
+            // Skip if already in the normal window
+            if (note.t_hit >= normal_lo - 0.001 && note.t_hit <= normal_hi + 0.001)
+                continue;
+            // Only draw if we're past t_enter and before t_hit + hold tail
+            if (t < note.t_enter) continue;
+            if (note.t_end < t - 0.5) continue;
+            emit_note(idx);
+        }
+    }
+
     s_last_note_count = frame.notes.size();  // 6B5: update adaptive reserve hint
 
     // Sort by (non-hold first for z-order, then by kind) to batch same-texture notes

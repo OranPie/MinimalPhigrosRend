@@ -151,6 +151,7 @@ int main(int argc, char* argv[]) {
         } else {
             auto chart = load_chart(p, cfg);
             engine::precompute_t_enter(chart.lines, chart.notes, W, H, cfg.expand_factor);
+            chart.build_early_notes_index();
             int holds = 0;
             for (auto& n : chart.notes) if (!n.fake && n.kind == 3) ++holds;
             printf("[Info] %s\n", p.c_str());
@@ -264,10 +265,10 @@ int main(int argc, char* argv[]) {
                     std::cerr << "[ChartScript] Failed to load: " << e.what() << "\n";
                     ++cursor; continue;
                 }
-                if (!item_chart.is_compiled)
+                if (!item_chart.is_compiled) {
                     engine::precompute_t_enter(item_chart.lines, item_chart.notes, iW, iH, item_cfg.expand_factor);
-
-                // Apply mods
+                    item_chart.build_early_notes_index();
+                }
                 for (const auto& mp : args.mod_paths) {
                     try { mods::apply(item_chart, mods::load_mod(mp)); } catch (...) {}
                 }
@@ -379,8 +380,10 @@ int main(int argc, char* argv[]) {
               << " Notes=" << chart.notes.size()
               << " Offset=" << chart.offset << "s\n";
 
-    if (!chart.is_compiled)
+    if (!chart.is_compiled) {
         engine::precompute_t_enter(chart.lines, chart.notes, W, H, cfg.expand_factor);
+        chart.build_early_notes_index();
+    }
 
     // ── Apply mods ────────────────────────────────────────────────────────────
     for (const auto& mp : args.mod_paths) {

@@ -110,6 +110,27 @@ struct ChartData {
     // True when loaded from .phbc — t_enter already baked; skip precompute_t_enter()
     bool is_compiled = false;
 
+    // "Acting notes" index: notes whose t_enter is much earlier than t_hit.
+    // These are typically notes on lines with speed=0 segments ("release" pattern).
+    // Sorted by t_enter. Each entry is an index into notes[].
+    // Built by build_early_notes_index() after precompute_t_enter().
+    std::vector<size_t> early_notes;  // indices into notes[], sorted by t_enter
+
+    void build_early_notes_index() {
+        early_notes.clear();
+        static constexpr double THRESHOLD = 15.0; // seconds gap to qualify
+        for (size_t i = 0; i < notes.size(); ++i) {
+            const auto& n = notes[i];
+            if (n.fake) continue;
+            if (n.t_hit - n.t_enter > THRESHOLD)
+                early_notes.push_back(i);
+        }
+        std::stable_sort(early_notes.begin(), early_notes.end(),
+            [this](size_t a, size_t b) {
+                return notes[a].t_enter < notes[b].t_enter;
+            });
+    }
+
     // Compute chart_end_t and playable_count from notes. Call once after parsing.
     void finalize() {
         chart_end_t = 0.0;

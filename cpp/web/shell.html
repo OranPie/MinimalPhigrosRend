@@ -439,11 +439,12 @@ var Module = {
   onRuntimeInitialized: function() {
     try { FS.mkdir('/data'); } catch(e) {}
     engineReady = true;
-    // Show version in badge
     var v = typeof PHIGROS_VERSION !== 'undefined' ? PHIGROS_VERSION : '1.0.0-dev';
     document.getElementById('ver-badge').textContent = 'v' + v;
     setStatus('Engine ready — load a chart to begin', 'ok');
     updateButtons();
+    // Auto-load chart from URL params (?chart=path&audio=path)
+    autoLoadFromURL();
   },
 
   setStatus: function(msg) {
@@ -722,6 +723,59 @@ function offerPhbcDownload() {
 // ── Volume ──────────────────────────────────────────────────────────────────────
 function applyVolume(v) {
   try { if (Module._phigros_set_volume) Module._phigros_set_volume(v / 100.0); } catch(e) {}
+}
+
+// ── URL-based auto-load (for web UI integration) ────────────────────────────────
+async function autoLoadFromURL() {
+  var params = new URLSearchParams(window.location.search);
+  var chartPath = params.get('chart');
+  if (!chartPath) return;
+  setStatus('Fetching chart: ' + chartPath + '…');
+  try {
+    // Fetch chart data
+    var cRes = await fetch('/chart-data/' + chartPath);
+    if (!cRes.ok) throw new Error('Chart fetch failed: ' + cRes.status);
+    var cData = new Uint8Array(await cRes.arrayBuffer());
+    var fname = chartPath.split('/').pop();
+    writeToFS('/data/' + fname, cData);
+    loadedFiles.chart = '/data/' + fname;
+    var btn = document.querySelector('#fs-chart .pick-btn');
+    if (btn) { btn.textContent = '✓ ' + fname; btn.classList.add('loaded'); }
+
+    // Fetch respack if available
+    try {
+      var rRes = await fetch('/respack-data');
+      if (rRes.ok) {
+        var rData = new Uint8Array(await rRes.arrayBuffer());
+        writeToFS('/respack.zip', rData);
+        loadedFiles.respack = '/respack.zip';
+        var rb = document.querySelector('#fs-respack .pick-btn');
+        if (rb) { rb.textContent = '✓ respack.zip'; rb.classList.add('loaded'); }
+      }
+    } catch(e) { /* no respack, fine */ }
+
+    // Fetch audio if specified
+    var audioPath = params.get('audio');
+    if (audioPath) {
+      var aRes = await fetch('/asset/' + audioPath);
+      if (aRes.ok) {
+        var aData = new Uint8Array(await aRes.arrayBuffer());
+        var aName = audioPath.split('/').pop();
+        writeToFS('/data/' + aName, aData);
+        loadedFiles.audio = '/data/' + aName;
+      }
+    }
+
+    updateButtons();
+    setStatus('Chart loaded: ' + fname + ' — ready to play', 'ok');
+
+    // Auto-play if requested
+    if (params.get('autoplay') === '1') {
+      setTimeout(function() { runEngine('play'); }, 200);
+    }
+  } catch(e) {
+    setStatus('Auto-load failed: ' + e.message, 'error');
+  }
 }
 
 // ── Event wiring ────────────────────────────────────────────────────────────────

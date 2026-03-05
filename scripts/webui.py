@@ -36,6 +36,8 @@ _BIN    = _ROOT / "cpp" / "build" / "phigros_render"
 _RESPACK = _ROOT / "respack.zip"
 _TMP    = Path("/tmp/phigros_webui")
 _TMP.mkdir(parents=True, exist_ok=True)
+_WASM_DIR  = _ROOT / "cpp" / "build_wasm"
+_SHELL_HTML = _ROOT / "cpp" / "web" / "shell.html"
 
 DIFF_ORDER = {"EZ": 0, "HD": 1, "IN": 2, "AT": 3}
 
@@ -261,6 +263,41 @@ def asset(rel: str):
         return send_file(str(p))
     return "not found", 404
 
+# ── WASM browser rendering ─────────────────────────────────────────────────────
+@app.route("/wasm")
+def wasm_player():
+    """Serve the WASM shell.html with {{{ SCRIPT }}} replaced by the JS loader."""
+    if not _SHELL_HTML.exists():
+        return "shell.html not found — build WASM first", 404
+    html = _SHELL_HTML.read_text()
+    html = html.replace("{{{ SCRIPT }}}", '<script src="/wasm/phigros_render.js"></script>')
+    return Response(html, mimetype="text/html")
+
+@app.route("/wasm/<path:filename>")
+def wasm_file(filename: str):
+    """Serve WASM build artifacts (.js, .wasm, .data)."""
+    p = _WASM_DIR / filename
+    if not p.exists() or not p.is_file():
+        return "not found", 404
+    mime = {".js": "application/javascript", ".wasm": "application/wasm",
+            ".data": "application/octet-stream"}.get(p.suffix, "application/octet-stream")
+    return send_file(str(p), mimetype=mime)
+
+@app.route("/chart-data/<path:rel>")
+def chart_data(rel: str):
+    """Serve raw chart JSON for WASM player to fetch."""
+    p = _CHARTS / rel
+    if p.exists() and p.is_file():
+        return send_file(str(p), mimetype="application/json")
+    return "not found", 404
+
+@app.route("/respack-data")
+def respack_data():
+    """Serve respack.zip for WASM player."""
+    if _RESPACK.exists():
+        return send_file(str(_RESPACK), mimetype="application/zip")
+    return "no respack", 404
+
 # ── Jobs ───────────────────────────────────────────────────────────────────────
 @app.route("/jobs", methods=["POST"])
 def create_job():
@@ -428,6 +465,7 @@ input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px}
 <header>
   <h1>🎵 Phigros Render</h1>
   <span>Web UI — server-side rendering</span>
+  <a href="/wasm" target="_blank" style="margin-left:auto;color:var(--accent);font-size:12px;text-decoration:none;border:1px solid var(--accent);padding:4px 10px;border-radius:var(--r)">🌐 WASM Player</a>
 </header>
 <div class="main">
 
@@ -506,6 +544,7 @@ input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px}
     <div class="render-btns">
       <button class="btn btn-preview" id="btnPreview" onclick="startJob('preview')" disabled>▶ Preview</button>
       <button class="btn btn-export"  id="btnExport"  onclick="startJob('export')"  disabled>⬇ Export MP4</button>
+      <button class="btn" id="btnWasm" onclick="openWasmPlayer()" disabled style="background:#7c3aed;color:#fff">🌐 Browser</button>
       <button class="btn btn-stop"    id="btnStop"    onclick="stopJob()"            style="display:none">■ Stop</button>
     </div>
   </div>
@@ -556,14 +595,22 @@ function renderChartList(items) {
     el.innerHTML = '<div style="padding:16px;color:var(--muted);text-align:center;font-size:12px">No charts found in charts/</div>';
     return;
   }
-  el.innerHTML = items.map(c => `
-    <div class="chart-item" id="ci_${CSS.escape(c.id)}" onclick="selectChart(${JSON.stringify(JSON.stringify(c))})">
+  el.innerHTML = items.map((c, idx) => `
+    <div class="chart-item" data-idx="${idx}" id="ci_${CSS.escape(c.id)}">
       ${c.bg_url ? `<img class="thumb" src="${c.bg_url}" loading="lazy" onerror="this.style.display='none'">` : '<div class="thumb"></div>'}
       <div class="chart-info">
         <div class="chart-name" title="${c.name}">${c.name}</div>
         ${c.diff ? `<span class="diff-badge ${c.diff}">${c.diff}</span>` : ''}
       </div>
     </div>`).join('');
+  // Event delegation: click on chart items
+  el.onclick = e => {
+    const item = e.target.closest('.chart-item');
+    if (!item || !item.dataset.idx) return;
+    const idx = parseInt(item.dataset.idx, 10);
+    const c = charts.find(ch => ch.id === items[idx]?.id);
+    if (c) selectChart(c);
+  };
 }
 
 function filterCharts() {
@@ -571,8 +618,7 @@ function filterCharts() {
   renderChartList(q ? charts.filter(c => c.name.toLowerCase().includes(q) || c.diff.toLowerCase().includes(q)) : charts);
 }
 
-function selectChart(jsonStr) {
-  const c = JSON.parse(jsonStr);
+function selectChart(c) {
   activeChart = c;
   document.querySelectorAll('.chart-item').forEach(el => el.classList.remove('active'));
   const el = document.getElementById('ci_' + CSS.escape(c.id));
@@ -584,6 +630,19 @@ function selectChart(jsonStr) {
   else thumb.style.display = 'none';
   document.getElementById('btnPreview').disabled = false;
   document.getElementById('btnExport').disabled = false;
+  document.getElementById('btnWasm').disabled = false;
+}
+
+function openWasmPlayer() {
+  if (!activeChart) return;
+  // Build relative chart path from charts/ dir
+  const chartRel = activeChart.path.replace(/.*charts\//, '');
+  let url = `/wasm?chart=${encodeURIComponent(chartRel)}`;
+  if (activeChart.audio) {
+    const audioRel = activeChart.audio.replace(/.*charts\//, '');
+    url += `&audio=${encodeURIComponent(audioRel)}`;
+  }
+  window.open(url, '_blank');
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────

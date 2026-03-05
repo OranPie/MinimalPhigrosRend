@@ -17,6 +17,26 @@ inline double scroll_speed_at(const math::IntegralTrack& track, double t) {
     return 0.0;
 }
 
+// Check if a line has any speed≈0 segment before time t
+inline bool line_has_zero_speed_before(const math::IntegralTrack& track, double t) {
+    for (const auto& s : track.segs) {
+        if (s.t0 >= t) break;
+        double seg_end = std::min(s.t1, t);
+        if (seg_end > s.t0 && std::abs(s.v0) <= 1e-4)
+            return true;
+    }
+    return false;
+}
+
+// Find earliest zero-speed segment start time on a line
+inline double earliest_zero_speed_time(const math::IntegralTrack& track, double before_t) {
+    for (const auto& s : track.segs) {
+        if (s.t0 >= before_t) break;
+        if (std::abs(s.v0) <= 1e-4) return s.t0;
+    }
+    return before_t;
+}
+
 // AABB visibility check with margin
 inline bool note_visible_on_screen(
     const std::vector<Line>& lines,
@@ -53,6 +73,12 @@ inline bool note_visible_on_screen(
 // Precompute t_enter for all notes.
 // expand_factor must match the value used during rendering so that the
 // visibility check sees the same viewport as the actual draw pass.
+//
+// Handles "acting notes" / "release" pattern: notes on lines with speed=0
+// segments may be visible long before their t_hit. These notes are placed early
+// (speed=0 parks them at a fixed scroll offset), then the line moves to them
+// at hit time. The algorithm checks visibility during zero-speed periods and
+// extends lookback accordingly.
 inline void precompute_t_enter(
     std::vector<Line>& lines,
     std::vector<Note>& notes,
@@ -76,10 +102,27 @@ inline void precompute_t_enter(
 
         double t_hit = n.t_hit;
 
-        // Check scroll speed — if near-zero, note is always visible
+        // Check scroll speed at hit time
+        bool has_zero_speed_history = false;
         if (n.line_id >= 0 && n.line_id < static_cast<int>(lines.size())) {
-            double v = scroll_speed_at(lines[n.line_id].scroll_px, t_hit);
+            const auto& track = lines[n.line_id].scroll_px;
+            double v = scroll_speed_at(track, t_hit);
+
+            // Speed=0 at hit time: note is a stationary "release" note — always visible
             if (v <= 1e-4) { n.t_enter = -1e9; continue; }
+
+            // Check if line had ANY speed=0 period before t_hit.
+            // If so, the note may be an "acting note" visible much earlier than
+            // the normal approach window suggests.
+            has_zero_speed_history = line_has_zero_speed_before(track, t_hit);
+        }
+
+        // For acting notes, extend lookback to cover the zero-speed period
+        double effective_lookback = lookback_default;
+        if (has_zero_speed_history) {
+            double t_zero = earliest_zero_speed_time(
+                lines[n.line_id].scroll_px, t_hit);
+            effective_lookback = std::max(lookback_default, t_hit - t_zero + 10.0);
         }
 
         // Find a visible point (prefer t_hit)
@@ -91,11 +134,30 @@ inline void precompute_t_enter(
             bool found = false;
             for (int i = 0; i < MAX_EXPAND; ++i) {
                 double t2 = t_hit - step;
-                if (t2 < t_hit - lookback_default) break;
+                if (t2 < t_hit - effective_lookback) break;
                 if (visible(n, t2)) { t_vis = t2; found = true; break; }
                 step *= 2.0;
             }
-            if (!found) { n.t_enter = t_hit - lookback_default; continue; }
+            if (!found) {
+                // For acting notes: also probe visibility during zero-speed periods
+                if (has_zero_speed_history) {
+                    const auto& track = lines[n.line_id].scroll_px;
+                    for (const auto& seg : track.segs) {
+                        if (seg.t0 >= t_hit) break;
+                        if (std::abs(seg.v0) > 1e-4) continue;
+                        // Probe middle + boundaries of zero-speed segment
+                        double probes[] = {seg.t0, (seg.t0 + std::min(seg.t1, t_hit)) * 0.5,
+                                           std::min(seg.t1, t_hit)};
+                        for (double tp : probes) {
+                            if (tp >= 0 && visible(n, tp)) {
+                                t_vis = tp; found = true; break;
+                            }
+                        }
+                        if (found) break;
+                    }
+                }
+                if (!found) { n.t_enter = t_hit - effective_lookback; continue; }
+            }
         }
 
         // Exponential search backward from visible point
@@ -105,7 +167,7 @@ inline void precompute_t_enter(
         double step = dt_init;
         for (int i = 0; i < MAX_EXPAND; ++i) {
             double t2 = hi - step;
-            if (t2 < t_hit - lookback_default) break;
+            if (t2 < t_hit - effective_lookback) break;
             if (visible(n, t2)) {
                 hi = t2;
                 step *= 2.0;
@@ -114,7 +176,7 @@ inline void precompute_t_enter(
             }
         }
 
-        if (!lo_found) { n.t_enter = t_hit - lookback_default; continue; }
+        if (!lo_found) { n.t_enter = t_hit - effective_lookback; continue; }
 
         // Binary search refinement (lo=invisible, hi=visible)
         for (int i = 0; i < 20; ++i) {
