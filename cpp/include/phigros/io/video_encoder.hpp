@@ -79,25 +79,21 @@ struct RecordStats {
 // --- Frame Capture Buffer ---
 
 struct FrameBuffer {
-    std::vector<uint8_t> data; // RGB24 pixels
+    std::vector<uint8_t> data;
     int w = 0, h = 0;
+    int channels = 4; // 4=RGBA, 3=RGB24
 
-    void resize(int width, int height) {
-        w = width; h = height;
-        data.resize(static_cast<size_t>(w) * h * 3);
+    void resize(int width, int height, int ch = 4) {
+        w = width; h = height; channels = ch;
+        data.resize(static_cast<size_t>(w) * h * channels);
     }
 
     size_t byte_size() const { return data.size(); }
 
-    // Convert RGBA32 → RGB24 in-place (from a readback buffer)
-    void from_rgba(const uint8_t* rgba, int width, int height) {
-        resize(width, height);
-        size_t pixels = static_cast<size_t>(width) * height;
-        for (size_t i = 0; i < pixels; ++i) {
-            data[i * 3 + 0] = rgba[i * 4 + 0];
-            data[i * 3 + 1] = rgba[i * 4 + 1];
-            data[i * 3 + 2] = rgba[i * 4 + 2];
-        }
+    // Point directly at RGBA readback buffer (zero-copy)
+    void wrap_rgba(uint8_t* rgba, int width, int height) {
+        w = width; h = height; channels = 4;
+        // We don't own this data, but we can ref it for write_frame_ptr
     }
 };
 
@@ -140,16 +136,20 @@ class VideoEncoder {
 public:
     ~VideoEncoder() { close(); }
 
-    bool open(const std::string& output_path, int width, int height,
-              double fps, const EncodingPreset& preset) {
+    bool open(const std::string& output_path, int input_w, int input_h,
+              int output_w, int output_h,
+              double fps, const EncodingPreset& preset,
+              const std::string& input_pix_fmt = "rgba") {
         if (pipe_) return false;
         output_path_ = output_path;
-        w_ = width; h_ = height;
+        w_ = input_w; h_ = input_h;
+        out_w_ = output_w; out_h_ = output_h;
         fps_ = fps;
         preset_ = preset;
-        frame_size_ = static_cast<size_t>(w_) * h_ * 3;
+        input_pix_fmt_ = input_pix_fmt;
+        int bpp = (input_pix_fmt == "rgba") ? 4 : 3;
+        frame_size_ = static_cast<size_t>(w_) * h_ * bpp;
 
-        // Build FFmpeg command
         std::string cmd = build_ffmpeg_cmd(output_path, false);
         pipe_ = popen(cmd.c_str(), "w");
         if (!pipe_) {
@@ -186,11 +186,11 @@ public:
         return true;
     }
 
-    // Write raw RGB24 data directly
-    bool write_frame_raw(const uint8_t* rgb24, size_t len) {
+    // Write raw pixel data directly (zero-copy from readback buffer)
+    bool write_frame_ptr(const uint8_t* data, size_t len) {
         if (!pipe_ || len != frame_size_) return false;
         auto t0 = std::chrono::steady_clock::now();
-        size_t written = fwrite(rgb24, 1, frame_size_, pipe_);
+        size_t written = fwrite(data, 1, frame_size_, pipe_);
         auto t1 = std::chrono::steady_clock::now();
 
         double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
@@ -235,15 +235,22 @@ private:
         std::snprintf(fps_str, sizeof(fps_str), "%.4f", fps_);
 
         std::string cmd = "ffmpeg -hide_banner -loglevel error -nostats -y "
-                          "-f rawvideo -pix_fmt rgb24 "
+                          "-f rawvideo -pix_fmt " + input_pix_fmt_ + " "
                           "-s " + std::to_string(w_) + "x" + std::to_string(h_) + " "
                           "-r " + std::string(fps_str) + " "
                           "-i pipe:0 ";
 
+        // Scale if output resolution differs from input
+        if (out_w_ > 0 && out_h_ > 0 && (out_w_ != w_ || out_h_ != h_)) {
+            cmd += "-vf scale=" + std::to_string(out_w_) + ":" + std::to_string(out_h_)
+                   + ":flags=bilinear ";
+        }
+
         cmd += "-c:v " + preset_.codec + " "
                "-preset " + preset_.ffmpeg_preset + " "
                "-crf " + std::to_string(preset_.crf) + " "
-               "-pix_fmt " + preset_.pix_fmt + " ";
+               "-pix_fmt " + preset_.pix_fmt + " "
+               "-threads 0 ";
 
         if (!preset_.extra_args.empty())
             cmd += preset_.extra_args + " ";
@@ -254,7 +261,9 @@ private:
 
     FILE* pipe_ = nullptr;
     std::string output_path_;
-    int w_ = 0, h_ = 0;
+    std::string input_pix_fmt_ = "rgba";
+    int w_ = 0, h_ = 0;        // input (readback) resolution
+    int out_w_ = 0, out_h_ = 0; // output (video) resolution (0 = same as input)
     double fps_ = 60.0;
     size_t frame_size_ = 0;
     EncodingPreset preset_;
@@ -279,35 +288,40 @@ class RecordingSession {
 public:
     bool start(const RecordConfig& rc, int window_w, int window_h) {
         cfg_ = rc;
-        int w = (rc.width > 0) ? rc.width : window_w;
-        int h = (rc.height > 0) ? rc.height : window_h;
+        // Input resolution = always window size (what read_pixels gives us)
+        int in_w = window_w, in_h = window_h;
+        // Output resolution = user override or same as input
+        int out_w = (rc.width > 0) ? rc.width : in_w;
+        int out_h = (rc.height > 0) ? rc.height : in_h;
 
         auto preset = get_preset(rc.preset_name);
         if (!rc.codec.empty()) preset.codec = rc.codec;
 
-        // If audio muxing needed, encode video to temp file first
+        std::string target = rc.output;
         if (!rc.audio_path.empty()) {
             video_tmp_ = rc.output + ".video_tmp.mp4";
-            if (!encoder_.open(video_tmp_, w, h, rc.fps, preset)) return false;
-        } else {
-            if (!encoder_.open(rc.output, w, h, rc.fps, preset)) return false;
+            target = video_tmp_;
         }
 
-        frame_buf_.resize(w, h);
-        rgba_buf_.resize(static_cast<size_t>(w) * h * 4);
+        // Pipe RGBA directly — FFmpeg handles scaling if out != in
+        if (!encoder_.open(target, in_w, in_h, out_w, out_h, rc.fps, preset, "rgba"))
+            return false;
+
         started_ = true;
-        std::cout << "[Record] " << w << "x" << h << " @ " << rc.fps
+        std::string res_info = std::to_string(in_w) + "x" + std::to_string(in_h);
+        if (out_w != in_w || out_h != in_h)
+            res_info += " → " + std::to_string(out_w) + "x" + std::to_string(out_h);
+        std::cout << "[Record] " << res_info << " @ " << rc.fps
                   << "fps, preset=" << preset.name
                   << ", codec=" << preset.codec << std::endl;
         return true;
     }
 
-    // Capture current framebuffer (call after end_frame but before present, or use readback)
-    // pixels: RGBA32 data from SDL_RenderReadPixels
+    // Capture RGBA framebuffer directly to FFmpeg (zero-copy, no conversion)
     bool capture_rgba(const uint8_t* rgba, int w, int h) {
         if (!started_) return false;
-        frame_buf_.from_rgba(rgba, w, h);
-        return encoder_.write_frame(frame_buf_);
+        size_t len = static_cast<size_t>(w) * h * 4;
+        return encoder_.write_frame_ptr(rgba, len);
     }
 
     // Finalize: close encoder, mux audio if needed
@@ -317,8 +331,9 @@ public:
 
         int ret = encoder_.close();
         auto& s = encoder_.stats();
+        double pipe_mb = s.bytes_written / (1024.0 * 1024.0);
         std::cout << "\n[Record] Complete: " << s.frames_written << " frames"
-                  << ", " << (s.bytes_written / (1024*1024)) << " MB input"
+                  << ", " << static_cast<int>(pipe_mb) << " MB piped"
                   << ", " << s.fps_wall() << " fps"
                   << ", avg write " << s.avg_write_ms() << "ms"
                   << " (max " << s.max_write_ms << "ms";
@@ -355,16 +370,19 @@ public:
     void log_progress(double chart_time, double chart_end) const {
         auto& s = encoder_.stats();
         double pct = (chart_end > 0) ? (chart_time / chart_end * 100.0) : 0.0;
-        std::printf("\r[Record] %.1f%% | frame %d | %.1f fps | %.1f MB",
-                    pct, s.frames_written, s.fps_wall(),
-                    s.bytes_written / (1024.0 * 1024.0));
+        double elapsed = s.elapsed_sec();
+        double speed = (elapsed > 0) ? chart_time / elapsed : 0.0;
+        double remaining = (speed > 0.01 && chart_end > chart_time)
+            ? (chart_end - chart_time) / speed : 0.0;
+        int eta_min = static_cast<int>(remaining) / 60;
+        int eta_sec = static_cast<int>(remaining) % 60;
+        std::printf("\r[Record] %.1f%% | f%d | %.0ffps | %.1fx speed | ETA %d:%02d  ",
+                    pct, s.frames_written, s.fps_wall(), speed, eta_min, eta_sec);
         std::fflush(stdout);
     }
 
 private:
     VideoEncoder encoder_;
-    FrameBuffer frame_buf_;
-    std::vector<uint8_t> rgba_buf_;
     RecordConfig cfg_;
     std::string video_tmp_;
     bool started_ = false;

@@ -523,8 +523,8 @@ input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px}
         <div class="cfg-group">Video export</div>
         <label><span>Preset</span>
           <select id="cfg_record_preset">
+            <option value="fast">fast (CRF 28, ultrafast) ← recommended</option>
             <option value="balanced">balanced (CRF 23, medium)</option>
-            <option value="fast">fast (CRF 28, ultrafast)</option>
             <option value="quality">quality (CRF 18, slow)</option>
             <option value="archive">archive (CRF 15, veryslow)</option>
           </select>
@@ -536,8 +536,8 @@ input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px}
             <option value="libvpx-vp9">libvpx-vp9 (VP9)</option>
           </select>
         </label>
-        <label><span>Record FPS</span><input type="number" id="cfg_record_fps" value="60" min="1" step="1"></label>
-        <label><span>Resolution (WxH)</span><input type="text" id="cfg_record_resolution" placeholder="e.g. 1920x1080"></label>
+        <label><span>Record FPS</span><input type="number" id="cfg_record_fps" value="30" min="1" step="1"></label>
+        <label><span>Resolution (WxH)</span><input type="text" id="cfg_record_resolution" placeholder="default: window size"></label>
       </div>
     </div>
 
