@@ -99,19 +99,29 @@ inline FrameSnapshot build_frame(
         });
     }
 
-    // Evaluate visible notes — candidate selection by precomputed t_enter index.
+    // Evaluate notes — only screen-position culling is applied.
     double flow_mul = cfg.note_flow_speed_multiplier;
+    const int W = cfg.window_w;
+    const int H = cfg.window_h;
+    const double ex = std::max(1.0, cfg.expand_factor);
+    const double over = std::max(1.0, cfg.overrender);
+    const double base_w = 0.06 * W * cfg.note_scale_x;
+    const double base_h = 0.018 * H * cfg.note_scale_y;
     static thread_local size_t s_last_note_count = 32;
     frame.notes.reserve(s_last_note_count + 8);
 
-    // Helper: emit one note into the frame snapshot (shared by normal + early paths)
+    auto point_visible = [&](double x, double y, double half_w, double half_h) {
+        return (x + half_w >= 0.0 && x - half_w <= W &&
+                y + half_h >= 0.0 && y - half_h <= H);
+    };
+
+    // Helper: emit one note into the frame snapshot
     auto emit_note = [&](size_t i) {
         const auto& note = chart.notes[i];
         const auto& ns   = states[i];
 
         if (ns.judged && note.kind != 3) return;
         if (ns.miss) return;
-        if (note.t_end < t - 0.5) return;
         if (note.line_id < 0 || note.line_id >= static_cast<int>(n_lines)) return;
         const auto& ls = (static_cast<size_t>(note.line_id) < ls_arr.size())
             ? ls_arr[note.line_id]
@@ -131,6 +141,25 @@ inline FrameSnapshot build_frame(
                 cfg.note_speed_mul_affects_travel, false);
             wx_tail = tail.x;
             wy_tail = tail.y;
+        }
+
+        // The only culling rule: out-of-screen (after expand transform).
+        if (!cfg.no_cull && !cfg.no_cull_screen) {
+            double hx = head.x, hy = head.y;
+            apply_expand_xy(hx, hy, W, H, ex);
+
+            const double half_w = std::max(1.0, base_w * note.size_px * 0.5 * over);
+            const double half_h = std::max(1.0, base_h * note.size_px * 0.5 * over);
+
+            bool vis = point_visible(hx, hy, half_w, half_h);
+            if (!vis && note.kind == 3) {
+                double tx = wx_tail, ty = wy_tail;
+                apply_expand_xy(tx, ty, W, H, ex);
+                vis = point_visible(tx, ty, half_w, half_h) ||
+                      ((std::min(hx, tx) <= W && std::max(hx, tx) >= 0.0) &&
+                       (std::min(hy, ty) <= H && std::max(hy, ty) >= 0.0));
+            }
+            if (!vis) return;
         }
 
         auto color = note_type_color(note.kind);
@@ -155,20 +184,7 @@ inline FrameSnapshot build_frame(
         });
     };
 
-    // Candidate selection by t_enter.
-    if (!chart.notes_by_enter.empty()) {
-        auto end_it = std::upper_bound(chart.notes_by_enter.begin(), chart.notes_by_enter.end(), t,
-            [&](double cur_t, size_t idx) {
-                return cur_t < chart.notes[idx].t_enter;
-            });
-        for (auto it = chart.notes_by_enter.begin(); it != end_it; ++it)
-            emit_note(*it);
-    } else {
-        for (size_t i = 0; i < chart.notes.size(); ++i) {
-            if (t < chart.notes[i].t_enter) continue;
-            emit_note(i);
-        }
-    }
+    for (size_t i = 0; i < chart.notes.size(); ++i) emit_note(i);
 
     s_last_note_count = frame.notes.size();  // 6B5: update adaptive reserve hint
 
