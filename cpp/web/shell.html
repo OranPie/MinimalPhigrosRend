@@ -423,6 +423,15 @@ var Module = {
   canvas: document.getElementById('canvas'),
   noInitialRun: true,
 
+  // Redirect .data/.wasm requests to /wasm/ route (for web UI integration)
+  locateFile: function(path, scriptDir) {
+    // If served from /wasm page, asset requests must go to /wasm/<file>
+    if (window.location.pathname === '/wasm' || window.location.pathname.startsWith('/wasm?')) {
+      return '/wasm/' + path;
+    }
+    return (scriptDir || '') + path;
+  },
+
   print: function(line) {
     console.log(line);
     lastOutput.push(line);
