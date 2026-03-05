@@ -116,6 +116,10 @@ struct ChartData {
     // Built by build_early_notes_index() after precompute_t_enter().
     std::vector<size_t> early_notes;  // indices into notes[], sorted by t_enter
 
+    // Full note index sorted by t_enter (all notes, not just acting notes).
+    // Used by render-stage candidate selection to avoid t_hit-based filtering.
+    std::vector<size_t> notes_by_enter; // indices into notes[], sorted by t_enter
+
     void build_early_notes_index() {
         early_notes.clear();
         static constexpr double THRESHOLD = 15.0; // seconds gap to qualify
@@ -128,6 +132,21 @@ struct ChartData {
         std::stable_sort(early_notes.begin(), early_notes.end(),
             [this](size_t a, size_t b) {
                 return notes[a].t_enter < notes[b].t_enter;
+            });
+    }
+
+    void build_notes_by_enter_index() {
+        notes_by_enter.clear();
+        notes_by_enter.reserve(notes.size());
+        for (size_t i = 0; i < notes.size(); ++i) {
+            if (notes[i].fake) continue;
+            notes_by_enter.push_back(i);
+        }
+        std::stable_sort(notes_by_enter.begin(), notes_by_enter.end(),
+            [this](size_t a, size_t b) {
+                if (notes[a].t_enter != notes[b].t_enter)
+                    return notes[a].t_enter < notes[b].t_enter;
+                return notes[a].t_hit < notes[b].t_hit;
             });
     }
 

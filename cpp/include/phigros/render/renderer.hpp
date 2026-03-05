@@ -99,8 +99,7 @@ inline FrameSnapshot build_frame(
         });
     }
 
-    // Evaluate visible notes — binary search bounds on sorted notes (6B1 + 6B5)
-    static constexpr double MAX_HOLD_SEC = 12.0;
+    // Evaluate visible notes — candidate selection by precomputed t_enter index.
     double flow_mul = cfg.note_flow_speed_multiplier;
     static thread_local size_t s_last_note_count = 32;
     frame.notes.reserve(s_last_note_count + 8);
@@ -156,45 +155,18 @@ inline FrameSnapshot build_frame(
         });
     };
 
-    // Normal approach window: notes with t_hit in [t-12, t+approach*2]
-    auto lo_it = std::lower_bound(chart.notes.begin(), chart.notes.end(),
-        t - MAX_HOLD_SEC,
-        [](const Note& n, double v) { return n.t_hit < v; });
-    auto hi_it = std::upper_bound(chart.notes.begin(), chart.notes.end(),
-        t + cfg.approach * 2.0,
-        [](double v, const Note& n) { return v < n.t_hit; });
-
-    for (auto it = lo_it; it != hi_it; ++it) {
-        const size_t i = static_cast<size_t>(it - chart.notes.begin());
-        const auto& note = *it;
-
-        // Optional time-based culling via precomputed t_enter (disabled by default).
-        // Enable with no_cull_enter_time = false in config.
-        // t_enter must have been computed with the same expand_factor as cfg.expand_factor.
-        if (!cfg.no_cull_enter_time) {
-            if (t < note.t_enter) continue;
-        }
-        emit_note(i);
-    }
-
-    // Early visible notes ("acting notes"): notes outside the normal approach window
-    // that should be drawn because their t_enter is much earlier than t_hit.
-    // These are typically notes on lines with speed=0 segments ("release" pattern).
-    if (!chart.early_notes.empty()) {
-        // Track which indices were already emitted by the normal loop
-        // (early_notes entries whose t_hit falls in the normal window are already handled)
-        double normal_lo = (lo_it != chart.notes.end()) ? lo_it->t_hit : 1e18;
-        double normal_hi = (hi_it != chart.notes.begin()) ? (hi_it - 1)->t_hit : -1e18;
-
-        for (size_t idx : chart.early_notes) {
-            const auto& note = chart.notes[idx];
-            // Skip if already in the normal window
-            if (note.t_hit >= normal_lo - 0.001 && note.t_hit <= normal_hi + 0.001)
-                continue;
-            // Only draw if we're past t_enter and before t_hit + hold tail
-            if (t < note.t_enter) continue;
-            if (note.t_end < t - 0.5) continue;
-            emit_note(idx);
+    // Candidate selection by t_enter.
+    if (!chart.notes_by_enter.empty()) {
+        auto end_it = std::upper_bound(chart.notes_by_enter.begin(), chart.notes_by_enter.end(), t,
+            [&](double cur_t, size_t idx) {
+                return cur_t < chart.notes[idx].t_enter;
+            });
+        for (auto it = chart.notes_by_enter.begin(); it != end_it; ++it)
+            emit_note(*it);
+    } else {
+        for (size_t i = 0; i < chart.notes.size(); ++i) {
+            if (t < chart.notes[i].t_enter) continue;
+            emit_note(i);
         }
     }
 

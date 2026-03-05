@@ -84,6 +84,8 @@ inline void precompute_t_enter(
     std::vector<Note>& notes,
     int W, int H,
     double expand_factor    = 1.0,
+    double note_scale_x     = 1.0,
+    double note_scale_y     = 1.0,
     double lookback_default = 256.0,
     double dt_init          = 1.0 / 30.0)
 {
@@ -94,7 +96,7 @@ inline void precompute_t_enter(
 
     auto visible = [&](const Note& n, double t) {
         return note_visible_on_screen(lines, n, t, W, H, base_w, base_h,
-                                      expand_factor);
+                                      expand_factor, note_scale_x, note_scale_y);
     };
 
     for (auto& n : notes) {
