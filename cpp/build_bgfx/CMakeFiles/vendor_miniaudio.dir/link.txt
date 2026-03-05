@@ -1,2 +1,0 @@
-/usr/bin/ar qc libvendor_miniaudio.a CMakeFiles/vendor_miniaudio.dir/src/vendor/audio_impl.cpp.o
-/usr/bin/ranlib libvendor_miniaudio.a

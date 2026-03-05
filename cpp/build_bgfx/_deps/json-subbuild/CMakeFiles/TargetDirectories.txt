@@ -1,3 +1,0 @@
-/root/MinimalPhigrosRend/cpp/build_bgfx/_deps/json-subbuild/CMakeFiles/json-populate.dir
-/root/MinimalPhigrosRend/cpp/build_bgfx/_deps/json-subbuild/CMakeFiles/edit_cache.dir
-/root/MinimalPhigrosRend/cpp/build_bgfx/_deps/json-subbuild/CMakeFiles/rebuild_cache.dir

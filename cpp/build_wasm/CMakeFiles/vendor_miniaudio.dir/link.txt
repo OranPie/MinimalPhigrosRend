@@ -1,2 +1,0 @@
-emar qc libvendor_miniaudio.a CMakeFiles/vendor_miniaudio.dir/src/vendor/audio_impl.cpp.o
-emranlib libvendor_miniaudio.a

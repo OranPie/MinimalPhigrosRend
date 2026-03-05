@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/phigros_core.dir/src/main.cpp.o -o phigros_core  libphigros_core_lib.a 

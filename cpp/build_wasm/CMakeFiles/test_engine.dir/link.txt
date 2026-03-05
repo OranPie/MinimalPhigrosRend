@@ -1,1 +1,0 @@
-/usr/bin/em++ -O3 -DNDEBUG @CMakeFiles/test_engine.dir/objects1 -o test_engine.js @CMakeFiles/test_engine.dir/linkLibs.rsp
