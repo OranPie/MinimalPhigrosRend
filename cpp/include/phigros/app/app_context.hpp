@@ -73,13 +73,16 @@ struct AppContext {
               const std::string& audio_override,
               bool               headless,
               int W, int H,
-              const config::RenderConfig& cfg)
+              const config::RenderConfig& cfg,
+              bool               no_vsync = false)
     {
         namespace fs = std::filesystem;
 
-        window.init(W, H, "Phigros Renderer", headless);
+        const bool vsync = !headless && !no_vsync;
+        window.init(W, H, "Phigros Renderer", headless, vsync);
         std::cout << "[Window] " << W << "x" << H
-                  << (headless ? " (headless)" : "") << "\n";
+                  << (headless ? " (headless)" : "")
+                  << (vsync ? "" : " (vsync off)") << "\n";
 
         batch.init(window.ren);
         draw_list.reserve(2048);

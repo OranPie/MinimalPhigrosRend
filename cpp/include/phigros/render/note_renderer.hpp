@@ -39,8 +39,14 @@ struct NoteRenderer {
             const auto& tex = respack.note_texture(ns.kind, ns.mh);
             if (!tex.valid()) continue;
 
+            // Keep note width in chart-space, but derive height from actual
+            // texture aspect ratio so tap/drag/flick can have different shapes
+            // across resource packs.
             double ws = base_note_w * note_scale_x * ns.size_px;
             double hs = base_note_h * note_scale_y * ns.size_px;
+            if (tex.w > 0 && tex.h > 0) {
+                hs = ws * (static_cast<double>(tex.h) / static_cast<double>(tex.w)) * note_scale_y;
+            }
 
             // Apply expand: compress world coords toward screen centre (matches Python)
             double draw_x = ns.wx, draw_y = ns.wy;

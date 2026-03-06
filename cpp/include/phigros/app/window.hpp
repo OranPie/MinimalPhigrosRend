@@ -17,7 +17,7 @@ struct Window {
     std::vector<SDL_Event> last_events;  // all events from last poll_events()
 
     void init(int width, int height, const std::string& title = "Phigros Renderer",
-              bool headless = false) {
+              bool headless = false, bool vsync = true) {
         w = width; h = height;
         if (!sdl::sdl_init())
             throw std::runtime_error(std::string("SDL_Init: ") + SDL_GetError());
@@ -25,8 +25,8 @@ struct Window {
         win = sdl::create_window(title.c_str(), w, h, headless);
         if (!win) throw std::runtime_error(std::string("SDL_CreateWindow: ") + SDL_GetError());
 
-        ren = sdl::create_renderer(win, false);
-        if (!ren) ren = sdl::create_renderer(win, true); // fallback
+        ren = sdl::create_renderer(win, false, vsync);
+        if (!ren) ren = sdl::create_renderer(win, true, false); // software fallback, no vsync concern
         if (!ren) throw std::runtime_error(std::string("SDL_CreateRenderer: ") + SDL_GetError());
 
         SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);

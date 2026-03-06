@@ -11,19 +11,25 @@ namespace phigros::render {
 
 struct HitFXRenderer {
 
-    // Approximate a circle outline using N line segments.
+    // Approximate a circle outline using N line segments rendered as quads.
     static void draw_circle_outline(const SpriteBatch& batch,
+                                    const Texture& white_tex,
                                     double cx, double cy, double r,
                                     uint8_t rr, uint8_t gg, uint8_t bb, uint8_t a,
                                     int n = 14) {
         if (r < 1.0 || a == 0) return;
+        static constexpr double LINE_W = 2.0;
         double step = 2.0 * M_PI / n;
         for (int i = 0; i < n; ++i) {
             double a0 = i * step, a1 = (i + 1) * step;
-            batch.draw_line(
-                cx + r * std::cos(a0), cy + r * std::sin(a0),
-                cx + r * std::cos(a1), cy + r * std::sin(a1),
-                2.0, rr, gg, bb, a);
+            double x0 = cx + r * std::cos(a0), y0 = cy + r * std::sin(a0);
+            double x1 = cx + r * std::cos(a1), y1 = cy + r * std::sin(a1);
+            double mx = (x0 + x1) * 0.5, my = (y0 + y1) * 0.5;
+            double dx = x1 - x0, dy = y1 - y0;
+            double seg_len = std::sqrt(dx * dx + dy * dy);
+            double angle = std::atan2(dy, dx);
+            batch.draw_rotated_rect(white_tex, mx, my, seg_len, LINE_W,
+                                    angle, rr, gg, bb, a);
         }
     }
 
@@ -93,7 +99,8 @@ struct HitFXRenderer {
                         std::clamp(255.0 * (1.0 - p) * double(intensity), 0.0, 255.0));
                     double fx_x = f.x, fx_y = f.y;
                     apply_expand_xy(fx_x, fx_y, W, H, expand);
-                    draw_circle_outline(batch, fx_x, fx_y, r,
+                    draw_circle_outline(batch, respack.white_tex,
+                                        fx_x, fx_y, r,
                                         f.color.r, f.color.g, f.color.b, a);
                 }
             }

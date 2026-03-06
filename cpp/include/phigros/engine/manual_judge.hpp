@@ -20,6 +20,10 @@ struct ManualJudge {
     // ptr_slot_id → note index (for tracking active holds)
     std::unordered_map<int64_t, int> holding_map;
 
+    // Default hitfx tints (typically from respack config).
+    math::RGB hitfx_color_perfect{235, 255, 236};
+    math::RGB hitfx_color_good{235, 180, 225};
+
     // Optional callback invoked whenever a note is judged (for ReplayWriter)
     std::function<void(int note_idx, float t, const std::string& grade)> on_judgment;
 
@@ -100,13 +104,13 @@ struct ManualJudge {
                 auto grade = judge.start_hold(ns, t);
                 if (grade) {
                     holding_map[s.id] = best_nidx;
-                    _emit_effect(effects, frame, best_nidx, t, note);
+                    _emit_effect(effects, frame, best_nidx, t, note, *grade);
                     if (on_judgment) on_judgment(best_nidx, (float)t, "hold_start:" + *grade);
                 }
             } else {
                 auto grade = judge.try_hit(ns, t);
                 if (grade) {
-                    _emit_effect(effects, frame, best_nidx, t, note);
+                    _emit_effect(effects, frame, best_nidx, t, note, *grade);
                     if (on_judgment) on_judgment(best_nidx, (float)t, *grade);
                 }
             }
@@ -129,7 +133,7 @@ struct ManualJudge {
                 if (dx * dx + dy * dy <= r2) {
                     auto grade = judge.try_hit(states[nidx], t);
                     if (grade) {
-                        _emit_effect(effects, frame, nidx, t, note);
+                        _emit_effect(effects, frame, nidx, t, note, *grade);
                         if (on_judgment) on_judgment(nidx, (float)t, *grade);
                     }
                     break;
@@ -139,19 +143,24 @@ struct ManualJudge {
     }
 
 private:
+    math::RGB _resolve_hitfx_color(const Note& note, const std::string& grade) const {
+        if (note.tint_hitfx_rgb) return *note.tint_hitfx_rgb;
+        if (grade == "GOOD" || grade == "BAD") return hitfx_color_good;
+        return hitfx_color_perfect;
+    }
+
     void _emit_effect(EffectManager& effects,
                       const phigros::render::FrameSnapshot& frame,
-                      int nidx, double t, const Note& note) {
+                      int nidx, double t, const Note& note, const std::string& grade) {
         // Find this note's world position in the snapshot
         for (const auto& ns : frame.notes) {
             if (ns.nid == nidx) {
-                math::RGB color = ns.color;
+                math::RGB color = _resolve_hitfx_color(note, grade);
                 effects.add_hitfx(ns.wx, ns.wy, t, color);
                 effects.add_particle_burst(ns.wx, ns.wy, t * 1000.0, 500.0, color);
                 return;
             }
         }
-        (void)note;
     }
 };
 

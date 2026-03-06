@@ -14,6 +14,12 @@
 #include <cmath>
 #include <cstring>
 #include <array>
+#include <deque>
+#include <mutex>
+#include <thread>
+#include <condition_variable>
+#include <algorithm>
+#include <cctype>
 
 #ifdef _WIN32
 #define popen _popen
@@ -43,6 +49,30 @@ inline EncodingPreset get_preset(const std::string& name) {
     if (name == "archive")
         return {"archive", "veryslow", 15, "libx264", "yuv444p", "-tune film"};
     return {"balanced", "medium", 23, "libx264", "yuv420p", ""};
+}
+
+inline std::string to_lower_ascii(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+    return s;
+}
+
+inline bool is_hw_codec_name(const std::string& codec) {
+    return codec.find("_nvenc") != std::string::npos ||
+           codec.find("_qsv") != std::string::npos ||
+           codec.find("_vaapi") != std::string::npos ||
+           codec.find("_amf") != std::string::npos ||
+           codec.find("_videotoolbox") != std::string::npos;
+}
+
+inline std::string hw_type_to_codec(const std::string& hw_type) {
+    const std::string hw = to_lower_ascii(hw_type);
+    if (hw == "nvenc") return "h264_nvenc";
+    if (hw == "qsv") return "h264_qsv";
+    if (hw == "vaapi") return "h264_vaapi";
+    if (hw == "amf") return "h264_amf";
+    if (hw == "videotoolbox") return "h264_videotoolbox";
+    return "";
 }
 
 // --- Recording Statistics ---
@@ -136,6 +166,39 @@ class VideoEncoder {
 public:
     ~VideoEncoder() { close(); }
 
+    static bool codec_available(const std::string& codec) {
+        if (codec.empty()) return false;
+        std::string cmd = "ffmpeg -hide_banner -loglevel error -encoders 2>/dev/null";
+        FILE* p = popen(cmd.c_str(), "r");
+        if (!p) return false;
+        std::array<char, 4096> buf{};
+        std::string out;
+        while (std::fgets(buf.data(), static_cast<int>(buf.size()), p))
+            out += buf.data();
+        int ret = pclose(p);
+        if (ret != 0 && out.empty()) return false;
+        const std::string needle0 = " " + codec;
+        const std::string needle1 = "\t" + codec;
+        const std::string needle2 = codec + " ";
+        return out.find(needle0) != std::string::npos ||
+               out.find(needle1) != std::string::npos ||
+               out.find(needle2) != std::string::npos;
+    }
+
+    static bool codec_usable(const std::string& codec) {
+        if (codec.empty()) return false;
+        // Some hardware encoders (notably NVENC) reject tiny probe frames (e.g. 16x16).
+        // Use a conservative probe size that works across SW/HW encoders.
+        constexpr int probe_w = 128;
+        constexpr int probe_h = 128;
+        std::string cmd = "ffmpeg -hide_banner -loglevel error "
+                          "-f lavfi -i color=c=black:s=" + std::to_string(probe_w) + "x" + std::to_string(probe_h) + ":r=1 "
+                          "-frames:v 1 -c:v " + codec +
+                          " -f null - >/dev/null 2>&1";
+        int ret = std::system(cmd.c_str());
+        return ret == 0;
+    }
+
     bool open(const std::string& output_path, int input_w, int input_h,
               int output_w, int output_h,
               double fps, const EncodingPreset& preset,
@@ -150,40 +213,26 @@ public:
         int bpp = (input_pix_fmt == "rgba") ? 4 : 3;
         frame_size_ = static_cast<size_t>(w_) * h_ * bpp;
 
-        std::string cmd = build_ffmpeg_cmd(output_path, false);
-        pipe_ = popen(cmd.c_str(), "w");
+        cmd_last_ = build_ffmpeg_cmd(output_path, false);
+        pipe_ = popen(cmd_last_.c_str(), "w");
         if (!pipe_) {
             std::cerr << "[VideoEncoder] Failed to start FFmpeg\n";
             return false;
         }
+        std::setvbuf(pipe_, nullptr, _IOFBF, 1 << 20);
 
-        stats_.start_wall_time = std::chrono::duration<double>(
-            std::chrono::steady_clock::now().time_since_epoch()).count();
+        {
+            std::lock_guard<std::mutex> lock(stats_mu_);
+            stats_ = RecordStats{};
+            stats_.start_wall_time = std::chrono::duration<double>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
+        }
         return true;
     }
 
     // Write one RGB24 frame
     bool write_frame(const FrameBuffer& frame) {
-        if (!pipe_ || frame.byte_size() != frame_size_) return false;
-
-        auto t0 = std::chrono::steady_clock::now();
-        size_t written = fwrite(frame.data.data(), 1, frame_size_, pipe_);
-        auto t1 = std::chrono::steady_clock::now();
-
-        double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-        stats_.total_write_ms += ms;
-        if (ms > stats_.max_write_ms) stats_.max_write_ms = ms;
-        if (ms >= 50.0) ++stats_.slow_writes;
-
-        if (written != frame_size_) {
-            std::cerr << "[VideoEncoder] Write failed (wrote " << written
-                      << "/" << frame_size_ << ")\n";
-            return false;
-        }
-
-        stats_.frames_written++;
-        stats_.bytes_written += static_cast<int64_t>(frame_size_);
-        return true;
+        return write_frame_ptr(frame.data.data(), frame.byte_size());
     }
 
     // Write raw pixel data directly (zero-copy from readback buffer)
@@ -194,13 +243,21 @@ public:
         auto t1 = std::chrono::steady_clock::now();
 
         double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-        stats_.total_write_ms += ms;
-        if (ms > stats_.max_write_ms) stats_.max_write_ms = ms;
-        if (ms >= 50.0) ++stats_.slow_writes;
-
-        if (written != frame_size_) return false;
-        stats_.frames_written++;
-        stats_.bytes_written += static_cast<int64_t>(frame_size_);
+        {
+            std::lock_guard<std::mutex> lock(stats_mu_);
+            stats_.total_write_ms += ms;
+            if (ms > stats_.max_write_ms) stats_.max_write_ms = ms;
+            if (ms >= 50.0) ++stats_.slow_writes;
+            if (written == frame_size_) {
+                stats_.frames_written++;
+                stats_.bytes_written += static_cast<int64_t>(frame_size_);
+            }
+        }
+        if (written != frame_size_) {
+            std::cerr << "[VideoEncoder] Write failed (wrote " << written
+                      << "/" << frame_size_ << ")\n";
+            return false;
+        }
         return true;
     }
 
@@ -212,9 +269,13 @@ public:
     }
 
     bool is_open() const { return pipe_ != nullptr; }
-    const RecordStats& stats() const { return stats_; }
+    RecordStats stats_snapshot() const {
+        std::lock_guard<std::mutex> lock(stats_mu_);
+        return stats_;
+    }
     int width() const { return w_; }
     int height() const { return h_; }
+    const std::string& command_line() const { return cmd_last_; }
 
     // Mux video with audio as a post-processing step
     static bool mux_audio(const std::string& video_path,
@@ -230,7 +291,15 @@ public:
     }
 
 private:
+    static std::string map_nvenc_preset(const std::string& p) {
+        if (p == "ultrafast") return "p1";
+        if (p == "slow") return "p6";
+        if (p == "veryslow") return "p7";
+        return "p4"; // medium / default
+    }
+
     std::string build_ffmpeg_cmd(const std::string& output, bool with_audio) const {
+        (void)with_audio;
         char fps_str[32];
         std::snprintf(fps_str, sizeof(fps_str), "%.4f", fps_);
 
@@ -240,19 +309,52 @@ private:
                           "-r " + std::string(fps_str) + " "
                           "-i pipe:0 ";
 
-        // Scale if output resolution differs from input
+        std::string vf;
         if (out_w_ > 0 && out_h_ > 0 && (out_w_ != w_ || out_h_ != h_)) {
-            cmd += "-vf scale=" + std::to_string(out_w_) + ":" + std::to_string(out_h_)
-                   + ":flags=bilinear ";
+            vf = "scale=" + std::to_string(out_w_) + ":" + std::to_string(out_h_) +
+                 ":flags=bilinear";
         }
 
-        cmd += "-c:v " + preset_.codec + " "
-               "-preset " + preset_.ffmpeg_preset + " "
-               "-crf " + std::to_string(preset_.crf) + " "
-               "-pix_fmt " + preset_.pix_fmt + " "
-               "-threads 0 ";
+        if (preset_.codec.find("_vaapi") != std::string::npos) {
+            if (!vf.empty()) vf += ",";
+            vf += "format=nv12,hwupload";
+        }
+        if (!vf.empty()) cmd += "-vf " + vf + " ";
 
-        if (!preset_.extra_args.empty())
+        cmd += "-c:v " + preset_.codec + " ";
+        if (preset_.codec.find("_nvenc") != std::string::npos) {
+            cmd += "-preset " + map_nvenc_preset(preset_.ffmpeg_preset) + " "
+                   "-cq " + std::to_string(preset_.crf) + " "
+                   "-b:v 0 "
+                   "-pix_fmt " + preset_.pix_fmt + " ";
+        } else if (preset_.codec.find("_qsv") != std::string::npos) {
+            cmd += "-global_quality " + std::to_string(preset_.crf) + " "
+                   "-look_ahead 0 "
+                   "-pix_fmt nv12 ";
+        } else if (preset_.codec.find("_vaapi") != std::string::npos) {
+            cmd += "-qp " + std::to_string(preset_.crf) + " "
+                   "-pix_fmt vaapi ";
+        } else if (preset_.codec.find("_videotoolbox") != std::string::npos) {
+            int qv = std::clamp(63 - preset_.crf, 1, 63);
+            cmd += "-q:v " + std::to_string(qv) + " "
+                   "-pix_fmt yuv420p ";
+        } else if (preset_.codec.find("_amf") != std::string::npos) {
+            cmd += "-quality quality "
+                   "-rc cqp "
+                   "-qp_i " + std::to_string(preset_.crf) + " "
+                   "-qp_p " + std::to_string(preset_.crf) + " "
+                   "-pix_fmt " + preset_.pix_fmt + " ";
+        } else {
+            cmd += "-preset " + preset_.ffmpeg_preset + " ";
+            if (preset_.codec == "libvpx-vp9")
+                cmd += "-crf " + std::to_string(preset_.crf) + " -b:v 0 ";
+            else
+                cmd += "-crf " + std::to_string(preset_.crf) + " ";
+            cmd += "-pix_fmt " + preset_.pix_fmt + " ";
+        }
+        cmd += "-threads 0 ";
+
+        if (!preset_.extra_args.empty() && !is_hw_codec_name(preset_.codec))
             cmd += preset_.extra_args + " ";
 
         cmd += "\"" + output + "\"";
@@ -267,6 +369,8 @@ private:
     double fps_ = 60.0;
     size_t frame_size_ = 0;
     EncodingPreset preset_;
+    std::string cmd_last_;
+    mutable std::mutex stats_mu_;
     RecordStats stats_;
 };
 
@@ -276,8 +380,11 @@ struct RecordConfig {
     std::string output;                    // output.mp4
     std::string preset_name = "balanced";  // fast|balanced|quality|archive
     std::string codec;                     // override: libx265, libvpx-vp9
+    std::string hw_type;                   // nvenc|qsv|vaapi|amf|videotoolbox
     double fps = 60.0;
-    int width = 0, height = 0;            // 0 = use window resolution
+    int width = 0, height = 0;             // output size (0 = same as capture)
+    int capture_width = 0, capture_height = 0; // render/readback size
+    int queue_depth = 6;                   // <=1 disables async queue
     double start_time = -1.0;             // chart time to start recording
     double end_time = 0.0;                // 0 = full chart
     std::string audio_path;               // BGM for muxing
@@ -286,42 +393,126 @@ struct RecordConfig {
 
 class RecordingSession {
 public:
+    ~RecordingSession() {
+        if (started_) finish();
+    }
+
     bool start(const RecordConfig& rc, int window_w, int window_h) {
+        if (started_) return false;
         cfg_ = rc;
-        // Input resolution = always window size (what read_pixels gives us)
-        int in_w = window_w, in_h = window_h;
-        // Output resolution = user override or same as input
-        int out_w = (rc.width > 0) ? rc.width : in_w;
-        int out_h = (rc.height > 0) ? rc.height : in_h;
+        {
+            std::lock_guard<std::mutex> lock(queue_mu_);
+            queue_.clear();
+            queue_peak_ = 0;
+            stop_worker_ = false;
+            worker_failed_ = false;
+        }
+
+        capture_w_ = (rc.capture_width > 0) ? rc.capture_width : window_w;
+        capture_h_ = (rc.capture_height > 0) ? rc.capture_height : window_h;
+        if (capture_w_ != window_w || capture_h_ != window_h) {
+            std::cerr << "[Record] capture resolution (" << capture_w_ << "x" << capture_h_
+                      << ") does not match render size (" << window_w << "x" << window_h
+                      << "); using render size for readback\n";
+            capture_w_ = window_w;
+            capture_h_ = window_h;
+        }
+        int out_w = (rc.width > 0) ? rc.width : capture_w_;
+        int out_h = (rc.height > 0) ? rc.height : capture_h_;
 
         auto preset = get_preset(rc.preset_name);
-        if (!rc.codec.empty()) preset.codec = rc.codec;
+        const std::string fallback_codec = preset.codec;
+        if (!rc.codec.empty()) {
+            preset.codec = rc.codec;
+        } else if (!rc.hw_type.empty()) {
+            std::string mapped = hw_type_to_codec(rc.hw_type);
+            if (mapped.empty()) {
+                std::cerr << "[Record] Unknown --record-hw value '" << rc.hw_type
+                          << "', using software codec '" << preset.codec << "'\n";
+            } else {
+                preset.codec = mapped;
+            }
+        }
+        if (!VideoEncoder::codec_available(preset.codec)) {
+            std::cerr << "[Record] Codec '" << preset.codec
+                      << "' is unavailable; falling back to '" << fallback_codec << "'\n";
+            preset.codec = fallback_codec;
+        }
+        if (is_hw_codec_name(preset.codec) && !VideoEncoder::codec_usable(preset.codec)) {
+            std::cerr << "[Record] Hardware codec '" << preset.codec
+                      << "' is not usable on this system; falling back to '"
+                      << fallback_codec << "'\n";
+            preset.codec = fallback_codec;
+        }
+        if (!VideoEncoder::codec_available(preset.codec)) {
+            std::cerr << "[Record] Codec '" << preset.codec
+                      << "' is unavailable in FFmpeg. Install the encoder or choose another codec.\n";
+            return false;
+        }
+        if (!VideoEncoder::codec_usable(preset.codec)) {
+            std::cerr << "[Record] Codec '" << preset.codec
+                      << "' failed ffmpeg probe. Choose a different codec.\n";
+            return false;
+        }
 
         std::string target = rc.output;
+        video_tmp_.clear();
         if (!rc.audio_path.empty()) {
             video_tmp_ = rc.output + ".video_tmp.mp4";
             target = video_tmp_;
         }
 
-        // Pipe RGBA directly — FFmpeg handles scaling if out != in
-        if (!encoder_.open(target, in_w, in_h, out_w, out_h, rc.fps, preset, "rgba"))
+        // Pipe RGBA directly — FFmpeg handles scaling if output != capture.
+        if (!encoder_.open(target, capture_w_, capture_h_, out_w, out_h, rc.fps, preset, "rgba"))
             return false;
 
+        queue_capacity_ = static_cast<size_t>(std::max(1, rc.queue_depth));
+        async_enabled_ = queue_capacity_ > 1;
+        if (async_enabled_) {
+            try {
+                worker_ = std::thread([this]() { worker_main(); });
+            } catch (const std::exception& e) {
+                std::cerr << "[Record] Failed to start encoder worker: " << e.what() << "\n";
+                encoder_.close();
+                return false;
+            }
+        }
+
         started_ = true;
-        std::string res_info = std::to_string(in_w) + "x" + std::to_string(in_h);
-        if (out_w != in_w || out_h != in_h)
-            res_info += " → " + std::to_string(out_w) + "x" + std::to_string(out_h);
+        std::string res_info = "capture=" + std::to_string(capture_w_) + "x" + std::to_string(capture_h_) +
+                               " output=" + std::to_string(out_w) + "x" + std::to_string(out_h);
         std::cout << "[Record] " << res_info << " @ " << rc.fps
                   << "fps, preset=" << preset.name
-                  << ", codec=" << preset.codec << std::endl;
+                  << ", codec=" << preset.codec
+                  << ", queue=" << queue_capacity_
+                  << (async_enabled_ ? " (async)" : " (sync)") << std::endl;
         return true;
     }
 
-    // Capture RGBA framebuffer directly to FFmpeg (zero-copy, no conversion)
+    // Capture RGBA framebuffer. Async mode copies into queue; worker writes to FFmpeg.
     bool capture_rgba(const uint8_t* rgba, int w, int h) {
         if (!started_) return false;
+        if (w != capture_w_ || h != capture_h_) {
+            std::cerr << "[Record] capture size mismatch: got "
+                      << w << "x" << h << ", expected "
+                      << capture_w_ << "x" << capture_h_ << "\n";
+            return false;
+        }
         size_t len = static_cast<size_t>(w) * h * 4;
-        return encoder_.write_frame_ptr(rgba, len);
+        if (!async_enabled_) return encoder_.write_frame_ptr(rgba, len);
+
+        std::vector<uint8_t> frame(len);
+        std::memcpy(frame.data(), rgba, len);
+        std::unique_lock<std::mutex> lock(queue_mu_);
+        queue_cv_not_full_.wait(lock, [this]() {
+            return queue_.size() < queue_capacity_ || stop_worker_ || worker_failed_;
+        });
+        if (stop_worker_ || worker_failed_) return false;
+        queue_.push_back(std::move(frame));
+        if (queue_.size() > queue_peak_) queue_peak_ = queue_.size();
+        lock.unlock();
+        queue_cv_not_empty_.notify_one();
+        return true;
     }
 
     // Finalize: close encoder, mux audio if needed
@@ -329,8 +520,19 @@ public:
         if (!started_) return false;
         started_ = false;
 
+        if (async_enabled_) {
+            {
+                std::lock_guard<std::mutex> lock(queue_mu_);
+                stop_worker_ = true;
+            }
+            queue_cv_not_empty_.notify_all();
+            queue_cv_not_full_.notify_all();
+            if (worker_.joinable()) worker_.join();
+            async_enabled_ = false;
+        }
+
         int ret = encoder_.close();
-        auto& s = encoder_.stats();
+        auto s = encoder_.stats_snapshot();
         double pipe_mb = s.bytes_written / (1024.0 * 1024.0);
         std::cout << "\n[Record] Complete: " << s.frames_written << " frames"
                   << ", " << static_cast<int>(pipe_mb) << " MB piped"
@@ -339,7 +541,13 @@ public:
                   << " (max " << s.max_write_ms << "ms";
         if (s.slow_writes > 0)
             std::cout << ", " << s.slow_writes << " slow";
-        std::cout << ")" << std::endl;
+        std::cout << ", queue_peak " << queue_peak_ << "/" << queue_capacity_
+                  << ")" << std::endl;
+
+        if (worker_failed_) {
+            std::cerr << "[Record] Async encoder worker failed before completion\n";
+            return false;
+        }
 
         if (ret != 0) {
             std::cerr << "[Record] FFmpeg exited with code " << ret << std::endl;
@@ -366,9 +574,9 @@ public:
     }
 
     bool is_active() const { return started_; }
-    const RecordStats& stats() const { return encoder_.stats(); }
+    RecordStats stats_snapshot() const { return encoder_.stats_snapshot(); }
     void log_progress(double chart_time, double chart_end) const {
-        auto& s = encoder_.stats();
+        auto s = encoder_.stats_snapshot();
         double pct = (chart_end > 0) ? (chart_time / chart_end * 100.0) : 0.0;
         double elapsed = s.elapsed_sec();
         double speed = (elapsed > 0) ? chart_time / elapsed : 0.0;
@@ -376,16 +584,65 @@ public:
             ? (chart_end - chart_time) / speed : 0.0;
         int eta_min = static_cast<int>(remaining) / 60;
         int eta_sec = static_cast<int>(remaining) % 60;
-        std::printf("\r[Record] %.1f%% | f%d | %.0ffps | %.1fx speed | ETA %d:%02d  ",
-                    pct, s.frames_written, s.fps_wall(), speed, eta_min, eta_sec);
+        size_t qsz = queue_size_snapshot();
+        std::printf("\r[Record] %.1f%% | f%d | %.0ffps | q%zu/%zu | %.1fx speed | ETA %d:%02d  ",
+                    pct, s.frames_written, s.fps_wall(), qsz, queue_capacity_,
+                    speed, eta_min, eta_sec);
         std::fflush(stdout);
     }
 
 private:
+    void worker_main() {
+        for (;;) {
+            std::vector<uint8_t> frame;
+            {
+                std::unique_lock<std::mutex> lock(queue_mu_);
+                queue_cv_not_empty_.wait(lock, [this]() {
+                    return stop_worker_ || !queue_.empty();
+                });
+                if (queue_.empty()) {
+                    if (stop_worker_) break;
+                    continue;
+                }
+                frame = std::move(queue_.front());
+                queue_.pop_front();
+            }
+            queue_cv_not_full_.notify_one();
+
+            if (!encoder_.write_frame_ptr(frame.data(), frame.size())) {
+                std::lock_guard<std::mutex> lock(queue_mu_);
+                worker_failed_ = true;
+                stop_worker_ = true;
+                queue_.clear();
+                queue_cv_not_full_.notify_all();
+                queue_cv_not_empty_.notify_all();
+                return;
+            }
+        }
+    }
+
+    size_t queue_size_snapshot() const {
+        std::lock_guard<std::mutex> lock(queue_mu_);
+        return queue_.size();
+    }
+
     VideoEncoder encoder_;
     RecordConfig cfg_;
     std::string video_tmp_;
     bool started_ = false;
+    int capture_w_ = 0;
+    int capture_h_ = 0;
+
+    mutable std::mutex queue_mu_;
+    std::condition_variable queue_cv_not_empty_;
+    std::condition_variable queue_cv_not_full_;
+    std::deque<std::vector<uint8_t>> queue_;
+    std::thread worker_;
+    size_t queue_capacity_ = 1;
+    size_t queue_peak_ = 0;
+    bool async_enabled_ = false;
+    bool stop_worker_ = false;
+    bool worker_failed_ = false;
 };
 
 } // namespace phigros::io

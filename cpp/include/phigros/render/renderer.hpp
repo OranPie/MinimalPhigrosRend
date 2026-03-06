@@ -11,7 +11,8 @@
 
 namespace phigros::render {
 
-// Note type colors (matching Python's NOTE_TYPE_COLORS)
+// Legacy helper for optional kind-based tinting (e.g. via mods/tools).
+// Default rendering uses Note::tint_rgb directly.
 inline math::RGB note_type_color(int kind) {
     switch (kind) {
         case 1: return {255, 220, 120}; // Tap
@@ -162,15 +163,17 @@ inline FrameSnapshot build_frame(
             if (!vis) return;
         }
 
-        auto color = note_type_color(note.kind);
+        auto color = note.tint_rgb;
         double note_alpha = note.alpha01 * cfg.note_alpha;
         switch (cfg.line_alpha_mode) {
         case config::LineAlphaMode::Always:
             note_alpha *= ls.alpha01;
             break;
         case config::LineAlphaMode::NegativeOnly:
-            if (ls.alpha01 < 0.5)
-                note_alpha *= ls.alpha01 * 2.0;
+            // Only negative raw line alpha attenuates notes.
+            // Positive/zero raw alpha leaves note alpha unchanged.
+            if (ls.alpha_raw < 0.0)
+                note_alpha *= ls.alpha01;
             break;
         default: break;
         }

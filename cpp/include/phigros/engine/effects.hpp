@@ -146,7 +146,8 @@ public:
     // Generate hold tick effects for active holds
     void hold_tick_fx(std::vector<NoteState>& states, int idx_next,
                       double t, int hold_fx_interval_ms,
-                      const std::vector<Line>& lines) {
+                      const std::vector<Line>& lines,
+                      math::RGB default_hitfx_color = {235, 255, 236}) {
         int st0 = std::max(0, idx_next - 50);
         int st1 = std::min(static_cast<int>(states.size()), idx_next + 500);
         int now_ms = static_cast<int>(t * 1000.0);
@@ -165,8 +166,7 @@ public:
                     auto pos = note_world_pos_cs(ls.x, ls.y, ls.cos_rot, ls.sin_rot,
                                                  ls.scroll, n, n.scroll_hit,
                                                  false, 1.0, false, true);  // hold_keep_head=true → line position
-                    math::RGB color = n.tint_hitfx_rgb.value_or(
-                        math::RGB{255, 236, 160});
+                    math::RGB color = n.tint_hitfx_rgb.value_or(default_hitfx_color);
                     add_hitfx(pos.x, pos.y, t, color, ls.rot);
                     add_particle_burst(pos.x, pos.y, t * 1000.0, 500.0, color);
                 }

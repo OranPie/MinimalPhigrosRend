@@ -127,6 +127,10 @@ int main(int argc, char* argv[]) {
     if (args.audio_offset_ms != 0.0) cfg.audio_offset_ms = args.audio_offset_ms;
     if (args.window_w > 0) cfg.window_w = args.window_w;
     if (args.window_h > 0) cfg.window_h = args.window_h;
+    if (!args.record_output.empty()) {
+        if (args.record_capture_w > 0) cfg.window_w = args.record_capture_w;
+        if (args.record_capture_h > 0) cfg.window_h = args.record_capture_h;
+    }
     const int W = cfg.window_w, H = cfg.window_h;
 
     // ── Info mode (no full parse) ─────────────────────────────────────────────
@@ -204,7 +208,8 @@ int main(int argc, char* argv[]) {
             item_ctx.init(item.input, item_chart.offset + seg_start,
                           item_args.respack_path, item_args.bg_path,
                           item_args.font_path, item_args.audio_path,
-                          item_args.headless, iW, iH, item_cfg);
+                          item_args.headless, iW, iH, item_cfg,
+                          /*no_vsync=*/!item_args.record_output.empty());
 
             GameLoop gl(item_ctx, item_args, item_cfg, item_chart,
                         item_chart.playable_count, seg_end);
@@ -511,7 +516,8 @@ int main(int argc, char* argv[]) {
     AppContext ctx;
     ctx.init(args.chart_path, chart.offset,
              args.respack_path, args.bg_path, args.font_path, args.audio_path,
-             args.headless, W, H, cfg);
+             args.headless, W, H, cfg,
+             /*no_vsync=*/!args.record_output.empty());
 
     GameLoop gl(ctx, args, cfg, chart, chart.playable_count, chart_end);
 

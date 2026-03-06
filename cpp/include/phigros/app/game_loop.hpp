@@ -28,6 +28,7 @@
 #include <string>
 #include <algorithm>
 #include <filesystem>
+#include <iomanip>
 
 #ifdef PHIGROS_WASM
 #include <emscripten.h>
@@ -84,6 +85,76 @@ struct GameLoop {
     render::ResultScreen result_screen;
     render::PauseOverlay pause_overlay;
 
+    // ── Per-frame profiling ───────────────────────────────────────────────────
+    // Tracks wall-clock time for 5 render phases. Enabled by --profile flag.
+    // Prints rolling stats every ~60 rendered frames.
+    struct FramePhaseStats {
+        uint64_t freq = 1;
+        static constexpr int PHASES = 5;
+        // 0=build_frame, 1=render_scene, 2=trail_blur, 3=readback, 4=present
+        static const char* phase_name(int i) {
+            static const char* names[PHASES] = {
+                "build_frame", "render_scene", "trail_blur ", "readback   ", "present    "
+            };
+            return names[i];
+        }
+
+        double sum_ms[PHASES]  = {};
+        double max_ms[PHASES]  = {};
+        double sum2_ms[PHASES] = {};  // for p95 via sorted reservoir
+        static constexpr int HIST = 128;
+        double hist[PHASES][HIST] = {};
+        int    hist_n = 0;
+        int    report_frame = 0;
+        static constexpr int REPORT_INTERVAL = 60;
+
+        void init() { freq = SDL_GetPerformanceFrequency(); }
+
+        uint64_t now() const { return SDL_GetPerformanceCounter(); }
+
+        double to_ms(uint64_t ticks) const {
+            return static_cast<double>(ticks) * 1000.0 / static_cast<double>(freq);
+        }
+
+        void record(int phase, uint64_t start, uint64_t end) {
+            double ms = to_ms(end - start);
+            sum_ms[phase]  += ms;
+            sum2_ms[phase] += ms * ms;
+            if (ms > max_ms[phase]) max_ms[phase] = ms;
+            if (hist_n < HIST) {
+                hist[phase][hist_n] = ms;
+            }
+        }
+
+        // Call at end of each rendered frame; returns true when a report was printed.
+        bool end_frame(bool enabled) {
+            ++hist_n;
+            ++report_frame;
+            if (!enabled || report_frame < REPORT_INTERVAL) return false;
+            int n = report_frame;
+            std::cout << "[Profile] " << n << " frames";
+            for (int p = 0; p < PHASES; ++p) {
+                double mean = sum_ms[p] / n;
+                // p95 approximation from histogram
+                int hsz = std::min(hist_n, HIST);
+                std::sort(hist[p], hist[p] + hsz);
+                double p95 = hsz > 0 ? hist[p][static_cast<int>(hsz * 0.95)] : 0.0;
+                std::cout << "  |" << phase_name(p)
+                          << " avg=" << std::fixed << std::setprecision(2) << mean
+                          << "ms p95=" << p95 << "ms max=" << max_ms[p] << "ms";
+            }
+            std::cout << "\n";
+            // Reset
+            for (int p = 0; p < PHASES; ++p) {
+                sum_ms[p] = sum2_ms[p] = max_ms[p] = 0.0;
+                std::fill(std::begin(hist[p]), std::end(hist[p]), 0.0);
+            }
+            hist_n = 0;
+            report_frame = 0;
+            return true;
+        }
+    } prof;
+
     // ── Derived constants ────────────────────────────────────────────────────
     static constexpr double SIM_DT = 1.0 / 240.0;
     double render_dt         = 1.0 / 60.0;
@@ -107,6 +178,8 @@ struct GameLoop {
 
         // Propagate config to EffectManager
         effects.particle_count = cfg.particle_count;
+        manual_judge.hitfx_color_perfect = ctx.respack.cfg.color_perfect;
+        manual_judge.hitfx_color_good = ctx.respack.cfg.color_good;
 
         // Timing constants
         render_dt = args.record_output.empty() ? (1.0 / 60.0)
@@ -133,9 +206,13 @@ struct GameLoop {
             rc.output     = args.record_output;
             rc.preset_name= args.record_preset;
             rc.codec      = args.record_codec;
+            rc.hw_type    = args.record_hw;
             rc.fps        = args.record_fps;
             rc.width      = args.record_w;
             rc.height     = args.record_h;
+            rc.capture_width = args.record_capture_w;
+            rc.capture_height = args.record_capture_h;
+            rc.queue_depth = args.record_queue_depth;
             rc.start_time = args.record_start;
             rc.end_time   = args.record_end;
             rc.audio_path = args.audio_path;
@@ -153,6 +230,8 @@ struct GameLoop {
         // Screenshot directory
         if (!args.screenshot_dir.empty())
             std::filesystem::create_directories(args.screenshot_dir);
+
+        prof.init();
     }
 
     // ── run_frame() ──────────────────────────────────────────────────────────
@@ -228,13 +307,16 @@ struct GameLoop {
             if (!result_shown && t >= 0.0) {
                 if (replay_player.enabled()) {
                     replay_player.tick(t, chart.notes, states, judge,
-                        [&](int nidx, float ft, const std::string&) {
+                        [&](int nidx, float ft, const std::string& g) {
+                            if (nidx < 0 || nidx >= static_cast<int>(chart.notes.size())) return;
+                            const auto& note = chart.notes[nidx];
+                            math::RGB col = resolve_hitfx_color(note, g);
                             for (const auto& ns : render::build_frame(
                                      ft, chart, states, judge, cfg).notes) {
                                 if (ns.nid == nidx) {
-                                    effects.add_hitfx(ns.wx, ns.wy, ft, ns.color);
+                                    effects.add_hitfx(ns.wx, ns.wy, ft, col);
                                     effects.add_particle_burst(ns.wx, ns.wy,
-                                        ft * 1000.0, 500.0, ns.color);
+                                        ft * 1000.0, 500.0, col);
                                     break;
                                 }
                             }
@@ -266,7 +348,8 @@ struct GameLoop {
                         ls.x, ls.y, ls.cos_rot, ls.sin_rot, ls.scroll, n,
                         n.scroll_hit, false, cfg.note_flow_speed_multiplier,
                         cfg.note_speed_mul_affects_travel, n.kind == 3);  // holds clamp to line
-                    auto col = render::note_type_color(n.kind);
+                    auto g = judge.grade_window(n.t_hit, t).value_or("PERFECT");
+                    auto col = resolve_hitfx_color(n, g);
                     effects.add_hitfx(pos.x, pos.y, t, col);
                     if (cfg.show_particles)
                         effects.add_particle_burst(pos.x, pos.y, t * 1000.0,
@@ -284,7 +367,8 @@ struct GameLoop {
             engine::hold_finalize(states, idx_next, t, cfg.hold_tail_tol,
                                   engine::Judge::BAD, judge);
             effects.hold_tick_fx(states, idx_next, t,
-                                 cfg.hold_fx_interval_ms, chart.lines);
+                                 cfg.hold_fx_interval_ms, chart.lines,
+                                 ctx.respack.cfg.color_perfect);
             effects.update(t, t * 1000.0, ctx.respack.cfg.hitfx_duration);
         }
 
@@ -293,11 +377,14 @@ struct GameLoop {
         headless_sub = 0;
 
         // === 7. BUILD FRAME SNAPSHOT ===
+        uint64_t t0_build = prof.now();
         auto frame = render::build_frame(t, chart, states, judge, cfg);
+        uint64_t t1_build = prof.now();
 
         // === 8. RENDER ===
         ctx.window.begin_frame();
 
+        uint64_t t0_trail = prof.now();
         if (ctx.motion_blur.enabled()) {
             ctx.bg.draw(ctx.batch, cfg.bg_dim);
             ctx.motion_blur.begin_accumulate(ctx.window.ren);
@@ -307,20 +394,27 @@ struct GameLoop {
                 ctx.motion_blur.begin_subframe(ctx.window.ren);
                 auto sub_fr = (t_sub == t) ? frame
                     : render::build_frame(t_sub, chart, states, judge, cfg);
+                uint64_t t0_scene = prof.now();
                 render_scene_at(t_sub, sub_fr);
+                prof.record(1, t0_scene, prof.now());
                 ctx.motion_blur.add_subframe(ctx.window.ren, ctx.motion_blur.sample_weight(i));
             }
             ctx.motion_blur.composite(ctx.window.ren);
         } else if (ctx.trail.enabled()) {
             ctx.trail.begin_frame(ctx.window.ren);
+            uint64_t t0_scene = prof.now();
             render_scene_at(t, frame);
+            prof.record(1, t0_scene, prof.now());
             render::RenderTarget::unbind(ctx.window.ren);
             ctx.bg.draw(ctx.batch, cfg.bg_dim);
             ctx.trail.composite(ctx.window.ren);
         } else {
             ctx.bg.draw(ctx.batch, cfg.bg_dim);
+            uint64_t t0_scene = prof.now();
             render_scene_at(t, frame);
+            prof.record(1, t0_scene, prof.now());
         }
+        uint64_t t1_trail = prof.now();
 
         ctx.hud_ren.draw(ctx.batch, frame.hud, fps_display);
 
@@ -332,13 +426,24 @@ struct GameLoop {
                                playable_notes, W, H, elapsed * 1.5);
         }
 
+        uint64_t t0_present = prof.now();
         ctx.window.end_frame();
+        uint64_t t1_present = prof.now();
 
         // === 9. VIDEO CAPTURE ===
+        uint64_t t0_readback = prof.now();
         if (is_recording) do_capture();
+        uint64_t t1_readback = prof.now();
 
         // === 10. SCREENSHOT ===
         if (!args.screenshot_dir.empty()) do_screenshot();
+
+        // Record profiling stats
+        prof.record(0, t0_build,    t1_build);
+        prof.record(2, t0_trail,    t1_trail);
+        prof.record(3, t0_readback, t1_readback);
+        prof.record(4, t0_present,  t1_present);
+        prof.end_frame(args.profile);
 
         return !ctx.window.quit_requested;
     }
@@ -394,6 +499,12 @@ private:
         return lo;
     }
 
+    math::RGB resolve_hitfx_color(const Note& note, const std::string& grade) const {
+        if (note.tint_hitfx_rgb) return *note.tint_hitfx_rgb;
+        if (grade == "GOOD" || grade == "BAD") return ctx.respack.cfg.color_good;
+        return ctx.respack.cfg.color_perfect;
+    }
+
     // Record into DrawList and execute via SdlExecutor.
     void render_scene_at(double t_r, const render::FrameSnapshot& fr) {
         // Adaptive reserve: reuse last-frame command count to avoid realloc
@@ -425,6 +536,8 @@ private:
         effects       = engine::EffectManager{};
         effects.particle_count = cfg.particle_count;
         manual_judge  = engine::ManualJudge{};
+        manual_judge.hitfx_color_perfect = ctx.respack.cfg.color_perfect;
+        manual_judge.hitfx_color_good = ctx.respack.cfg.color_good;
         replay_player.cursor = 0;
         ctx.reload_audio(chart.offset);
     }
@@ -437,7 +550,12 @@ private:
             return;
         }
         ctx.window.read_pixels_rgba(readback_rgba.data());
-        recorder.capture_rgba(readback_rgba.data(), W, H);
+        if (!recorder.capture_rgba(readback_rgba.data(), W, H)) {
+            std::cerr << "[Record] Capture failed, stopping recorder\n";
+            recorder.finish();
+            is_recording = false;
+            return;
+        }
         if (++record_log_frames % static_cast<int>(args.record_fps) == 0)
             recorder.log_progress(t, chart_end);
     }

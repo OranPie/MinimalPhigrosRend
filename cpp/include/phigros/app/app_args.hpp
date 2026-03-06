@@ -23,6 +23,7 @@ struct AppArgs {
     bool        benchmark           = false;
     int         benchmark_iterations = 10;
     bool        play_mode           = false;
+    bool        profile             = false;  // --profile: print per-phase frame timings
     std::string save_replay_path;
     std::string play_replay_path;
     std::string backend             = "sdl";
@@ -31,8 +32,11 @@ struct AppArgs {
     std::string record_output;
     std::string record_preset       = "balanced";
     std::string record_codec;
+    std::string record_hw;
     double      record_fps          = 60.0;
     int         record_w            = 0, record_h = 0;
+    int         record_capture_w    = 0, record_capture_h = 0;
+    int         record_queue_depth  = 6;
     double      record_start        = -1.0;
     double      record_end          = 0.0;
     // Compile
@@ -73,6 +77,7 @@ inline AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--score-only")  { args.score_only = true; args.headless = true; }
         else if (a == "--benchmark")   { args.benchmark = true; args.score_only = true; args.headless = true; }
         else if (a == "--benchmark-iterations" && i+1 < argc) args.benchmark_iterations = std::atoi(argv[++i]);
+        else if (a == "--profile")     args.profile = true;
         else if (a == "--play")        args.play_mode = true;
         else if (a == "--save-replay"  && i+1 < argc) args.save_replay_path = argv[++i];
         else if (a == "--play-replay"  && i+1 < argc) args.play_replay_path = argv[++i];
@@ -83,6 +88,7 @@ inline AppArgs parse_args(int argc, char* argv[]) {
         }
         else if (a == "--record-preset"     && i+1 < argc) args.record_preset = argv[++i];
         else if (a == "--record-codec"      && i+1 < argc) args.record_codec  = argv[++i];
+        else if (a == "--record-hw"         && i+1 < argc) args.record_hw     = argv[++i];
         else if (a == "--record-fps"        && i+1 < argc) args.record_fps    = std::atof(argv[++i]);
         else if (a == "--record-resolution" && i+1 < argc) {
             std::string res = argv[++i];
@@ -91,6 +97,17 @@ inline AppArgs parse_args(int argc, char* argv[]) {
                 args.record_w = std::atoi(res.substr(0, x).c_str());
                 args.record_h = std::atoi(res.substr(x + 1).c_str());
             }
+        }
+        else if (a == "--record-capture-resolution" && i+1 < argc) {
+            std::string res = argv[++i];
+            auto x = res.find('x');
+            if (x != std::string::npos) {
+                args.record_capture_w = std::atoi(res.substr(0, x).c_str());
+                args.record_capture_h = std::atoi(res.substr(x + 1).c_str());
+            }
+        }
+        else if (a == "--record-queue-depth" && i+1 < argc) {
+            args.record_queue_depth = std::atoi(argv[++i]);
         }
         else if (a == "--record-start"  && i+1 < argc) args.record_start = std::atof(argv[++i]);
         else if (a == "--record-end"    && i+1 < argc) args.record_end   = std::atof(argv[++i]);
@@ -146,15 +163,19 @@ inline void print_usage(const char* prog) {
         "BENCHMARK / ANALYSIS\n"
         "  --benchmark               Benchmark engine (implies --score-only)\n"
         "  --benchmark-iterations N  Benchmark runs (default 10)\n"
+        "  --profile                 Print per-phase frame timing stats every 60 frames\n"
         "  --info    (-i)            Print chart metadata and exit\n"
         "  --list-charts <dir>       Discover and list all charts under dir\n"
         "\n"
         "RECORDING\n"
         "  --record <output.mp4>     Record video (headless)\n"
         "  --record-preset <name>    fast|balanced|quality|archive\n"
-        "  --record-codec <codec>    libx264|libx265|libvpx-vp9\n"
+        "  --record-codec <codec>    libx264|libx265|libvpx-vp9|h264_nvenc|hevc_nvenc|h264_qsv|h264_vaapi\n"
+        "  --record-hw <type>        nvenc|qsv|vaapi|amf|videotoolbox (sets hw codec if --record-codec is empty)\n"
         "  --record-fps <fps>        Recording framerate (default 60)\n"
-        "  --record-resolution WxH   Recording resolution\n"
+        "  --record-resolution WxH   Output video resolution\n"
+        "  --record-capture-resolution WxH  Render/readback resolution before encoding\n"
+        "  --record-queue-depth N    Async encoder queue depth (<=1 = sync write)\n"
         "  --record-start <sec>      Start recording at time\n"
         "  --record-end <sec>        Stop recording at time\n"
         "\n"

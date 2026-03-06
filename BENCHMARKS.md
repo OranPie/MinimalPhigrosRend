@@ -9,6 +9,7 @@
 | OS           | Linux                           |
 | Build        | Release (-O3)                   |
 | C++ standard | C++17                           |
+| SDL version  | SDL2 2.0.20 (MESA software renderer) |
 
 ## 1. Chart Inventory
 
@@ -282,6 +283,63 @@ Cost of one `eval(t)` call for a judge-line's `pos_x` track. Piecewise = `std::f
 | Rrharil.TeamGrimoire/AT.json           | 14.36 ns          | 6.29 ns              | 2.28×  |
 | Rrharil.TeamGrimoire/IN.json           | 18.27 ns          | 6.46 ns              | 2.83×  |
 
+## 11. SDL Render Performance
+
+Per-frame phase timing (headless hidden window, no recording) and video recording throughput.
+Renderer: SDL2 (MESA software, AMD EPYC 7702). Use `--profile` to reproduce.
+
+> **Key change vs previous build:** `SDL_RENDERER_PRESENTVSYNC` was hardcoded on all SDL2 modes,
+> capping `SDL_RenderPresent` at the monitor refresh rate (~60 Hz). With a 60 fps recording target
+> that meant ≤ 1× real-time throughput. VSync is now disabled automatically for recording/headless
+> runs, and hit-effect circle segments were converted from O(width) `SDL_RenderDrawLineF` loops to
+> single textured quads.
+
+### 11a. Per-Frame Phase Timings — 1280×720 headless
+
+Measured over 60-frame windows, steady-state (after warmup). `render_scene` = DrawList execution;
+`trail_blur` = trail composite or motion-blur accumulation; `present` = `SDL_RenderPresent` (GPU flush + display).
+
+| Chart                                  | build_frame avg | render_scene avg | trail_blur avg | present avg | present p95 |
+| -------------------------------------- | --------------- | ---------------- | -------------- | ----------- | ----------- |
+| ATHAZA.LeaF/AT.json                    | 0.06 ms         | 0.00 ms          | 0.00 ms        | 0.88 ms     | 2.23 ms     |
+| ATHAZA.LeaF/IN.json                    | 0.06 ms         | 0.00 ms          | 0.01 ms        | 1.03 ms     | 2.02 ms     |
+| AbsoluTedisoRdeR.AcuteDisarray/AT.json | 0.06 ms         | 0.01 ms          | 0.01 ms        | 1.02 ms     | 2.60 ms     |
+| AbsoluTedisoRdeR.AcuteDisarray/IN.json | 0.07 ms         | 0.01 ms          | 0.01 ms        | 1.18 ms     | 3.52 ms     |
+| Aleph0.LeaF/IN.json                    | 0.04 ms         | 0.01 ms          | 0.01 ms        | 1.13 ms     | 2.48 ms     |
+| BetterGraphicAnimation.ルゼ/IN.json  | 0.03 ms         | 0.00 ms          | 0.01 ms        | 0.97 ms     | 1.55 ms     |
+
+Key: `build_frame` (CPU snapshot) and `render_scene` (DrawList→SDL calls) are negligible (<0.1 ms).
+Dominant cost is `SDL_RenderPresent` (~1 ms), which includes MESA software rasterisation flush.
+
+### 11b. Recording Throughput — libx264 balanced, 60 fps output
+
+Pipeline: render → `SDL_RenderPresent` → `SDL_RenderReadPixels` (GPU→CPU) → async FFmpeg pipe.
+
+| Resolution  | Chart                                  | Rec fps  | Avg write | Realtime× |
+| ----------- | -------------------------------------- | -------- | --------- | ---------- |
+| 640 × 360   | ATHAZA.LeaF/AT.json                    | 259 fps  | 3.57 ms   | **4.3×**  |
+| 640 × 360   | ATHAZA.LeaF/IN.json                    | 256 fps  | 3.61 ms   | **4.3×**  |
+| 640 × 360   | AbsoluTedisoRdeR.AcuteDisarray/AT.json | 231 fps  | 3.98 ms   | **3.9×**  |
+| 640 × 360   | Aleph0.LeaF/IN.json                    | 254 fps  | 3.68 ms   | **4.2×**  |
+| 640 × 360   | BetterGraphicAnimation.ルゼ/IN.json  | 254 fps  | 3.71 ms   | **4.2×**  |
+| 1280 × 720  | ATHAZA.LeaF/AT.json                    | 75 fps   | 12.80 ms  | 1.3×      |
+| 1280 × 720  | AbsoluTedisoRdeR.AcuteDisarray/AT.json | 77 fps   | 12.36 ms  | 1.3×      |
+| 1280 × 720  | Aleph0.LeaF/IN.json                    | 81 fps   | 11.75 ms  | 1.4×      |
+| 1920 × 1080 | ATHAZA.LeaF/AT.json                    | 34 fps   | 28.17 ms  | 0.57×     |
+| 1920 × 1080 | AbsoluTedisoRdeR.AcuteDisarray/AT.json | 35 fps   | 27.36 ms  | 0.58×     |
+
+**Before/after — VSync fix impact:**
+
+| Mode       | Before (VSync on)              | After (VSync off)           | Δ        |
+| ---------- | ------------------------------ | --------------------------- | --------- |
+| 640 × 360  | ≤ 60 fps (≤ 1× real-time)      | ~250 fps (4.2× real-time)  | **+320%** |
+| 1280 × 720 | ≤ 60 fps (≤ 1× real-time)      | ~78 fps (1.3× real-time)   | **+30%**  |
+| 1920×1080  | ≤ 60 fps (≤ 1× real-time)      | ~35 fps (bottleneck: MESA) | — (MESA limited) |
+
+> At 1280×720 and above, throughput is now limited by MESA software renderer pixel readback
+> (~12–28 ms/frame). Hardware GPU acceleration would remove this floor. Use `--width 640 --height 360`
+> for fastest software-render recording.
+
 ## Summary
 
 | Area                   | Headline Result                                        |
@@ -289,6 +347,9 @@ Cost of one `eval(t)` call for a judge-line's `pos_x` track. Piecewise = `std::f
 | Parser throughput      | 12 MB/s peak (worst-case: 1319.0 ms for largest chart) |
 | Engine simulation      | Up to 919× realtime at 240Hz step                     |
 | build_frame (renderer) | Up to 988× realtime; worst-case mean 8.07 μs/frame   |
+| SDL render (present)   | ~0.9–1.2 ms/frame avg at 1280×720 (MESA)              |
+| Recording 640×360      | ~250 fps avg (4.2× real-time); was ≤ 60 fps (VSync)  |
+| Recording 1280×720     | ~78 fps avg (1.3× real-time); MESA readback limited   |
 | Mod application        | All mods < 60.66 μs; range 26–61 μs                |
 | PHBC load speedup      | Up to 42.7× faster than source chart load             |
 | Note struct size       | 168 bytes; NoteState 72 bytes                          |

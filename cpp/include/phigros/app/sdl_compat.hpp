@@ -35,10 +35,12 @@ inline SDL_Window* create_window(const char* title, int w, int h, bool hidden) {
     return SDL_CreateWindow(title, w, h, flags);
 }
 
-inline SDL_Renderer* create_renderer(SDL_Window* win, bool software) {
+inline SDL_Renderer* create_renderer(SDL_Window* win, bool software, bool vsync = true) {
     if (software)
         return SDL_CreateRenderer(win, "software");
-    return SDL_CreateRenderer(win, nullptr);
+    SDL_Renderer* ren = SDL_CreateRenderer(win, nullptr);
+    if (ren) SDL_SetRenderVSync(ren, vsync ? 1 : 0);
+    return ren;
 }
 
 inline void set_render_logical_size(SDL_Renderer* ren, int w, int h) {
@@ -87,7 +89,15 @@ inline void set_draw_color(SDL_Renderer* ren, uint8_t r, uint8_t g,
 inline bool read_pixels_rgba(SDL_Renderer* ren, uint8_t* out, int w, int h) {
     SDL_Surface* surf = SDL_RenderReadPixels(ren, nullptr);
     if (!surf) return false;
-    // Convert to RGBA32 if needed
+    // Fast path: surface is already RGBA32 (common for hardware renderers)
+    if (surf->format == SDL_PIXELFORMAT_RGBA32) {
+        SDL_LockSurface(surf);
+        std::memcpy(out, surf->pixels, static_cast<size_t>(w) * h * 4);
+        SDL_UnlockSurface(surf);
+        SDL_DestroySurface(surf);
+        return true;
+    }
+    // Slow path: need format conversion
     SDL_Surface* rgba = SDL_ConvertSurface(surf, SDL_PIXELFORMAT_RGBA32);
     SDL_DestroySurface(surf);
     if (!rgba) return false;
@@ -150,6 +160,7 @@ inline bool handle_event_window_resized(const SDL_Event& e, int& w, int& h) {
 namespace phigros::app::sdl {
 
 inline bool sdl_init() {
+    SDL_SetHint(SDL_HINT_RENDER_BATCHING, "1");
     return SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER) == 0;
 }
 
@@ -160,11 +171,11 @@ inline SDL_Window* create_window(const char* title, int w, int h, bool hidden) {
                             SDL_WINDOWPOS_CENTERED, w, h, flags);
 }
 
-inline SDL_Renderer* create_renderer(SDL_Window* win, bool software) {
+inline SDL_Renderer* create_renderer(SDL_Window* win, bool software, bool vsync = true) {
     if (software)
         return SDL_CreateRenderer(win, -1, SDL_RENDERER_SOFTWARE);
     return SDL_CreateRenderer(win, -1,
-        SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+        SDL_RENDERER_ACCELERATED | (vsync ? SDL_RENDERER_PRESENTVSYNC : 0));
 }
 
 inline void set_render_logical_size(SDL_Renderer* ren, int w, int h) {
