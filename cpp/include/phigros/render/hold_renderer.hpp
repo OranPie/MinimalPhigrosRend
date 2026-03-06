@@ -27,7 +27,8 @@ struct HoldRenderer {
         for (auto& ns : notes) {
             if (!ns.is_hold) continue;
 
-            const auto& tex = respack.note_texture(3, false);
+            const bool mh = ns.mh;
+            const auto& tex = respack.note_texture(3, mh);
             if (!tex.valid()) continue;
 
             double ws = base_note_w * note_scale_x * ns.size_px;
@@ -46,8 +47,8 @@ struct HoldRenderer {
             double angle = std::atan2(dy, dx) - M_PI * 0.5; // perpendicular to direction
 
             // Atlas dimensions
-            int head_h = respack.cfg.hold_head_h;
-            int tail_h = respack.cfg.hold_tail_h;
+            int head_h = mh ? respack.cfg.hold_head_h_mh : respack.cfg.hold_head_h;
+            int tail_h = mh ? respack.cfg.hold_tail_h_mh : respack.cfg.hold_tail_h;
             int body_h = tex.h - head_h - tail_h;
             if (body_h <= 0) body_h = 1;
 
@@ -73,8 +74,8 @@ struct HoldRenderer {
             {
                 double cx = tx + ux * tail_screen_h * 0.5;
                 double cy = ty + uy * tail_screen_h * 0.5;
-                SDL_Rect src{0, head_h + body_h, tex.w, tail_h};
-                batch.draw_texture_region(tex,
+                batch.draw_texture_region(
+                    tex,
                     0, head_h + body_h, tex.w, tail_h,
                     cx, cy, ws, tail_screen_h, angle, r, g, b, a);
             }
@@ -83,7 +84,8 @@ struct HoldRenderer {
             if (body_screen_h > 0.5) {
                 double cx = tx + ux * (tail_screen_h + body_screen_h * 0.5);
                 double cy = ty + uy * (tail_screen_h + body_screen_h * 0.5);
-                batch.draw_texture_region(tex,
+                batch.draw_texture_region(
+                    tex,
                     0, head_h, tex.w, body_h,
                     cx, cy, ws, body_screen_h, angle, r, g, b, a);
             }
@@ -96,7 +98,8 @@ struct HoldRenderer {
                 uint8_t ga = static_cast<uint8_t>(a * 0.35);
                 if (ga > 0) {
                     batch.set_blend_mode(SDL_BLENDMODE_ADD);
-                    batch.draw_texture_region(tex,
+                    batch.draw_texture_region(
+                        tex,
                         0, head_h, tex.w, body_h,
                         glow_cx, glow_cy, ws * 1.15, body_screen_h,
                         angle, r, g, b, ga);
@@ -109,7 +112,8 @@ struct HoldRenderer {
             {
                 double cx = hx - ux * head_screen_h * 0.5;
                 double cy = hy - uy * head_screen_h * 0.5;
-                batch.draw_texture_region(tex,
+                batch.draw_texture_region(
+                    tex,
                     0, 0, tex.w, head_h,
                     cx, cy, ws, head_screen_h, angle, r, g, b, a);
             }

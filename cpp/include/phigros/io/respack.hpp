@@ -100,6 +100,7 @@ inline void parse_hex_color(const std::string& s, math::RGB& rgb, uint8_t& alpha
 // Parse info.yml (minimal YAML parser matching Python's _parse_info_yml_minimal)
 inline RespackConfig parse_info_yml(const std::string& text) {
     RespackConfig cfg;
+    bool saw_hold_atlas_mh = false;
     std::istringstream iss(text);
     std::string line;
     while (std::getline(iss, line)) {
@@ -114,8 +115,11 @@ inline RespackConfig parse_info_yml(const std::string& text) {
 
         // Trim
         auto trim = [](std::string& s) {
-            while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) s.erase(s.begin());
-            while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\r')) s.pop_back();
+            while (!s.empty() && (s.front() == ' ' || s.front() == '\t'))
+                s.erase(s.begin());
+            while (!s.empty() &&
+                   (s.back() == ' ' || s.back() == '\t' || s.back() == '\r'))
+                s.pop_back();
         };
         trim(key); trim(val);
         // Remove quotes
@@ -140,7 +144,8 @@ inline RespackConfig parse_info_yml(const std::string& text) {
             if (bracket != std::string::npos &&
                 (std::sscanf(val.c_str() + bracket, "[%d, %d]", &a, &b) == 2 ||
                  std::sscanf(val.c_str() + bracket, "[%d,%d]", &a, &b) == 2)) {
-                cfg.hold_head_h = a; cfg.hold_tail_h = b;
+                cfg.hold_tail_h = a;
+                cfg.hold_head_h = b;
             }
         }
         else if (key == "holdAtlasMH") {
@@ -149,7 +154,9 @@ inline RespackConfig parse_info_yml(const std::string& text) {
             if (bracket != std::string::npos &&
                 (std::sscanf(val.c_str() + bracket, "[%d, %d]", &a, &b) == 2 ||
                  std::sscanf(val.c_str() + bracket, "[%d,%d]", &a, &b) == 2)) {
-                cfg.hold_head_h_mh = a; cfg.hold_tail_h_mh = b;
+                cfg.hold_tail_h_mh = a;
+                cfg.hold_head_h_mh = b;
+                saw_hold_atlas_mh = true;
             }
         }
         else if (key == "hitFxDuration") cfg.hitfx_duration = std::atof(val.c_str());
@@ -162,6 +169,10 @@ inline RespackConfig parse_info_yml(const std::string& text) {
         else if (key == "holdCompact") cfg.hold_compact = (val == "true");
         else if (key == "colorPerfect") parse_hex_color(val, cfg.color_perfect, cfg.alpha_perfect);
         else if (key == "colorGood") parse_hex_color(val, cfg.color_good, cfg.alpha_good);
+    }
+    if (!saw_hold_atlas_mh) {
+        cfg.hold_tail_h_mh = cfg.hold_tail_h;
+        cfg.hold_head_h_mh = cfg.hold_head_h;
     }
     return cfg;
 }
