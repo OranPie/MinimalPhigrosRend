@@ -124,6 +124,7 @@ int main(int argc, char* argv[]) {
     // ── Load config; apply CLI overrides ──────────────────────────────────────
     config::RenderConfig cfg;
     if (!args.config_path.empty()) cfg = config::load_config(args.config_path);
+    if (!args.backend.empty()) cfg.backend = args.backend;
     if (args.audio_offset_ms != 0.0) cfg.audio_offset_ms = args.audio_offset_ms;
     if (args.window_w > 0) cfg.window_w = args.window_w;
     if (args.window_h > 0) cfg.window_h = args.window_h;

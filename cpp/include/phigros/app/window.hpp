@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <cstring>
 #include <vector>
+#include <algorithm>
+#include <cctype>
 #include "stb_image_write.h"
 
 namespace phigros::app {
@@ -16,8 +18,19 @@ struct Window {
     bool resized = false;
     std::vector<SDL_Event> last_events;  // all events from last poll_events()
 
+    static std::string normalize_backend(std::string backend) {
+        std::transform(backend.begin(), backend.end(), backend.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (backend == "software") return "sdl_sw";
+        if (backend == "hardware") return "sdl_hw";
+        if (backend == "bgfx") return "sdl_hw"; // Current runtime uses SDL renderer path.
+        if (backend.empty()) return "sdl";
+        return backend;
+    }
+
     void init(int width, int height, const std::string& title = "Phigros Renderer",
-              bool headless = false, bool vsync = true) {
+              bool headless = false, bool vsync = true,
+              const std::string& backend = "sdl") {
         w = width; h = height;
         if (!sdl::sdl_init())
             throw std::runtime_error(std::string("SDL_Init: ") + SDL_GetError());
@@ -25,8 +38,14 @@ struct Window {
         win = sdl::create_window(title.c_str(), w, h, headless);
         if (!win) throw std::runtime_error(std::string("SDL_CreateWindow: ") + SDL_GetError());
 
-        ren = sdl::create_renderer(win, false, vsync);
-        if (!ren) ren = sdl::create_renderer(win, true, false); // software fallback, no vsync concern
+        const std::string b = normalize_backend(backend);
+        if (b != "sdl" && b != "sdl_hw" && b != "sdl_sw")
+            throw std::runtime_error("Unsupported backend '" + backend +
+                                     "'. Supported: sdl, sdl_hw, sdl_sw.");
+
+        const bool prefer_software = (b == "sdl_sw");
+        ren = sdl::create_renderer(win, prefer_software, prefer_software ? false : vsync);
+        if (!ren) ren = sdl::create_renderer(win, !prefer_software, false); // fallback path
         if (!ren) throw std::runtime_error(std::string("SDL_CreateRenderer: ") + SDL_GetError());
 
         SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);

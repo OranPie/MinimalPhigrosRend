@@ -154,7 +154,7 @@ mod 格式参考请见 `docs/ADVANCE_MODE_GUIDE.md`。
 |------|------|
 | `--headless` | 不显示窗口 |
 | `--screenshot-dir <dir>` | 每 5 秒保存一张 PNG 截图到指定目录 |
-| `--backend <name>` | 渲染后端（`sdl`） |
+| `--backend <name>` | 渲染后端（`sdl`、`sdl_hw`、`sdl_sw`） |
 | `--version` / `-v` | 打印版本后退出 |
 | `--help` / `-h` | 打印帮助信息后退出 |
 

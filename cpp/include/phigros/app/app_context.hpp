@@ -79,10 +79,11 @@ struct AppContext {
         namespace fs = std::filesystem;
 
         const bool vsync = !headless && !no_vsync;
-        window.init(W, H, "Phigros Renderer", headless, vsync);
+        window.init(W, H, "Phigros Renderer", headless, vsync, cfg.backend);
         std::cout << "[Window] " << W << "x" << H
                   << (headless ? " (headless)" : "")
-                  << (vsync ? "" : " (vsync off)") << "\n";
+                  << (vsync ? "" : " (vsync off)")
+                  << " backend=" << window.normalize_backend(cfg.backend) << "\n";
 
         batch.init(window.ren);
         draw_list.reserve(2048);

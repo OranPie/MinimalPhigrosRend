@@ -581,6 +581,65 @@ static void test_mods() {
     CHECK(chart.notes[2].tint_rgb.r == 255, "Gradient end=white");
 }
 
+static void test_config_and_culling() {
+    std::cout << "\n=== Config/backend + no_cull_enter_time tests ===\n";
+
+    // Config parsing: top-level/backend + render/no_cull_enter_time.
+    const auto cfg_path = std::filesystem::temp_directory_path() / "phigros_cfg_test.jsonc";
+    {
+        std::ofstream f(cfg_path.string());
+        f << "{\n"
+          << "  \"backend\": \"sdl_sw\",\n"
+          << "  \"render\": {\n"
+          << "    \"no_cull_enter_time\": false\n"
+          << "  }\n"
+          << "}\n";
+    }
+    auto cfg = config::load_config(cfg_path.string());
+    std::filesystem::remove(cfg_path);
+    CHECK(cfg.backend == "sdl_sw", "Config parses backend from JSON");
+    CHECK(cfg.no_cull_enter_time == false, "Config parses render.no_cull_enter_time");
+
+    // Build a tiny chart with one note that enters at t=2.0 and hits at t=3.0.
+    ChartData chart;
+    Line line;
+    line.lid = 0;
+    line.pos_x = [](double) { return 640.0; };
+    line.pos_y = [](double) { return 360.0; };
+    line.rot   = [](double) { return 0.0; };
+    line.alpha = [](double) { return 1.0; };
+    line.scroll_fn = [](double) { return 0.0; };
+    chart.lines.push_back(line);
+
+    Note note;
+    note.nid = 1;
+    note.line_id = 0;
+    note.kind = 1;
+    note.t_enter = 2.0;
+    note.t_hit = 3.0;
+    note.t_end = 3.0;
+    note.scroll_hit = 0.0;
+    chart.notes.push_back(note);
+    chart.finalize();
+
+    std::vector<NoteState> states(chart.notes.size());
+    states[0].note = &chart.notes[0];
+    engine::Judge judge;
+
+    cfg.window_w = 1280;
+    cfg.window_h = 720;
+    cfg.no_cull = false;
+    cfg.no_cull_screen = true; // isolate enter-time culling
+
+    cfg.no_cull_enter_time = false;
+    auto culled = render::build_frame(1.0, chart, states, judge, cfg);
+    CHECK(culled.notes.empty(), "no_cull_enter_time=false culls note before t_enter");
+
+    cfg.no_cull_enter_time = true;
+    auto shown = render::build_frame(1.0, chart, states, judge, cfg);
+    CHECK(shown.notes.size() == 1, "no_cull_enter_time=true keeps note before t_enter");
+}
+
 // ---- Full autoplay simulation ----
 static bool run_autoplay(const std::string& path, int W, int H) {
     std::cout << "\n--- " << path << " ---\n";
@@ -846,6 +905,7 @@ int main(int argc, char* argv[]) {
     test_judge_boundaries();
     test_replay_roundtrip();
     test_edge_cases();
+    test_config_and_culling();
 
     // Auto-discover mode: --auto-discover <dir>
     if (argc >= 3 && std::string(argv[1]) == "--auto-discover") {

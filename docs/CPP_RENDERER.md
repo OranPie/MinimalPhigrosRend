@@ -155,7 +155,7 @@ Pre-compiling reduces load time on repeated runs and is recommended for playlist
 |------|-------------|
 | `--headless` | No visible window |
 | `--screenshot-dir <dir>` | Save PNG screenshots every 5 s |
-| `--backend <name>` | Renderer backend (`sdl`) |
+| `--backend <name>` | Renderer backend (`sdl`, `sdl_hw`, `sdl_sw`) |
 | `--version` / `-v` | Print version and exit |
 | `--help` / `-h` | Print help and exit |
 

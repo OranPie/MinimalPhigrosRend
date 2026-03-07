@@ -1,0 +1,2 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar qc libphic_core.a CMakeFiles/phic_core.dir/core/src/parser.cpp.o CMakeFiles/phic_core.dir/core/src/engine.cpp.o CMakeFiles/phic_core.dir/core/src/mods.cpp.o CMakeFiles/phic_core.dir/core/src/mod_config_json.cpp.o CMakeFiles/phic_core.dir/core/src/video_recorder.cpp.o
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ranlib libphic_core.a

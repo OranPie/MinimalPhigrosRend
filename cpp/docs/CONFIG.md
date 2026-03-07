@@ -13,6 +13,7 @@ All options are loaded from a JSONC file (JSON with `//` and `#` line comments).
 
 ```jsonc
 {
+  "backend":  "sdl",
   "window":   { ... },
   "render":   { ... },
   "assets":   { ... },
@@ -21,6 +22,16 @@ All options are loaded from a JSONC file (JSON with `//` and `#` line comments).
   "debug":    { ... }
 }
 ```
+
+---
+
+## `backend` (top-level)
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `backend` | string | `"sdl3_bgfx"` | Runtime renderer mode. Supported runtime values are `sdl`/`sdl_hw` (prefer hardware) and `sdl_sw` (prefer software). |
+
+You may also set `render.backend`; top-level `backend` takes precedence.
 
 ---
 

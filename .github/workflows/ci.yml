@@ -55,10 +55,21 @@ jobs:
         run: cmake --build cpp/build --parallel
 
       - name: Test — engine (autoplay + compile round-trip)
-        run: cpp/build/test_engine --auto-discover charts
+        run: |
+          if [ -d charts ]; then
+            cpp/build/test_engine --auto-discover charts
+          else
+            echo "charts/ not found; running unit tests only"
+            cpp/build/test_engine
+          fi
 
       - name: Test — parsers
-        run: cpp/build/test_parser charts
+        run: |
+          if [ -d charts ]; then
+            cpp/build/test_parser charts
+          else
+            echo "charts/ not found; skipping parser chart-scan tests"
+          fi
 
       - name: Test — easing
         run: cpp/build/test_easing

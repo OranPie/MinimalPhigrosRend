@@ -26,7 +26,7 @@ struct AppArgs {
     bool        profile             = false;  // --profile: print per-phase frame timings
     std::string save_replay_path;
     std::string play_replay_path;
-    std::string backend             = "sdl";
+    std::string backend;
     double      audio_offset_ms     = 0.0;
     // Recording
     std::string record_output;
@@ -187,7 +187,7 @@ inline void print_usage(const char* prog) {
         "  --headless                No visible window\n"
         "  --screenshot-dir <dir>    Save PNG screenshots periodically\n"
         "  --screenshot-fps <fps>    Screenshot rate in chart-seconds (default 0.2 = every 5s)\n"
-        "  --backend <name>          Renderer backend (sdl)\n"
+        "  --backend <name>          Renderer backend (sdl|sdl_hw|sdl_sw)\n"
         "  --version  (-v)           Print version and exit\n"
         "  --help     (-h)           Print this help and exit\n"
         "\n"

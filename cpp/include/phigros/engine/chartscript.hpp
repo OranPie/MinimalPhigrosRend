@@ -770,6 +770,8 @@ inline void apply_config_overrides(config::RenderConfig& cfg, const nlohmann::js
         if (ov.contains(k) && !ov[k].is_null()) v = ov[k].get<bool>(); };
     auto get_i = [&](const char* k, int& v) {
         if (ov.contains(k) && !ov[k].is_null()) v = ov[k].get<int>(); };
+    auto get_s = [&](const char* k, std::string& v) {
+        if (ov.contains(k) && !ov[k].is_null()) v = ov[k].get<std::string>(); };
     auto opt_d = [&](const char* k, std::optional<double>& v) {
         if (ov.contains(k) && !ov[k].is_null()) v = ov[k].get<double>(); };
     auto opt_i = [&](const char* k, std::optional<int>& v) {
@@ -785,12 +787,15 @@ inline void apply_config_overrides(config::RenderConfig& cfg, const nlohmann::js
     get_d("note_alpha",              cfg.note_alpha);
     get_d("overrender",              cfg.overrender);
     get_b("no_cull",                 cfg.no_cull);
+    get_b("no_cull_screen",          cfg.no_cull_screen);
+    get_b("no_cull_enter_time",      cfg.no_cull_enter_time);
     get_b("note_outline",            cfg.note_outline);
     get_b("show_hitfx",              cfg.show_hitfx);
     get_b("show_particles",          cfg.show_particles);
     get_i("particle_count",          cfg.particle_count);
     get_d("hitfx_intensity",         cfg.hitfx_intensity);
     get_i("bg_dim",                  cfg.bg_dim);
+    get_s("backend",                 cfg.backend);
 
     opt_d("trail_alpha",             cfg.trail_alpha);
     opt_i("trail_frames",            cfg.trail_frames);

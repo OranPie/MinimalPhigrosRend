@@ -124,6 +124,13 @@ inline FrameSnapshot build_frame(
         if (ns.judged && note.kind != 3) return;
         if (ns.miss) return;
         if (note.line_id < 0 || note.line_id >= static_cast<int>(n_lines)) return;
+
+        // Optional t_enter/t_end culling for dense charts.
+        if (!cfg.no_cull && !cfg.no_cull_enter_time) {
+            if (t < note.t_enter) return;
+            if (t > note.t_end + 0.5) return;
+        }
+
         const auto& ls = (static_cast<size_t>(note.line_id) < ls_arr.size())
             ? ls_arr[note.line_id]
             : ls_heap[note.line_id];

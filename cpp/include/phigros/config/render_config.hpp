@@ -146,6 +146,7 @@ inline RenderConfig load_config(const std::string& path) {
         get_b("show_particles", cfg.show_particles);
         get_i("particle_count", cfg.particle_count);
         get_d("hitfx_intensity", cfg.hitfx_intensity);
+        get_s("backend", cfg.backend);
 
         if (r.contains("line_alpha_affects_notes") && !r["line_alpha_affects_notes"].is_null()) {
             std::string s = r["line_alpha_affects_notes"].get<std::string>();
@@ -202,6 +203,9 @@ inline RenderConfig load_config(const std::string& path) {
         auto& d = j["debug"];
         if (d.contains("basic_debug") && !d["basic_debug"].is_null()) cfg.basic_debug = d["basic_debug"].get<bool>();
     }
+
+    if (j.contains("backend") && !j["backend"].is_null())
+        cfg.backend = j["backend"].get<std::string>();
 
     return cfg;
 }
