@@ -118,8 +118,25 @@ See `docs/CHARTSCRIPT.md` for the full chartscript DSL reference.
 |------|-------------|
 | `--compile <out.phbc>` | Compile chart to binary and exit |
 | `--sample-rate <Hz>` | Sampling rate for compile (default: 240) |
+| `--compress [zlib\|lzma]` | Compress payload (default: zlib). LZMA requires `USE_LZMA` build flag |
+| `--encrypt [aes-gcm\|aes-cbc\|chacha20\|xor]` | Encrypt payload (default: aes-gcm). Requires `--password` |
+| `--password <passphrase>` | Password for encryption/decryption (PBKDF2 key derivation) |
 
 Pre-compiling reduces load time on repeated runs and is recommended for playlists.
+
+#### PHBC v2 Format
+
+When `--compress` or `--encrypt` is used, the output is written as **PHBC v2**. The 52-byte header
+is identical to v1 (readable without a password), but the payload may be compressed and/or encrypted.
+The reader auto-detects v1 vs v2 via the version field and flags bitfield.
+
+- **Compression**: zlib (via miniz, always available) or LZMA (optional, `cmake -DUSE_LZMA=ON`).
+  Typical compression ratio: 3–6× for zlib, 5–10× for LZMA.
+- **Encryption**: AES-256-GCM (default, AEAD), AES-256-CBC, ChaCha20-Poly1305, or XOR.
+  AES/ChaCha require OpenSSL (`cmake -DUSE_ENCRYPTION=ON`). XOR is always available.
+- **Order**: compress → encrypt on write; decrypt → decompress on read.
+
+To load an encrypted `.phbc` at runtime, pass `--password <passphrase>`.
 
 ### Recording
 

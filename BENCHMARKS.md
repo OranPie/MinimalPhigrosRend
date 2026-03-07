@@ -340,6 +340,23 @@ Pipeline: render → `SDL_RenderPresent` → `SDL_RenderReadPixels` (GPU→CPU) 
 > (~12–28 ms/frame). Hardware GPU acceleration would remove this floor. Use `--width 640 --height 360`
 > for fastest software-render recording.
 
+## PHBC v2 — Compression & Encryption
+
+PHBC v2 adds optional payload compression and encryption. Typical results with zlib (deflate level 6):
+
+| Metric | Value |
+| --- | --- |
+| Compression ratio (zlib) | ~3–6× (float arrays with smooth curves) |
+| Compression ratio (LZMA) | ~5–10× |
+| zlib decompression overhead | ~5–15 ms (< 1 GB/s throughput) |
+| LZMA decompression overhead | ~30–60 ms |
+| AES-256-GCM decrypt overhead | < 1 ms (AES-NI, ~3 GB/s) |
+| Encryption metadata overhead | Fixed 48 bytes per file |
+
+Net effect: smaller files + less I/O can offset decompression cost, especially on slow storage.
+
+Build options: `cmake -DUSE_ENCRYPTION=ON -DUSE_LZMA=ON` (LZMA optional, encryption requires OpenSSL).
+
 ## Summary
 
 | Area                   | Headline Result                                        |

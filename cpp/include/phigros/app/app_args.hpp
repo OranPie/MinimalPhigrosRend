@@ -42,6 +42,11 @@ struct AppArgs {
     // Compile
     std::string compile_output;
     float       compile_sample_rate = 240.0f;
+    bool        compile_compress    = false;
+    std::string compile_compress_algo; // "zlib" or "lzma" (default: zlib)
+    bool        compile_encrypt     = false;
+    std::string compile_encrypt_algo;  // "aes-gcm", "aes-cbc", "chacha20", "xor" (default: aes-gcm)
+    std::string password;              // for --encrypt / loading encrypted .phbc
     // Mods (applied to chart after load, in order)
     std::vector<std::string> mod_paths; // --mod <file.mod.json>, repeatable
     // Chart script (declarative playlist DSL)
@@ -113,6 +118,15 @@ inline AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--record-end"    && i+1 < argc) args.record_end   = std::atof(argv[++i]);
         else if (a == "--compile"       && i+1 < argc) { args.compile_output = argv[++i]; args.headless = true; }
         else if (a == "--sample-rate"   && i+1 < argc) args.compile_sample_rate = static_cast<float>(std::atof(argv[++i]));
+        else if (a == "--compress") {
+            args.compile_compress = true;
+            if (i+1 < argc && argv[i+1][0] != '-') args.compile_compress_algo = argv[++i];
+        }
+        else if (a == "--encrypt") {
+            args.compile_encrypt = true;
+            if (i+1 < argc && argv[i+1][0] != '-') args.compile_encrypt_algo = argv[++i];
+        }
+        else if (a == "--password"      && i+1 < argc) args.password = argv[++i];
         else if (a == "--mod"           && i+1 < argc) args.mod_paths.push_back(argv[++i]);
         else if (a == "--script"        && i+1 < argc) args.script_path = argv[++i];
         else if (a == "--list-charts"   && i+1 < argc) { args.list_charts_dir = argv[++i]; args.headless = true; }
@@ -142,6 +156,10 @@ inline void print_usage(const char* prog) {
         "COMPILE\n"
         "  --compile <out.phbc>      Compile chart to binary and exit\n"
         "  --sample-rate <Hz>        Sampling rate for --compile (default 240)\n"
+        "  --compress [zlib|lzma]    Compress payload (default: zlib)\n"
+        "  --encrypt [aes-gcm|aes-cbc|chacha20|xor]\n"
+        "                            Encrypt payload (default: aes-gcm)\n"
+        "  --password <passphrase>   Password for encryption/decryption\n"
         "\n"
         "MODS\n"
         "  --mod <file.mod.json>     Apply a mod to the chart (repeatable, applied in order)\n"

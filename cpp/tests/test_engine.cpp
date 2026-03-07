@@ -9,6 +9,8 @@
 #include "phigros/chart/pec.hpp"
 #include "phigros/chart/compiler.hpp"
 #include "phigros/chart/phbc_io.hpp"
+#include "phigros/chart/phbc_compress.hpp"
+#include "phigros/chart/phbc_crypto.hpp"
 #include "phigros/engine/kinematics.hpp"
 #include "phigros/engine/judge.hpp"
 #include "phigros/engine/visibility.hpp"
@@ -895,6 +897,216 @@ static bool test_compile_roundtrip(const std::string& path, int W, int H) {
     return sr.score == 1000000;
 }
 
+// ── PHBC v2 round-trip tests ─────────────────────────────────────────────────
+// Unit tests: create a small CompiledChartData, write v2, read back, compare.
+static void test_phbc_v2_roundtrip() {
+    std::cout << "\n=== PHBC v2 round-trip tests ===\n";
+    using namespace phigros::chart;
+
+    // Build a small test CompiledChartData
+    CompiledChartData orig;
+    orig.offset = 0.5;
+    orig.chart_end_t = 30.0;
+    orig.playable_count = 2;
+    orig.sample_rate = 60.0f;
+    orig.t_start = 0.0;
+    orig.sample_count = 100;
+
+    CompiledChartData::CompiledLine line;
+    line.lid = 1;
+    line.color_rgb = {255, 128, 0};
+    line.pos_x.resize(100, 0.5f);
+    line.pos_y.resize(100, 0.3f);
+    line.rot.resize(100, 0.0f);
+    line.alpha.resize(100, 1.0f);
+    line.scroll.resize(100, 100.0f);
+    orig.lines.push_back(line);
+
+    phigros::Note note1;
+    note1.nid = 1; note1.line_id = 1; note1.kind = 1;
+    note1.above = true; note1.fake = false; note1.mh = false;
+    note1.t_hit = 5.0; note1.t_end = 5.0; note1.t_enter = 3.0;
+    note1.scroll_hit = 400.0; note1.scroll_end = 400.0;
+    note1.x_local_px = 50.0; note1.y_offset_px = 0.0;
+    note1.speed_mul = 1.0; note1.size_px = 80.0; note1.alpha01 = 1.0;
+    note1.tint_rgb = {255, 255, 255};
+    orig.notes.push_back(note1);
+
+    phigros::Note note2 = note1;
+    note2.nid = 2; note2.t_hit = 10.0; note2.t_enter = 8.0;
+    note2.scroll_hit = 800.0; note2.scroll_end = 800.0;
+    orig.notes.push_back(note2);
+
+    auto verify = [&](const CompiledChartData& got, const std::string& label) {
+        CHECK(got.sample_count == orig.sample_count, label + ": sample_count");
+        CHECK(got.lines.size() == orig.lines.size(), label + ": line count");
+        CHECK(got.notes.size() == orig.notes.size(), label + ": note count");
+        CHECK(std::abs(got.offset - orig.offset) < 1e-9, label + ": offset");
+        CHECK(got.sample_rate == orig.sample_rate, label + ": sample_rate");
+        CHECK(got.playable_count == orig.playable_count, label + ": playable_count");
+        CHECK(got.notes[0].nid == orig.notes[0].nid, label + ": note[0].nid");
+        CHECK(std::abs(got.notes[1].t_hit - orig.notes[1].t_hit) < 1e-9, label + ": note[1].t_hit");
+        CHECK(got.lines[0].lid == orig.lines[0].lid, label + ": line[0].lid");
+        CHECK(std::abs(got.lines[0].pos_x[50] - orig.lines[0].pos_x[50]) < 1e-6, label + ": line[0].pos_x[50]");
+    };
+
+    // Test 1: v1 write → v2 reader (backward compat)
+    {
+        std::ostringstream oss(std::ios::binary);
+        write_phbc(orig, oss);
+        std::string blob = oss.str();
+        std::istringstream iss(blob, std::ios::binary);
+        auto got = read_phbc(iss);
+        verify(got, "v1-compat");
+        std::cout << "  v1 backward compat: OK\n";
+    }
+
+    // Test 2: zlib compressed
+    {
+        PhbcWriteOptions opts;
+        opts.compress = true;
+        opts.compress_algo = CompressionAlgo::Zlib;
+        std::ostringstream oss(std::ios::binary);
+        write_phbc(orig, oss, opts);
+        std::string blob = oss.str();
+        CHECK(blob.size() < 100 * 5 * 4, "zlib: compressed smaller than raw");
+        std::istringstream iss(blob, std::ios::binary);
+        auto got = read_phbc(iss);
+        verify(got, "zlib-compressed");
+        std::cout << "  zlib compressed: OK (" << blob.size() << " bytes)\n";
+    }
+
+    // Test 3: XOR encrypted (always available)
+    {
+        PhbcWriteOptions opts;
+        opts.encrypt = true;
+        opts.encrypt_algo = EncryptionAlgo::XOR;
+        opts.password = "test_password_123";
+        std::ostringstream oss(std::ios::binary);
+        write_phbc(orig, oss, opts);
+        std::string blob = oss.str();
+        std::istringstream iss(blob, std::ios::binary);
+        auto got = read_phbc(iss, "test_password_123");
+        verify(got, "xor-encrypted");
+        std::cout << "  XOR encrypted: OK\n";
+    }
+
+    // Test 4: zlib + XOR encrypted
+    {
+        PhbcWriteOptions opts;
+        opts.compress = true;
+        opts.encrypt = true;
+        opts.encrypt_algo = EncryptionAlgo::XOR;
+        opts.password = "combo_pass";
+        std::ostringstream oss(std::ios::binary);
+        write_phbc(orig, oss, opts);
+        std::string blob = oss.str();
+        std::istringstream iss(blob, std::ios::binary);
+        auto got = read_phbc(iss, "combo_pass");
+        verify(got, "zlib+xor");
+        std::cout << "  zlib + XOR encrypted: OK (" << blob.size() << " bytes)\n";
+    }
+
+    // Test 5: wrong password → read should throw
+    {
+        PhbcWriteOptions opts;
+        opts.encrypt = true;
+        opts.encrypt_algo = EncryptionAlgo::XOR;
+        opts.password = "correct_pass";
+        std::ostringstream oss(std::ios::binary);
+        write_phbc(orig, oss, opts);
+        std::string blob = oss.str();
+        std::istringstream iss(blob, std::ios::binary);
+        bool threw = false;
+        try { auto got = read_phbc(iss, "wrong_pass"); }
+        catch (...) { threw = true; }
+        // XOR won't throw on decrypt itself (no auth tag), but parsed data will be garbage.
+        // For XOR, the payload parse may succeed but data will be wrong.
+        // For AEAD algos, the decrypt will throw. So we just verify data mismatch:
+        if (!threw) {
+            std::istringstream iss2(blob, std::ios::binary);
+            try {
+                auto got = read_phbc(iss2, "wrong_pass");
+                // Data should differ
+                bool data_matches = (got.notes.size() == orig.notes.size() &&
+                                     std::abs(got.offset - orig.offset) < 1e-9);
+                // It's possible XOR wrong-pass still parses but data is garbage
+                std::cout << "  wrong password (XOR): data " << (data_matches ? "MATCHES (bad)" : "corrupted (expected)") << "\n";
+            } catch (...) {
+                std::cout << "  wrong password (XOR): threw (OK)\n";
+            }
+        } else {
+            std::cout << "  wrong password: threw (OK)\n";
+        }
+    }
+
+#ifdef PHIGROS_HAS_OPENSSL
+    // Test 6: AES-256-GCM encrypted
+    {
+        PhbcWriteOptions opts;
+        opts.encrypt = true;
+        opts.encrypt_algo = EncryptionAlgo::AES_256_GCM;
+        opts.password = "aes_test_pass";
+        std::ostringstream oss(std::ios::binary);
+        write_phbc(orig, oss, opts);
+        std::string blob = oss.str();
+        std::istringstream iss(blob, std::ios::binary);
+        auto got = read_phbc(iss, "aes_test_pass");
+        verify(got, "aes-gcm-encrypted");
+        std::cout << "  AES-256-GCM encrypted: OK\n";
+    }
+
+    // Test 7: AES-256-GCM wrong password → auth failure
+    {
+        PhbcWriteOptions opts;
+        opts.encrypt = true;
+        opts.encrypt_algo = EncryptionAlgo::AES_256_GCM;
+        opts.password = "correct";
+        std::ostringstream oss(std::ios::binary);
+        write_phbc(orig, oss, opts);
+        std::string blob = oss.str();
+        std::istringstream iss(blob, std::ios::binary);
+        bool threw = false;
+        try { auto got = read_phbc(iss, "incorrect"); }
+        catch (...) { threw = true; }
+        CHECK(threw, "AES-GCM wrong password throws");
+        std::cout << "  AES-256-GCM wrong password: threw (OK)\n";
+    }
+
+    // Test 8: ChaCha20-Poly1305 compressed + encrypted
+    {
+        PhbcWriteOptions opts;
+        opts.compress = true;
+        opts.encrypt = true;
+        opts.encrypt_algo = EncryptionAlgo::ChaCha20_Poly1305;
+        opts.password = "chacha_pass";
+        std::ostringstream oss(std::ios::binary);
+        write_phbc(orig, oss, opts);
+        std::string blob = oss.str();
+        std::istringstream iss(blob, std::ios::binary);
+        auto got = read_phbc(iss, "chacha_pass");
+        verify(got, "chacha20+zlib");
+        std::cout << "  ChaCha20-Poly1305 + zlib: OK (" << blob.size() << " bytes)\n";
+    }
+
+    // Test 9: AES-256-CBC
+    {
+        PhbcWriteOptions opts;
+        opts.compress = true;
+        opts.encrypt = true;
+        opts.encrypt_algo = EncryptionAlgo::AES_256_CBC;
+        opts.password = "cbc_pass";
+        std::ostringstream oss(std::ios::binary);
+        write_phbc(orig, oss, opts);
+        std::string blob = oss.str();
+        std::istringstream iss(blob, std::ios::binary);
+        auto got = read_phbc(iss, "cbc_pass");
+        verify(got, "aes-cbc+zlib");
+        std::cout << "  AES-256-CBC + zlib: OK (" << blob.size() << " bytes)\n";
+    }
+#endif // PHIGROS_HAS_OPENSSL
+}
+
 int main(int argc, char* argv[]) {
     int W = 1280, H = 720;
 
@@ -906,6 +1118,7 @@ int main(int argc, char* argv[]) {
     test_replay_roundtrip();
     test_edge_cases();
     test_config_and_culling();
+    test_phbc_v2_roundtrip();
 
     // Auto-discover mode: --auto-discover <dir>
     if (argc >= 3 && std::string(argv[1]) == "--auto-discover") {

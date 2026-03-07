@@ -53,12 +53,13 @@ static std::string detect_format(const std::string& path) {
 }
 
 static phigros::ChartData load_chart(const std::string& path,
-                                      const phigros::config::RenderConfig& cfg) {
+                                      const phigros::config::RenderConfig& cfg,
+                                      const std::string& password = "") {
     // Binary compiled chart
     if (path.size() >= 5 && path.substr(path.size() - 5) == ".phbc") {
         std::ifstream f(path, std::ios::binary);
         if (!f) throw std::runtime_error("Cannot open .phbc file: " + path);
-        auto compiled = phigros::chart::read_phbc(f);
+        auto compiled = phigros::chart::read_phbc(f, password);
         return compiled.to_chart_data(); // is_compiled = true → skip precompute_t_enter
     }
     std::string fmt = detect_format(path);
@@ -140,12 +141,29 @@ int main(int argc, char* argv[]) {
         if (p.size() >= 5 && p.substr(p.size()-5) == ".phbc") {
             std::ifstream f(p, std::ios::binary);
             if (!f) { std::cerr << "[Error] Cannot open: " << p << "\n"; return 1; }
-            auto compiled = phigros::chart::read_phbc(f);
+            auto compiled = phigros::chart::read_phbc(f, args.password);
             f.seekg(0, std::ios::end);
             double mb = static_cast<double>(f.tellg()) / 1e6;
             double dur = compiled.chart_end_t - compiled.offset;
+
+            // Re-read header to get version/flags for display
+            f.seekg(4);  // skip magic
+            uint16_t ver = 0, fl = 0;
+            f.read(reinterpret_cast<char*>(&ver), 2);
+            f.read(reinterpret_cast<char*>(&fl), 2);
+
             printf("[Info] %s\n", p.c_str());
-            printf("  Format:       .phbc v1\n");
+            printf("  Format:       .phbc v%d", (int)ver);
+            if (ver >= 2 && fl != 0) {
+                auto calgo = phigros::chart::phbc_compression_from_flags(fl);
+                bool enc   = (fl & phigros::chart::PHBC_FLAG_ENCRYPTED) != 0;
+                auto ealgo = phigros::chart::phbc_encryption_from_flags(fl);
+                if (calgo != phigros::chart::CompressionAlgo::None)
+                    printf(" (compressed: %s)", phigros::chart::compression_name(calgo));
+                if (enc)
+                    printf(" (encrypted: %s)", phigros::chart::encryption_name(ealgo));
+            }
+            printf("\n");
             printf("  Lines:        %d\n", (int)compiled.lines.size());
             printf("  Notes:        %d  (%d playable)\n",
                    (int)compiled.notes.size(), compiled.playable_count);
@@ -267,7 +285,7 @@ int main(int argc, char* argv[]) {
 
                 ChartData item_chart;
                 try {
-                    item_chart = load_chart(item.input, item_cfg);
+                    item_chart = load_chart(item.input, item_cfg, args.password);
                 } catch (const std::exception& e) {
                     std::cerr << "[ChartScript] Failed to load: " << e.what() << "\n";
                     ++cursor; continue;
@@ -383,7 +401,7 @@ int main(int argc, char* argv[]) {
 
     // Load chart
     std::cout << "[Chart] Loading: " << args.chart_path << "\n";
-    auto chart = load_chart(args.chart_path, cfg);
+    auto chart = load_chart(args.chart_path, cfg, args.password);
     std::cout << "[Chart] Lines=" << chart.lines.size()
               << " Notes=" << chart.notes.size()
               << " Offset=" << chart.offset << "s\n";
@@ -429,9 +447,38 @@ int main(int argc, char* argv[]) {
 
         std::ofstream f(args.compile_output, std::ios::binary);
         if (!f) { std::cerr << "[Error] Cannot open output: " << args.compile_output << "\n"; return 1; }
-        phigros::chart::write_phbc(compiled, f);
+
+        if (args.compile_compress || args.compile_encrypt) {
+            phigros::chart::PhbcWriteOptions wopts;
+            wopts.compress = args.compile_compress;
+            if (!args.compile_compress_algo.empty() && args.compile_compress_algo == "lzma")
+                wopts.compress_algo = phigros::chart::CompressionAlgo::Lzma;
+            wopts.encrypt = args.compile_encrypt;
+            if (!args.compile_encrypt_algo.empty()) {
+                if (args.compile_encrypt_algo == "aes-cbc")
+                    wopts.encrypt_algo = phigros::chart::EncryptionAlgo::AES_256_CBC;
+                else if (args.compile_encrypt_algo == "chacha20")
+                    wopts.encrypt_algo = phigros::chart::EncryptionAlgo::ChaCha20_Poly1305;
+                else if (args.compile_encrypt_algo == "xor")
+                    wopts.encrypt_algo = phigros::chart::EncryptionAlgo::XOR;
+                // default: AES_256_GCM
+            }
+            wopts.password = args.password;
+            phigros::chart::write_phbc(compiled, f, wopts);
+
+            std::string features;
+            if (wopts.compress)
+                features += std::string("compressed:") + phigros::chart::compression_name(wopts.compress_algo);
+            if (wopts.encrypt) {
+                if (!features.empty()) features += ", ";
+                features += std::string("encrypted:") + phigros::chart::encryption_name(wopts.encrypt_algo);
+            }
+            std::cout << "[Compile] Written v2 (" << features << "): " << args.compile_output << "\n";
+        } else {
+            phigros::chart::write_phbc(compiled, f);
+            std::cout << "[Compile] Written: " << args.compile_output << "\n";
+        }
         f.flush();
-        std::cout << "[Compile] Written: " << args.compile_output << "\n";
         return 0;
     }
 

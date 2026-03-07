@@ -117,8 +117,24 @@ mod 格式参考请见 `docs/ADVANCE_MODE_GUIDE.md`。
 |------|------|
 | `--compile <out.phbc>` | 将谱面编译为二进制文件后退出 |
 | `--sample-rate <Hz>` | 编译时的采样率（默认：240） |
+| `--compress [zlib\|lzma]` | 压缩载荷（默认：zlib）。LZMA 需要 `USE_LZMA` 构建选项 |
+| `--encrypt [aes-gcm\|aes-cbc\|chacha20\|xor]` | 加密载荷（默认：aes-gcm）。需要 `--password` |
+| `--password <passphrase>` | 加密/解密密码（PBKDF2 密钥派生） |
 
 预编译可减少多次运行时的加载时间，推荐在播放列表中使用。
+
+#### PHBC v2 格式
+
+使用 `--compress` 或 `--encrypt` 时，输出为 **PHBC v2** 格式。52 字节头部与 v1 完全兼容
+（无需密码即可读取），但载荷可能被压缩和/或加密。读取器通过版本号和标志位自动识别 v1 与 v2。
+
+- **压缩**：zlib（通过 miniz，始终可用）或 LZMA（可选，`cmake -DUSE_LZMA=ON`）。
+  典型压缩比：zlib 3–6 倍，LZMA 5–10 倍。
+- **加密**：AES-256-GCM（默认，AEAD）、AES-256-CBC、ChaCha20-Poly1305 或 XOR。
+  AES/ChaCha 需要 OpenSSL（`cmake -DUSE_ENCRYPTION=ON`）。XOR 始终可用。
+- **顺序**：写入时先压缩后加密；读取时先解密后解压。
+
+运行时加载加密的 `.phbc` 文件需传入 `--password <passphrase>`。
 
 ### 录制
 

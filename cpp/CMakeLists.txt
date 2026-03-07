@@ -21,6 +21,57 @@ endif()
 # --- SDL3 via FetchContent ---
 option(USE_SDL3 "Build with SDL3 instead of SDL2" ON)
 option(USE_BGFX "Build with bgfx GPU renderer" ON)
+option(USE_LIBAV "Use libavcodec/libavformat for video encoding (no FFmpeg subprocess)" ON)
+option(USE_LZMA "Build with LZMA compression support for PHBC v2" OFF)
+option(USE_ENCRYPTION "Build with OpenSSL encryption support for PHBC v2" ON)
+
+# --- libav (FFmpeg dev libs) ---
+if(USE_LIBAV AND NOT EMSCRIPTEN)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(LIBAV QUIET libavcodec libavformat libavutil libswscale libswresample)
+    endif()
+    if(LIBAV_FOUND)
+        set(HAS_LIBAV TRUE)
+        message(STATUS "[libav] Found: avcodec ${libavcodec_VERSION}")
+    else()
+        set(HAS_LIBAV FALSE)
+        message(STATUS "[libav] Not found, falling back to FFmpeg subprocess encoder")
+    endif()
+else()
+    set(HAS_LIBAV FALSE)
+endif()
+
+# --- LZMA (optional, for PHBC v2 LZMA compression) ---
+if(USE_LZMA AND NOT EMSCRIPTEN)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(LIBLZMA QUIET liblzma)
+    endif()
+    if(LIBLZMA_FOUND)
+        set(HAS_LZMA TRUE)
+        message(STATUS "[lzma] Found: liblzma ${LIBLZMA_VERSION}")
+    else()
+        set(HAS_LZMA FALSE)
+        message(STATUS "[lzma] Not found, PHBC LZMA compression disabled")
+    endif()
+else()
+    set(HAS_LZMA FALSE)
+endif()
+
+# --- OpenSSL (optional, for PHBC v2 encryption) ---
+if(USE_ENCRYPTION AND NOT EMSCRIPTEN)
+    find_package(OpenSSL QUIET)
+    if(OpenSSL_FOUND)
+        set(HAS_OPENSSL TRUE)
+        message(STATUS "[openssl] Found: OpenSSL ${OPENSSL_VERSION}")
+    else()
+        set(HAS_OPENSSL FALSE)
+        message(STATUS "[openssl] Not found, PHBC encryption limited to XOR only")
+    endif()
+else()
+    set(HAS_OPENSSL FALSE)
+endif()
 
 if(USE_SDL3 AND NOT EMSCRIPTEN)
     set(SDL_SHARED OFF CACHE BOOL "" FORCE)
@@ -69,6 +120,24 @@ endif()
 # --- Vendor include directories ---
 set(VENDOR_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor")
 
+# --- Vendor libraries (stb, miniz, miniaudio) — defined early for core_lib ---
+add_library(vendor_stb STATIC src/vendor/vendor_impl.cpp)
+target_include_directories(vendor_stb PUBLIC "${VENDOR_DIR}/stb")
+
+add_library(vendor_miniz STATIC
+    "${VENDOR_DIR}/miniz/miniz.c"
+    "${VENDOR_DIR}/miniz/miniz_tdef.c"
+    "${VENDOR_DIR}/miniz/miniz_tinfl.c"
+    "${VENDOR_DIR}/miniz/miniz_zip.c"
+)
+target_include_directories(vendor_miniz PUBLIC "${VENDOR_DIR}/miniz")
+
+add_library(vendor_miniaudio STATIC src/vendor/audio_impl.cpp)
+target_include_directories(vendor_miniaudio PUBLIC "${VENDOR_DIR}/miniaudio")
+if(NOT EMSCRIPTEN)
+    target_link_libraries(vendor_miniaudio PUBLIC dl pthread m)
+endif()
+
 # --- Core library (math + types + parsers) ---
 add_library(phigros_core_lib STATIC
     src/chart/official.cpp
@@ -76,9 +145,27 @@ add_library(phigros_core_lib STATIC
     src/chart/pec.cpp
     src/chart/compiler.cpp
     src/chart/phbc_io.cpp
+    src/chart/phbc_compress.cpp
+    src/chart/phbc_crypto.cpp
 )
 target_include_directories(phigros_core_lib PUBLIC include)
+target_include_directories(phigros_core_lib PRIVATE "${VENDOR_DIR}/miniz")
 target_link_libraries(phigros_core_lib PUBLIC nlohmann_json::nlohmann_json)
+target_link_libraries(phigros_core_lib PRIVATE vendor_miniz)
+
+if(HAS_LZMA)
+    target_include_directories(phigros_core_lib PRIVATE ${LIBLZMA_INCLUDE_DIRS})
+    if(LIBLZMA_LIBRARY_DIRS)
+        target_link_directories(phigros_core_lib PRIVATE ${LIBLZMA_LIBRARY_DIRS})
+    endif()
+    target_link_libraries(phigros_core_lib PRIVATE ${LIBLZMA_LIBRARIES})
+    target_compile_definitions(phigros_core_lib PRIVATE PHIGROS_HAS_LZMA=1)
+endif()
+
+if(HAS_OPENSSL)
+    target_link_libraries(phigros_core_lib PRIVATE OpenSSL::Crypto)
+    target_compile_definitions(phigros_core_lib PRIVATE PHIGROS_HAS_OPENSSL=1)
+endif()
 
 # --- Main executable (headless) ---
 add_executable(phigros_core src/main.cpp)
@@ -98,6 +185,9 @@ endif()
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_engine.cpp")
     add_executable(test_engine tests/test_engine.cpp)
     target_link_libraries(test_engine PRIVATE phigros_core_lib vendor_miniz)
+    if(HAS_OPENSSL)
+        target_compile_definitions(test_engine PRIVATE PHIGROS_HAS_OPENSSL=1)
+    endif()
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_parser.cpp")
@@ -111,24 +201,6 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/bench.cpp")
     if(UNIX AND NOT APPLE)
         target_link_libraries(bench PRIVATE stdc++fs)
     endif()
-endif()
-
-# --- Vendor libraries (stb, miniz, miniaudio) ---
-add_library(vendor_stb STATIC src/vendor/vendor_impl.cpp)
-target_include_directories(vendor_stb PUBLIC "${VENDOR_DIR}/stb")
-
-add_library(vendor_miniz STATIC
-    "${VENDOR_DIR}/miniz/miniz.c"
-    "${VENDOR_DIR}/miniz/miniz_tdef.c"
-    "${VENDOR_DIR}/miniz/miniz_tinfl.c"
-    "${VENDOR_DIR}/miniz/miniz_zip.c"
-)
-target_include_directories(vendor_miniz PUBLIC "${VENDOR_DIR}/miniz")
-
-add_library(vendor_miniaudio STATIC src/vendor/audio_impl.cpp)
-target_include_directories(vendor_miniaudio PUBLIC "${VENDOR_DIR}/miniaudio")
-if(NOT EMSCRIPTEN)
-    target_link_libraries(vendor_miniaudio PUBLIC dl pthread m)
 endif()
 
 # --- Render executable ---
@@ -196,4 +268,13 @@ endif()
 if(HAS_BGFX)
     target_link_libraries(phigros_render PRIVATE bgfx bx bimg)
     target_compile_definitions(phigros_render PRIVATE PHIGROS_HAS_BGFX=1)
+endif()
+
+if(HAS_LIBAV)
+    target_include_directories(phigros_render PRIVATE ${LIBAV_INCLUDE_DIRS})
+    if(LIBAV_LIBRARY_DIRS)
+        target_link_directories(phigros_render PRIVATE ${LIBAV_LIBRARY_DIRS})
+    endif()
+    target_link_libraries(phigros_render PRIVATE ${LIBAV_LIBRARIES})
+    target_compile_definitions(phigros_render PRIVATE PHIGROS_HAS_LIBAV=1)
 endif()
