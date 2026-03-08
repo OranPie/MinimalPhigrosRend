@@ -34,6 +34,15 @@ struct RenderTarget {
     void blit_to(SDL_Renderer* ren, uint8_t alpha,
                  SDL_BlendMode blend = SDL_BLENDMODE_BLEND) const {
         if (!tex) return;
+        // Textures rendered via SDL render targets are effectively premultiplied-alpha
+        // buffers. Re-blending them with regular SRC_ALPHA causes an extra alpha
+        // multiply (visible as dark/near-black output in motion-blur accumulation).
+        // Use ONE, ONE_MINUS_SRC_ALPHA for "normal" blits of render targets.
+        if (blend == SDL_BLENDMODE_BLEND) {
+            blend = SDL_ComposeCustomBlendMode(
+                SDL_BLENDFACTOR_ONE, SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, SDL_BLENDOPERATION_ADD,
+                SDL_BLENDFACTOR_ONE, SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, SDL_BLENDOPERATION_ADD);
+        }
         SDL_SetTextureAlphaMod(tex, alpha);
         SDL_SetTextureColorMod(tex, 255, 255, 255);
         SDL_SetTextureBlendMode(tex, blend);

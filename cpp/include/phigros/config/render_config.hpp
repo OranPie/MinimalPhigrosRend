@@ -47,6 +47,7 @@ struct RenderConfig {
     bool show_particles = true;
     int  particle_count = 8;         // particles per hit burst
     double hitfx_intensity = 1.0;    // alpha multiplier for all hit effects [0,1]
+    bool hitfx_effect_apply = true;  // true: hitfx participates in trail/motion blur
 
     // Trail effect
     std::optional<double> trail_alpha;
@@ -146,6 +147,7 @@ inline RenderConfig load_config(const std::string& path) {
         get_b("show_particles", cfg.show_particles);
         get_i("particle_count", cfg.particle_count);
         get_d("hitfx_intensity", cfg.hitfx_intensity);
+        get_b("hitfx_effect_apply", cfg.hitfx_effect_apply);
         get_s("backend", cfg.backend);
 
         if (r.contains("line_alpha_affects_notes") && !r["line_alpha_affects_notes"].is_null()) {
@@ -234,6 +236,7 @@ inline nlohmann::json config_to_json(const RenderConfig& cfg) {
     r["show_particles"]             = cfg.show_particles;
     r["particle_count"]             = cfg.particle_count;
     r["hitfx_intensity"]            = cfg.hitfx_intensity;
+    r["hitfx_effect_apply"]         = cfg.hitfx_effect_apply;
     switch (cfg.line_alpha_mode) {
         case LineAlphaMode::Always:  r["line_alpha_affects_notes"] = "always"; break;
         case LineAlphaMode::Off:     r["line_alpha_affects_notes"] = "off"; break;

@@ -792,6 +792,7 @@ inline void apply_config_overrides(config::RenderConfig& cfg, const nlohmann::js
     get_b("note_outline",            cfg.note_outline);
     get_b("show_hitfx",              cfg.show_hitfx);
     get_b("show_particles",          cfg.show_particles);
+    get_b("hitfx_effect_apply",      cfg.hitfx_effect_apply);
     get_i("particle_count",          cfg.particle_count);
     get_d("hitfx_intensity",         cfg.hitfx_intensity);
     get_i("bg_dim",                  cfg.bg_dim);

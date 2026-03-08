@@ -395,19 +395,21 @@ struct GameLoop {
                 auto sub_fr = (t_sub == t) ? frame
                     : render::build_frame(t_sub, chart, states, judge, cfg);
                 uint64_t t0_scene = prof.now();
-                render_scene_at(t_sub, sub_fr);
+                render_scene_at(t_sub, sub_fr, cfg.hitfx_effect_apply);
                 prof.record(1, t0_scene, prof.now());
                 ctx.motion_blur.add_subframe(ctx.window.ren, ctx.motion_blur.sample_weight(i));
             }
             ctx.motion_blur.composite(ctx.window.ren);
+            if (!cfg.hitfx_effect_apply) draw_hitfx_only(t);
         } else if (ctx.trail.enabled()) {
             ctx.trail.begin_frame(ctx.window.ren);
             uint64_t t0_scene = prof.now();
-            render_scene_at(t, frame);
+            render_scene_at(t, frame, cfg.hitfx_effect_apply);
             prof.record(1, t0_scene, prof.now());
             render::RenderTarget::unbind(ctx.window.ren);
             ctx.bg.draw(ctx.batch, cfg.bg_dim);
             ctx.trail.composite(ctx.window.ren);
+            if (!cfg.hitfx_effect_apply) draw_hitfx_only(t);
         } else {
             ctx.bg.draw(ctx.batch, cfg.bg_dim);
             uint64_t t0_scene = prof.now();
@@ -506,7 +508,7 @@ private:
     }
 
     // Record into DrawList and execute via SdlExecutor.
-    void render_scene_at(double t_r, const render::FrameSnapshot& fr) {
+    void render_scene_at(double t_r, const render::FrameSnapshot& fr, bool include_hitfx = true) {
         // Adaptive reserve: reuse last-frame command count to avoid realloc
         static thread_local size_t s_last_dl_sz = 256;
         ctx.draw_list.clear();
@@ -520,11 +522,25 @@ private:
         ctx.note_ren.draw(ctx.batch, ctx.respack, fr.notes, t_r, W, H, cfg.expand_factor);
         ctx.line_ren.draw(ctx.batch, ctx.respack.white_tex, fr.lines, W, H, cfg.expand_factor, /*cover_pass=*/true);
 
+        if (include_hitfx) {
+            ctx.hitfx_ren.draw(ctx.batch, ctx.respack, effects, t_r,
+                               cfg.show_hitfx, cfg.show_particles,
+                               static_cast<float>(cfg.hitfx_intensity),
+                               W, H, cfg.expand_factor);
+        }
+        s_last_dl_sz = ctx.draw_list.cmds.size();
+        ctx.batch.dl = nullptr;
+        render::SdlExecutor::execute(ctx.window.ren, ctx.draw_list);
+    }
+
+    void draw_hitfx_only(double t_r) {
+        if (!cfg.show_hitfx && !cfg.show_particles) return;
+        ctx.draw_list.clear();
+        ctx.batch.dl = &ctx.draw_list;
         ctx.hitfx_ren.draw(ctx.batch, ctx.respack, effects, t_r,
                            cfg.show_hitfx, cfg.show_particles,
                            static_cast<float>(cfg.hitfx_intensity),
                            W, H, cfg.expand_factor);
-        s_last_dl_sz = ctx.draw_list.cmds.size();
         ctx.batch.dl = nullptr;
         render::SdlExecutor::execute(ctx.window.ren, ctx.draw_list);
     }

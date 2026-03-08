@@ -76,6 +76,7 @@
 | `show_particles` | bool | `true` | 在音符判定时渲染粒子爆发效果。 |
 | `particle_count` | int | `8` | 每次打击的粒子数量，范围限制 `[0, 64]`。 |
 | `hitfx_intensity` | float | `1.0` | 所有打击特效的 alpha 倍率，范围限制 `[0, 2]`。 |
+| `hitfx_effect_apply` | bool | `true` | 打击特效是否参与拖影/运动模糊通道。`false` 时会在合成后单独绘制（更清晰、不拖尾）。 |
 
 ### 拖影效果
 
@@ -169,6 +170,7 @@
     "show_particles": true,
     "particle_count": 8,
     "hitfx_intensity": 1.0,
+    "hitfx_effect_apply": true,
 
     // 拖影：取消注释以启用
     // "trail_alpha": 0.4,

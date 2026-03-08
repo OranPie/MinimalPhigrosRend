@@ -86,6 +86,7 @@ Values for `line_alpha_affects_notes`:
 | `show_particles` | bool | `true` | Render particle bursts on note judgement. |
 | `particle_count` | int | `8` | Particles per hit burst. Clamped `[0, 64]`. |
 | `hitfx_intensity` | float | `1.0` | Alpha multiplier for all hit effects. Clamped `[0, 2]`. |
+| `hitfx_effect_apply` | bool | `true` | Whether hit effects participate in trail/motion blur passes. If `false`, hit effects render after compositing (crisp/no smear). |
 
 ### Trail effect
 
@@ -179,6 +180,7 @@ These are set via the C++ API or programmatically:
     "show_particles": true,
     "particle_count": 8,
     "hitfx_intensity": 1.0,
+    "hitfx_effect_apply": true,
 
     // Trail: uncomment to enable
     // "trail_alpha": 0.4,
