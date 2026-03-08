@@ -578,6 +578,7 @@ public:
     void log_progress(double chart_time, double chart_end) const {
         auto s = encoder_.stats_snapshot();
         double pct = (chart_end > 0) ? (chart_time / chart_end * 100.0) : 0.0;
+        pct = std::clamp(pct, 0.0, 100.0);
         double elapsed = s.elapsed_sec();
         double speed = (elapsed > 0) ? chart_time / elapsed : 0.0;
         double remaining = (speed > 0.01 && chart_end > chart_time)

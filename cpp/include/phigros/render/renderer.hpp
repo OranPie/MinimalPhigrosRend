@@ -267,7 +267,7 @@ inline FrameSnapshot build_frame(
 
     // Update HUD — use precomputed metadata to avoid O(N) loops
     auto sr = engine::compute_score(judge.acc_sum, judge.max_combo,
-                                     static_cast<int>(chart.notes.size()));
+                                    chart.playable_count);
     hud::update_hud(frame.hud, sr.score, sr.acc_ratio,
                     judge.combo, judge.max_combo, t,
                     chart.chart_end_t, chart.playable_count);

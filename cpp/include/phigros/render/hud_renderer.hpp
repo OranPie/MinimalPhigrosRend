@@ -219,6 +219,21 @@ struct HudRenderer {
                       W - tw - 16, bar_h + 48, 200, 200, 200, 200);
         }
 
+        // Compact stats panel (top-left): Score / Acc / Combo
+        {
+            char combo_line[64];
+            std::snprintf(combo_line, sizeof(combo_line), "COMBO %d/%d", hud.combo, hud.max_combo);
+            std::string s_score = "SCORE " + hud.score_text;
+            std::string s_acc   = "ACC   " + hud.acc_text;
+            std::string s_combo = combo_line;
+
+            const double x = 16.0;
+            const double y0 = bar_h + 10.0;
+            draw_text(batch, font_small, s_score, x, y0 + 0.0, 235, 235, 235, 210);
+            draw_text(batch, font_small, s_acc,   x, y0 + 22.0, 210, 210, 210, 200);
+            draw_text(batch, font_small, s_combo, x, y0 + 44.0, 210, 210, 210, 200);
+        }
+
         // Combo (top center)
         if (hud.show_combo) {
             char combo_str[32];

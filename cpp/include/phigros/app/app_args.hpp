@@ -18,6 +18,7 @@ struct AppArgs {
     std::string screenshot_dir;
     double      screenshot_fps      = 0.2;   // screenshots per chart-second (default 1/5s)
     double      duration            = 0.0;
+    bool        truncate_at_duration = false;
     bool        headless            = false;
     bool        score_only          = false;
     bool        benchmark           = false;
@@ -76,6 +77,7 @@ inline AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--screenshot-dir" && i+1 < argc) args.screenshot_dir = argv[++i];
         else if (a == "--screenshot-fps" && i+1 < argc) args.screenshot_fps = std::atof(argv[++i]);
         else if (a == "--duration"  && i+1 < argc) args.duration      = std::atof(argv[++i]);
+        else if (a == "--truncate-at-duration") args.truncate_at_duration = true;
         else if (a == "--audio-offset" && i+1 < argc) args.audio_offset_ms = std::atof(argv[++i]);
         else if (a == "--width"     && i+1 < argc) args.window_w      = std::atoi(argv[++i]);
         else if (a == "--height"    && i+1 < argc) args.window_h      = std::atoi(argv[++i]);
@@ -151,6 +153,7 @@ inline void print_usage(const char* prog) {
         "  --play                    Interactive mode (mouse/touch input)\n"
         "  --score-only              Headless engine scoring (fastest)\n"
         "  --duration <sec>          Auto-quit after N seconds\n"
+        "  --truncate-at-duration    Score denominator uses notes fully inside --duration\n"
         "  --audio-offset <ms>       Audio latency compensation\n"
         "  --width <px>              Window width  (overrides config)\n"
         "  --height <px>             Window height (overrides config)\n"

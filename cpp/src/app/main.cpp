@@ -445,6 +445,23 @@ int main(int argc, char* argv[]) {
     }
 
     double chart_end = chart.chart_end_t + 2.0;
+    double simulation_end = chart_end;
+    if (args.duration > 0.0) simulation_end = std::min(simulation_end, args.duration);
+
+    auto count_scoring_notes = [&](double cutoff_t) -> int {
+        if (!(args.truncate_at_duration && args.duration > 0.0)) return chart.playable_count;
+        int cnt = 0;
+        for (const auto& n : chart.notes) {
+            if (n.fake) continue;
+            if (n.kind == static_cast<int>(NoteKind::Hold)) {
+                if (n.t_end <= cutoff_t) ++cnt;
+            } else {
+                if (n.t_hit <= cutoff_t) ++cnt;
+            }
+        }
+        return cnt;
+    };
+    int scoring_notes = count_scoring_notes(simulation_end);
 
     // ── COMPILE MODE ──────────────────────────────────────────────────────────
     if (!args.compile_output.empty()) {
@@ -516,14 +533,14 @@ int main(int argc, char* argv[]) {
                 return lo;
             };
             int inx = 0;
-            for (double tc = chart.offset; tc <= chart_end; tc += SIM_DT) {
+            for (double tc = chart.offset; tc <= simulation_end; tc += SIM_DT) {
                 ap.step(tc, chart.notes, st, chart.lines, j, W, H);
                 inx = fnext(tc);
                 engine::detect_misses(st, inx, tc, engine::Judge::BAD, j);
                 engine::hold_maintenance(st, inx, tc, HOLD_TOL, j);
                 engine::hold_finalize(st, inx, tc, HOLD_TOL, engine::Judge::BAD, j);
             }
-            return engine::compute_score(j.acc_sum, j.max_combo, chart.playable_count);
+            return engine::compute_score(j.acc_sum, j.max_combo, scoring_notes);
         };
 
         if (args.benchmark) {
@@ -540,7 +557,7 @@ int main(int argc, char* argv[]) {
             }
             std::sort(ms.begin(), ms.end());
             double tot = 0; for (double m : ms) tot += m;
-            double len = chart_end - chart.offset;
+            double len = std::max(0.0, simulation_end - chart.offset);
             std::cout << "\n=== Benchmark (" << N << " iters) ==="
                       << "\n  Mean:   " << (tot/N) << " ms"
                       << "\n  Median: " << ms[N/2] << " ms"
@@ -559,24 +576,25 @@ int main(int argc, char* argv[]) {
             return lo;
         };
         int inx = 0;
-        for (double tc = chart.offset; tc <= chart_end; tc += SIM_DT) {
+        for (double tc = chart.offset; tc <= simulation_end; tc += SIM_DT) {
             ap.step(tc, chart.notes, st, chart.lines, j, W, H);
             inx = fnext(tc);
             engine::detect_misses(st, inx, tc, engine::Judge::BAD, j);
             engine::hold_maintenance(st, inx, tc, 0.30, j);
             engine::hold_finalize(st, inx, tc, 0.30, engine::Judge::BAD, j);
         }
-        auto sr = engine::compute_score(j.acc_sum, j.max_combo, chart.playable_count);
+        auto sr = engine::compute_score(j.acc_sum, j.max_combo, scoring_notes);
         std::cout << "\n=== Score Only ===\nScore: " << sr.score
                   << "\nAccuracy: " << (sr.acc_ratio*100.0) << "%"
-                  << "\nMaxCombo: " << j.max_combo << "/" << chart.playable_count
-                  << "\nJudged: "   << j.judged_cnt << "/" << chart.playable_count << "\n";
+                  << "\nMaxCombo: " << j.max_combo << "/" << scoring_notes
+                  << "\nJudged: "   << j.judged_cnt << "/" << scoring_notes << "\n";
         return (sr.score == 1000000) ? 0 : 1;
     }
 
     // ── RENDERING / INTERACTIVE MODE ─────────────────────────────────────────
     std::cout << "[Render] Starting (chart_end=" << chart_end << "s, "
-              << chart.playable_count << " playable notes)\n";
+              << chart.playable_count << " playable notes, scoring_notes="
+              << scoring_notes << ")\n";
 
     AppContext ctx;
     ctx.init(args.chart_path, chart.offset,
@@ -584,7 +602,7 @@ int main(int argc, char* argv[]) {
              args.headless, W, H, cfg,
              /*no_vsync=*/!args.record_output.empty());
 
-    GameLoop gl(ctx, args, cfg, chart, chart.playable_count, chart_end);
+    GameLoop gl(ctx, args, cfg, chart, scoring_notes, chart_end);
 
 #ifdef PHIGROS_WASM
     emscripten_set_main_loop_arg(GameLoop::wasm_tick, &gl, 0, 1);
@@ -600,8 +618,8 @@ int main(int argc, char* argv[]) {
     std::cout << "\n=== " << tag << " ==="
               << "\nScore: "    << sr.score
               << "\nAccuracy: " << (sr.acc_ratio * 100.0) << "%"
-              << "\nMaxCombo: " << gl.judge.max_combo << "/" << chart.playable_count
-              << "\nJudged: "   << gl.judge.judged_cnt << "/" << chart.playable_count << "\n";
+              << "\nMaxCombo: " << gl.judge.max_combo << "/" << scoring_notes
+              << "\nJudged: "   << gl.judge.judged_cnt << "/" << scoring_notes << "\n";
 
     gl.finish();
     ctx.destroy();

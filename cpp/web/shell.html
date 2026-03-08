@@ -6,25 +6,28 @@
 <title>Phigros Renderer</title>
 <style>
 :root {
-  --bg: #0a0a0e;
-  --surface: #181820;
-  --surface2: #1e1e2a;
-  --border: #2e2e40;
-  --text: #ddd;
-  --muted: #777;
-  --accent: #4a90e2;
-  --green: #3a8a50;
-  --danger: #d45454;
-  --phi: #f0c040;
-  --radius: 6px;
+  --bg: #0b1116;
+  --surface: #121c24;
+  --surface2: #1a2731;
+  --border: #2a3d4d;
+  --text: #d8e4ef;
+  --muted: #7990a6;
+  --accent: #3fb3ff;
+  --green: #48b26f;
+  --danger: #e06767;
+  --phi: #ffd26b;
+  --radius: 8px;
   --max-w: 1280px;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { height: 100%; }
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(1200px 600px at 0% -10%, rgba(63,179,255,0.18), transparent 55%),
+    radial-gradient(900px 400px at 100% 0%, rgba(72,178,111,0.14), transparent 50%),
+    linear-gradient(180deg, #091017 0%, #0b1116 45%, #0a0f14 100%);
   color: var(--text);
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: "Avenir Next", "Segoe UI Variable", "SF Pro Text", "Hiragino Sans GB", "Noto Sans", sans-serif;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -48,8 +51,15 @@ body {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 14px 4px;
 }
-#header h1 { font-size: 1.0rem; color: var(--muted); letter-spacing: 0.03em; }
-#ver-badge  { font-size: 0.72rem; color: #444; }
+#header h1 { font-size: 1.05rem; color: var(--text); letter-spacing: 0.03em; font-weight: 700; }
+#header-sub { font-size: 0.68rem; color: var(--muted); margin-top: 2px; }
+#ver-badge  {
+  font-size: 0.72rem; color: #89d0ff;
+  border: 1px solid rgba(63,179,255,0.35);
+  background: rgba(18, 34, 46, 0.7);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
 
 /* ── File row ────────────────────────────────── */
 #file-row {
@@ -77,9 +87,10 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
 }
-.pick-btn:hover                { background: var(--surface2); border-color: var(--accent); }
-.pick-btn.loaded               { border-color: var(--accent); color: var(--accent); }
+.pick-btn:hover                { background: var(--surface2); border-color: var(--accent); transform: translateY(-1px); }
+.pick-btn.loaded               { border-color: var(--accent); color: #9edcff; background: rgba(29, 64, 89, 0.45); }
 
 /* Mod list below the mod slot */
 #mod-list {
@@ -127,6 +138,23 @@ body {
   padding: 8px 12px;
 }
 #btn-fullscreen:hover { background: var(--surface); color: var(--text); }
+
+/* quick presets */
+#preset-row {
+  width: 100%; max-width: var(--max-w);
+  display: flex; gap: 6px; flex-wrap: wrap;
+  padding: 0 12px 6px;
+}
+.preset-btn {
+  border: 1px solid var(--border);
+  background: rgba(20, 32, 43, 0.9);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 0.69rem;
+  cursor: pointer;
+}
+.preset-btn:hover { color: var(--text); border-color: var(--accent); }
 
 /* Volume */
 #vol-wrap {
@@ -302,10 +330,11 @@ kbd {
 /* ── Settings panel ──────────────────────────────── */
 #cfg-wrap { width: 100%; max-width: var(--max-w); }
 details.cfg-panel {
-  background: var(--surface);
+  background: linear-gradient(180deg, rgba(20,31,40,0.92), rgba(16,26,34,0.92));
   border: 1px solid var(--border);
   border-radius: var(--radius);
   margin: 0 12px 6px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.22);
 }
 details.cfg-panel summary {
   padding: 6px 10px;
@@ -340,6 +369,7 @@ details.cfg-panel[open] summary::after { transform: rotate(90deg); }
   border-radius: 3px; color: var(--text); font-size: 0.72rem;
 }
 .cfg-inner label input[type=checkbox] { width: auto; }
+.cfg-inner .wide-select { width: 115px !important; }
 
 /* ── Mobile ─────────────────────────────────────── */
 @media (max-width: 600px) {
@@ -358,7 +388,10 @@ details.cfg-panel[open] summary::after { transform: rotate(90deg); }
 <div id="progress-bar"><div id="progress-fill"></div></div>
 
 <div id="header">
-  <h1>🎵 Phigros Chart Renderer</h1>
+  <div>
+    <h1>Phigros Chart Renderer</h1>
+    <div id="header-sub">WASM runtime, instant preview and one-click compile</div>
+  </div>
   <span id="ver-badge">v1.0.0-dev</span>
 </div>
 
@@ -406,12 +439,27 @@ details.cfg-panel[open] summary::after { transform: rotate(90deg); }
   <button class="action-btn" id="btn-fullscreen">⛶</button>
 </div>
 
+<div id="preset-row">
+  <button class="preset-btn" data-preset="balanced">Balanced</button>
+  <button class="preset-btn" data-preset="trail">Trail Focus</button>
+  <button class="preset-btn" data-preset="motion">Motion Blur Focus</button>
+  <button class="preset-btn" data-preset="clearfx">Clean HitFX</button>
+</div>
+
 <!-- Settings panel -->
 <div id="cfg-wrap">
   <details class="cfg-panel" id="cfg-panel">
     <summary>⚙ Settings</summary>
     <div class="cfg-inner">
       <div class="cfg-group-label">Render</div>
+      <label><span>Backend</span>
+        <select id="s-backend" class="wide-select">
+          <option value="sdl">sdl</option>
+          <option value="sdl_hw" selected>sdl_hw</option>
+          <option value="sdl_sw">sdl_sw</option>
+          <option value="bgfx">bgfx</option>
+        </select>
+      </label>
       <label><span>Expand factor</span><input type="number" id="s-expand" value="1" min="0.1" step="0.1"></label>
       <label><span>Note scale X</span><input type="number" id="s-nsx" value="2.5" min="0.1" step="0.1"></label>
       <label><span>Note scale Y</span><input type="number" id="s-nsy" value="1" min="0.1" step="0.1"></label>
@@ -423,6 +471,7 @@ details.cfg-panel[open] summary::after { transform: rotate(90deg); }
       <label><span>Hit effects</span><input type="checkbox" id="s-hitfx" checked></label>
       <label><span>Particles</span><input type="checkbox" id="s-particles" checked></label>
       <label><span>Hitfx intensity</span><input type="number" id="s-hitfx-int" value="1" min="0" max="2" step="0.1"></label>
+      <label><span>Hitfx in effects</span><input type="checkbox" id="s-hitfx-apply" checked></label>
       <label><span>Line alpha mode</span>
         <select id="s-line-alpha">
           <option value="negative_only">Negative only</option>
@@ -433,6 +482,14 @@ details.cfg-panel[open] summary::after { transform: rotate(90deg); }
       <div class="cfg-group-label">Background</div>
       <label><span>Dim (0–255)</span><input type="number" id="s-bgdim" value="120" min="0" max="255" step="1"></label>
       <label><span>Blur radius</span><input type="number" id="s-bgblur" value="10" min="0" step="1"></label>
+      <div class="cfg-group-label">Effects</div>
+      <label><span>Trail enabled</span><input type="checkbox" id="s-trail-on"></label>
+      <label><span>Trail alpha</span><input type="number" id="s-trail-alpha" value="0.55" min="0" max="1" step="0.01"></label>
+      <label><span>Trail frames</span><input type="number" id="s-trail-frames" value="8" min="2" max="32" step="1"></label>
+      <label><span>Trail decay</span><input type="number" id="s-trail-decay" value="0.86" min="0" max="1" step="0.01"></label>
+      <label><span>Motion blur enabled</span><input type="checkbox" id="s-mb-on"></label>
+      <label><span>MB samples</span><input type="number" id="s-mb-samples" value="4" min="1" max="32" step="1"></label>
+      <label><span>MB shutter</span><input type="number" id="s-mb-shutter" value="0.5" min="0.05" max="1" step="0.05"></label>
       <div class="cfg-group-label">Audio</div>
       <label><span>Offset (ms)</span><input type="number" id="s-offset" value="0" step="1"></label>
       <div class="cfg-group-label">Culling</div>
@@ -777,10 +834,17 @@ function writeConfig() {
       show_hitfx:                b('s-hitfx'),
       show_particles:            b('s-particles'),
       hitfx_intensity:           n('s-hitfx-int'),
+      hitfx_effect_apply:        b('s-hitfx-apply'),
       line_alpha_affects_notes:  s('s-line-alpha'),
+      backend:                   s('s-backend'),
       no_cull:                   b('s-no-cull'),
       no_cull_screen:            b('s-no-cull-screen'),
-      no_cull_enter_time:        b('s-no-cull-enter')
+      no_cull_enter_time:        b('s-no-cull-enter'),
+      trail_alpha:               b('s-trail-on') ? n('s-trail-alpha') : null,
+      trail_frames:              b('s-trail-on') ? n('s-trail-frames') : null,
+      trail_decay:               b('s-trail-on') ? n('s-trail-decay') : null,
+      motion_blur_samples:       b('s-mb-on') ? n('s-mb-samples') : null,
+      motion_blur_shutter:       b('s-mb-on') ? n('s-mb-shutter') : null
     },
     assets: {
       respack: './respack.zip',
@@ -961,6 +1025,9 @@ document.getElementById('vol-slider').addEventListener('input', function() {
 });
 
 document.getElementById('btn-fullscreen').addEventListener('click', toggleFullscreen);
+document.querySelectorAll('#preset-row .preset-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() { applyPreset(this.dataset.preset); });
+});
 
 // Double-tap canvas for fullscreen
 var lastTap = 0;
@@ -975,6 +1042,34 @@ function toggleFullscreen() {
   var isFs = document.fullscreenElement || document.webkitFullscreenElement;
   if (isFs) (document.exitFullscreen || document.webkitExitFullscreen || function(){}).call(document);
   else      (el.requestFullscreen    || el.webkitRequestFullscreen    || function(){}).call(el);
+}
+
+function applyPreset(name) {
+  if (name === 'balanced') {
+    document.getElementById('s-trail-on').checked = false;
+    document.getElementById('s-mb-on').checked = false;
+    document.getElementById('s-hitfx-apply').checked = true;
+    document.getElementById('s-speed').value = 1.0;
+    setStatus('Preset applied: Balanced', 'ok');
+  } else if (name === 'trail') {
+    document.getElementById('s-trail-on').checked = true;
+    document.getElementById('s-trail-alpha').value = 0.72;
+    document.getElementById('s-trail-frames').value = 10;
+    document.getElementById('s-trail-decay').value = 0.88;
+    document.getElementById('s-mb-on').checked = false;
+    setStatus('Preset applied: Trail Focus', 'ok');
+  } else if (name === 'motion') {
+    document.getElementById('s-trail-on').checked = false;
+    document.getElementById('s-mb-on').checked = true;
+    document.getElementById('s-mb-samples').value = 6;
+    document.getElementById('s-mb-shutter').value = 0.6;
+    setStatus('Preset applied: Motion Blur Focus', 'ok');
+  } else if (name === 'clearfx') {
+    document.getElementById('s-hitfx-apply').checked = false;
+    document.getElementById('s-hitfx').checked = true;
+    document.getElementById('s-particles').checked = true;
+    setStatus('Preset applied: Clean HitFX', 'ok');
+  }
 }
 
 // ── Drag & drop ──────────────────────────────────────────────────────────────────

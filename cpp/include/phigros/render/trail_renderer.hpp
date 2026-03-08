@@ -29,7 +29,8 @@ namespace phigros::render {
 //       render_scene_no_bg(t);
 //   }
 struct TrailRenderer {
-    static constexpr int MAX_SLOTS = 16;
+    // Allow longer temporal trails at high internal sampling rates (e.g. 240fps).
+    static constexpr int MAX_SLOTS = 64;
     static constexpr int MAX_BLUR_PASSES = 4;
 
     RenderTarget slots[MAX_SLOTS];

@@ -47,6 +47,7 @@ struct GameLoop {
     const int                          W, H;
     const int                          playable_notes;
     const double                       chart_end;
+    const double                       progress_end;
     const bool                         is_play_mode;
     const double                       audio_offset_sec;  // cfg.audio_offset_ms/1000
 
@@ -168,6 +169,7 @@ struct GameLoop {
         : ctx(ctx_), args(args_), cfg(cfg_), chart(chart_)
         , W(cfg_.window_w), H(cfg_.window_h)
         , playable_notes(playable_notes_), chart_end(chart_end_)
+        , progress_end((args_.duration > 0.0) ? std::min(chart_end_, args_.duration) : chart_end_)
         , is_play_mode(args_.play_mode || !args_.play_replay_path.empty())
         , audio_offset_sec(cfg_.audio_offset_ms / 1000.0)
     {
@@ -292,7 +294,10 @@ struct GameLoop {
         }
 
         // === 4. EXIT CONDITIONS ===
-        if (args.duration > 0 && t >= args.duration) return false;
+        if (args.duration > 0 && t >= args.duration) {
+            if (is_recording) recorder.log_progress(progress_end, progress_end);
+            return false;
+        }
         if (t > chart_end) {
             if (is_play_mode && !result_shown) mark_result();
             if (!is_play_mode) return false;
@@ -592,7 +597,7 @@ private:
             return;
         }
         if (++record_log_frames % static_cast<int>(args.record_fps) == 0)
-            recorder.log_progress(t, chart_end);
+            recorder.log_progress(t, progress_end);
     }
 
     void do_screenshot() {
