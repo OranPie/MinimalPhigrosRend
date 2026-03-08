@@ -1,5 +1,5 @@
 #pragma once
-#include "phigros/app/input_manager.hpp"
+#include "phigros/engine/judge_input.hpp"
 #include "phigros/engine/judge.hpp"
 #include "phigros/engine/effects.hpp"
 #include "phigros/render/renderer.hpp"  // FrameSnapshot / NoteSnapshot
@@ -29,7 +29,7 @@ struct ManualJudge {
 
     // Process one rendered frame.
     void process_frame(
-        const phigros::app::InputManager& input,
+        const JudgeInputFrame& input,
         const phigros::render::FrameSnapshot& frame,
         const std::vector<Note>& notes,
         std::vector<NoteState>& states,
@@ -40,11 +40,11 @@ struct ManualJudge {
         float radius = catch_radius_factor * static_cast<float>(H);
         float r2 = radius * radius;
 
-        // 1. Handle early hold releases from lifted fingers
-        for (const auto& s : input.slots) {
-            if (!s.active()) continue;
-            if (!s.release_edge) continue;
-            auto it = holding_map.find(s.id);
+        // 1. Handle early hold releases from lifted fingers/keys
+        for (int ai = 0; ai < input.count; ++ai) {
+            const auto& a = input.actions[ai];
+            if (!a.release) continue;
+            auto it = holding_map.find(a.id);
             if (it != holding_map.end()) {
                 int nidx = it->second;
                 if (nidx >= 0 && nidx < static_cast<int>(states.size())) {
@@ -60,8 +60,9 @@ struct ManualJudge {
         }
 
         // 2. Handle presses — find and hit nearest in-window note
-        for (const auto& s : input.slots) {
-            if (!s.active() || !s.press_edge) continue;
+        for (int ai = 0; ai < input.count; ++ai) {
+            const auto& a = input.actions[ai];
+            if (!a.press) continue;
 
             int best_nidx = -1;
             float best_dist2 = std::numeric_limits<float>::max();
@@ -78,20 +79,27 @@ struct ManualJudge {
                 double dt = std::abs(t - note.t_hit);
                 if (dt > Judge::BAD) continue;
 
-                // Flick notes only on flick gesture
-                if (note.kind == 4 && !s.flick) continue;
+                // Flick notes: pointer needs flick gesture; keyboard press counts
+                if (note.kind == 4 && a.has_position && !a.flick) continue;
 
-                // Spatial check
-                float dx = s.x - static_cast<float>(ns.wx);
-                float dy = s.y - static_cast<float>(ns.wy);
-                float d2 = dx * dx + dy * dy;
-                if (d2 > r2) continue;
+                if (a.has_position) {
+                    // Spatial check for pointer input
+                    float dx = a.x - static_cast<float>(ns.wx);
+                    float dy = a.y - static_cast<float>(ns.wy);
+                    float d2 = dx * dx + dy * dy;
+                    if (d2 > r2) continue;
 
-                // Prefer tighter timing, then proximity
-                if (dt < best_dt - 0.001 || (std::abs(dt - best_dt) < 0.001 && d2 < best_dist2)) {
-                    best_dt = dt;
-                    best_dist2 = d2;
-                    best_nidx = nidx;
+                    if (dt < best_dt - 0.001 || (std::abs(dt - best_dt) < 0.001 && d2 < best_dist2)) {
+                        best_dt = dt;
+                        best_dist2 = d2;
+                        best_nidx = nidx;
+                    }
+                } else {
+                    // Keyboard: temporal-only — find nearest unjudged note
+                    if (dt < best_dt) {
+                        best_dt = dt;
+                        best_nidx = nidx;
+                    }
                 }
             }
 
@@ -100,10 +108,9 @@ struct ManualJudge {
             auto& ns = states[best_nidx];
 
             if (note.kind == 3) {
-                // Hold: start and track
                 auto grade = judge.start_hold(ns, t);
                 if (grade) {
-                    holding_map[s.id] = best_nidx;
+                    holding_map[a.id] = best_nidx;
                     _emit_effect(effects, frame, best_nidx, t, note, *grade);
                     if (on_judgment) on_judgment(best_nidx, (float)t, "hold_start:" + *grade);
                 }
@@ -116,7 +123,7 @@ struct ManualJudge {
             }
         }
 
-        // 3. Auto-catch drag notes (kind=2) by any nearby down pointer
+        // 3. Auto-catch drag notes (kind=2) by any nearby down pointer or held key
         for (const auto& ns : frame.notes) {
             if (ns.judged || ns.miss || ns.kind != 2) continue;
             int nidx = ns.nid;
@@ -126,17 +133,26 @@ struct ManualJudge {
             double dt = std::abs(t - note.t_hit);
             if (dt > Judge::BAD) continue;
 
-            for (const auto& s : input.slots) {
-                if (!s.active() || !s.down) continue;
-                float dx = s.x - static_cast<float>(ns.wx);
-                float dy = s.y - static_cast<float>(ns.wy);
-                if (dx * dx + dy * dy <= r2) {
-                    auto grade = judge.try_hit(states[nidx], t);
-                    if (grade) {
-                        _emit_effect(effects, frame, nidx, t, note, *grade);
-                        if (on_judgment) on_judgment(nidx, (float)t, *grade);
-                    }
-                    break;
+            bool caught = false;
+            for (int ai = 0; ai < input.count && !caught; ++ai) {
+                const auto& a = input.actions[ai];
+                if (!a.down) continue;
+
+                if (a.has_position) {
+                    float dx = a.x - static_cast<float>(ns.wx);
+                    float dy = a.y - static_cast<float>(ns.wy);
+                    if (dx * dx + dy * dy <= r2) caught = true;
+                } else {
+                    // Any held key auto-catches drags
+                    caught = true;
+                }
+            }
+
+            if (caught) {
+                auto grade = judge.try_hit(states[nidx], t);
+                if (grade) {
+                    _emit_effect(effects, frame, nidx, t, note, *grade);
+                    if (on_judgment) on_judgment(nidx, (float)t, *grade);
                 }
             }
         }

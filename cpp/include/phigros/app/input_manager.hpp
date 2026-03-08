@@ -1,5 +1,6 @@
 #pragma once
 #include "phigros/app/sdl_compat.hpp"
+#include "phigros/engine/judge_input.hpp"
 #include <cstdint>
 #include <cmath>
 #include <algorithm>
@@ -21,17 +22,36 @@ struct PointerSlot {
     bool active() const { return id >= 0; }
 };
 
+struct KeyAction {
+    SDL_Scancode scancode = SDL_SCANCODE_UNKNOWN;
+    bool down = false;
+    bool press_edge = false;
+    bool release_edge = false;
+    bool active() const { return scancode != SDL_SCANCODE_UNKNOWN && (down || press_edge || release_edge); }
+};
+
 struct InputManager {
     static constexpr int MAX = 10;
     PointerSlot slots[MAX];
     int active_count = 0;
     float flick_vel_threshold = 1200.0f; // pixels/second
 
+    static constexpr int MAX_KEYS = 10;
+    KeyAction keys[MAX_KEYS];
+    int num_gameplay_keys = 4;
+    SDL_Scancode gameplay_scancodes[MAX_KEYS] = {
+        SDL_SCANCODE_D, SDL_SCANCODE_F, SDL_SCANCODE_J, SDL_SCANCODE_K
+    };
+
     // Call once per frame BEFORE processing events. Clears per-frame edge flags.
     void begin_frame() {
         for (auto& s : slots) {
             s.press_edge = s.release_edge = s.flick = false;
             s._px = s.x; s._py = s.y;
+        }
+        for (int i = 0; i < num_gameplay_keys; ++i) {
+            keys[i].press_edge = false;
+            keys[i].release_edge = false;
         }
     }
 
@@ -100,6 +120,25 @@ struct InputManager {
                 s->x = e.tfinger.x * static_cast<float>(W);
                 s->y = e.tfinger.y * static_cast<float>(H);
             }
+        } else if (e.type == PHIGROS_SDL_EVENT_KEY_DOWN) {
+            auto sc = PHIGROS_KEY_SCANCODE(e);
+            for (int i = 0; i < num_gameplay_keys; ++i) {
+                if (gameplay_scancodes[i] == sc && !keys[i].down) {
+                    keys[i].scancode = sc;
+                    keys[i].down = true;
+                    keys[i].press_edge = true;
+                    break;
+                }
+            }
+        } else if (e.type == PHIGROS_SDL_EVENT_KEY_UP) {
+            auto sc = PHIGROS_KEY_SCANCODE(e);
+            for (int i = 0; i < num_gameplay_keys; ++i) {
+                if (gameplay_scancodes[i] == sc && keys[i].down) {
+                    keys[i].down = false;
+                    keys[i].release_edge = true;
+                    break;
+                }
+            }
         }
 
         (void)W; (void)H; // suppress unused warning when no finger events
@@ -114,6 +153,22 @@ struct InputManager {
                 if (active_count < 0) active_count = 0;
             }
         }
+    }
+
+    // Build a platform-agnostic JudgeInputFrame from current pointer + key state.
+    engine::JudgeInputFrame to_judge_input() const {
+        engine::JudgeInputFrame frame;
+        for (const auto& s : slots) {
+            if (!s.active()) continue;
+            frame.add({s.id, true, s.x, s.y,
+                       s.press_edge, s.release_edge, s.down, s.flick});
+        }
+        for (int i = 0; i < num_gameplay_keys; ++i) {
+            if (!keys[i].active()) continue;
+            frame.add({-(int64_t)(i + 1), false, 0, 0,
+                       keys[i].press_edge, keys[i].release_edge, keys[i].down, false});
+        }
+        return frame;
     }
 
 private:

@@ -328,7 +328,8 @@ struct GameLoop {
                         if (!args.save_replay_path.empty())
                             replay_writer.record(ft, (uint32_t)nidx, g);
                     };
-                    manual_judge.process_frame(ctx.input, mj_frame,
+                    auto judge_input = ctx.input.to_judge_input();
+                    manual_judge.process_frame(judge_input, mj_frame,
                         chart.notes, states, judge, effects, t, W, H);
                     ctx.input.flush_released();
                 }
