@@ -62,10 +62,10 @@
 
 `line_alpha_affects_notes` 的可选值：
 
-| 值 | 行为 |
-|----|------|
-| `"off"` | 音符不受判定线 alpha 影响 |
-| `"negative_only"` | 判定线 alpha < 0.5 时音符变暗（默认 Phigros 行为） |
+| 值 | 行为                                      |
+|----|-----------------------------------------|
+| `"off"` | 音符不受判定线 alpha 影响                        |
+| `"negative_only"` | 判定线 alpha < 0 时音符消失（默认 RPE<br/> 行为）     |
 | `"always"` | 始终使音符 alpha = `note.alpha * line.alpha` |
 
 ### 打击特效

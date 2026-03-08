@@ -156,7 +156,7 @@ struct GameLoop {
     } prof;
 
     // ── Derived constants ────────────────────────────────────────────────────
-    static constexpr double SIM_DT = 1.0 / 240.0;
+    double sim_dt            = 1.0 / 240.0;
     double render_dt         = 1.0 / 60.0;
     int    sim_steps_per_render = 1;
 
@@ -182,10 +182,11 @@ struct GameLoop {
         manual_judge.hitfx_color_good = ctx.respack.cfg.color_good;
 
         // Timing constants
+        sim_dt = 1.0 / std::max(1.0, args.sim_fps);
         render_dt = args.record_output.empty() ? (1.0 / 60.0)
                                                : (1.0 / args.record_fps);
         sim_steps_per_render = std::max(1, static_cast<int>(
-            std::round(render_dt / SIM_DT)));
+            std::round(render_dt / sim_dt)));
 
         last_time = Window::get_time_sec();
 
@@ -280,7 +281,7 @@ struct GameLoop {
         if (ctx.has_audio && ctx.started_audio) {
             t = ctx.audio.get_playback_time() + audio_offset_sec;
         } else if (args.headless) {
-            t += SIM_DT;
+            t += sim_dt;
         } else {
             t += dt_frame;
         }

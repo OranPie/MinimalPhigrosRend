@@ -39,6 +39,7 @@ struct AppArgs {
     int         record_queue_depth  = 6;
     double      record_start        = -1.0;
     double      record_end          = 0.0;
+    double      sim_fps             = 240.0; // internal simulation sampling rate
     // Compile
     std::string compile_output;
     float       compile_sample_rate = 240.0f;
@@ -95,6 +96,7 @@ inline AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--record-codec"      && i+1 < argc) args.record_codec  = argv[++i];
         else if (a == "--record-hw"         && i+1 < argc) args.record_hw     = argv[++i];
         else if (a == "--record-fps"        && i+1 < argc) args.record_fps    = std::atof(argv[++i]);
+        else if (a == "--sim-fps"           && i+1 < argc) args.sim_fps       = std::atof(argv[++i]);
         else if (a == "--record-resolution" && i+1 < argc) {
             std::string res = argv[++i];
             auto x = res.find('x');
@@ -191,6 +193,7 @@ inline void print_usage(const char* prog) {
         "  --record-codec <codec>    libx264|libx265|libvpx-vp9|h264_nvenc|hevc_nvenc|h264_qsv|h264_vaapi\n"
         "  --record-hw <type>        nvenc|qsv|vaapi|amf|videotoolbox (sets hw codec if --record-codec is empty)\n"
         "  --record-fps <fps>        Recording framerate (default 60)\n"
+        "  --sim-fps <fps>           Internal simulation sampling rate (default 240)\n"
         "  --record-resolution WxH   Output video resolution\n"
         "  --record-capture-resolution WxH  Render/readback resolution before encoding\n"
         "  --record-queue-depth N    Async encoder queue depth (<=1 = sync write)\n"
