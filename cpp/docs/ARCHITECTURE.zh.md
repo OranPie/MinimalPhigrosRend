@@ -38,7 +38,10 @@ CLI args + config.jsonc
               ▼           ▼            ▼
        NoteManager   SimulatePlayer  ManualJudge
        (visibility)  (autoplay)      (--play mode)
-              │           │
+              │           │               ▲
+              │           │               │
+              │           │         JudgeInputFrame
+              │           │         (from InputManager)
               └─────┬─────┘
                     ▼
               engine::Judge
@@ -106,10 +109,11 @@ Notes 在解析后按 **`t_hit` 排序** — 这是二分查找可见性边界�
 |------|------|
 | `kinematics.hpp` | `LineState`、`eval_line_state()`、`note_world_pos_cs()`（预计算 cos/sin） |
 | `judge.hpp` | `Judge` — 判定时间窗口（PERFECT=45ms，GOOD=90ms，BAD=150ms），`compute_score()` |
+| `judge_input.hpp` | `JudgeAction`、`JudgeInputFrame` — 平台无关的判定输入抽象层 |
 | `note_manager.hpp` | `precompute_t_enter()`，基于二分查找的可见性更新 |
 | `hold_logic.hpp` | `hold_maintenance()`、`hold_finalize()`、`detect_misses()` |
 | `simulateplay.hpp` | `SimulatePlayer` — 帧精度的自动演奏模拟 |
-| `manual_judge.hpp` | `ManualJudge` — 交互模式下的空间 Note 搜索 |
+| `manual_judge.hpp` | `ManualJudge` — 交互模式下的空间+时间 Note 匹配；消费 `JudgeInputFrame`（指针：空间+时间匹配，键盘：仅时间匹配） |
 | `effects.hpp` | `EffectManager` — `HitFX`、`FlashFX`、`ParticleBurst` 的生命周期管理 |
 | `visibility.hpp` | `scroll_speed_at()`，`note_manager` 使用的 AABB 可见性检测辅助函数 |
 
@@ -183,7 +187,7 @@ Footer:  crc32[4]
 | `app_context.hpp` | `AppContext` — 持有所有长生命周期的 SDL 对象、渲染器及音频 |
 | `app_args.hpp` | CLI 参数解析 |
 | `game_loop.hpp` | `GameLoop::run_frame()` — 每帧的更新/渲染驱动 |
-| `input_manager.hpp` | `InputManager` — 扁平 `PointerSlot[10]` 数组；支持鼠标与触摸；滑动检测 |
+| `input_manager.hpp` | `InputManager` — 扁平 `PointerSlot[10]` 数组 + `KeyAction[10]` 键盘状态；支持鼠标、触摸与键盘输入；滑动检测；`to_judge_input()` 桥接到 `JudgeInputFrame` |
 
 #### `GameLoop::run_frame()` 执行阶段
 

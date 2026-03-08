@@ -38,7 +38,10 @@ CLI args + config.jsonc
               ▼           ▼            ▼
        NoteManager   SimulatePlayer  ManualJudge
        (visibility)  (autoplay)      (--play mode)
-              │           │
+              │           │               ▲
+              │           │               │
+              │           │         JudgeInputFrame
+              │           │         (from InputManager)
               └─────┬─────┘
                     ▼
               engine::Judge
@@ -106,10 +109,11 @@ Notes are **sorted by `t_hit`** after parsing — required for binary-search vis
 |------|-------------|
 | `kinematics.hpp` | `LineState`, `eval_line_state()`, `note_world_pos_cs()` (precomputed cos/sin) |
 | `judge.hpp` | `Judge` — timing windows (PERFECT=45ms, GOOD=90ms, BAD=150ms), `compute_score()` |
+| `judge_input.hpp` | `JudgeAction`, `JudgeInputFrame` — platform-agnostic input abstraction for the judge |
 | `note_manager.hpp` | `precompute_t_enter()`, binary-search visibility update |
 | `hold_logic.hpp` | `hold_maintenance()`, `hold_finalize()`, `detect_misses()` |
 | `simulateplay.hpp` | `SimulatePlayer` — frame-accurate autoplay simulation |
-| `manual_judge.hpp` | `ManualJudge` — spatial note search for interactive play |
+| `manual_judge.hpp` | `ManualJudge` — spatial+temporal note matching for interactive play; consumes `JudgeInputFrame` (pointer: spatial+temporal, keyboard: temporal-only) |
 | `effects.hpp` | `EffectManager` — `HitFX`, `FlashFX`, `ParticleBurst` lifecycle |
 | `visibility.hpp` | `scroll_speed_at()`, AABB visibility check helpers used by `note_manager` |
 
@@ -183,7 +187,7 @@ Compressed with miniz deflate.
 | `app_context.hpp` | `AppContext` — owns all long-lived SDL objects, renderers, audio |
 | `app_args.hpp` | CLI argument parsing |
 | `game_loop.hpp` | `GameLoop::run_frame()` — per-frame update/render driver |
-| `input_manager.hpp` | `InputManager` — flat `PointerSlot[10]` array; mouse + touch; flick detection |
+| `input_manager.hpp` | `InputManager` — flat `PointerSlot[10]` array + `KeyAction[10]` keyboard state; mouse, touch, and keyboard input; flick detection; `to_judge_input()` bridge to `JudgeInputFrame` |
 
 #### `GameLoop::run_frame()` phases
 

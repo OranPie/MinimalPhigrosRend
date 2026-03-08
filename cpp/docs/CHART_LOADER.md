@@ -1,5 +1,7 @@
 # Chart Loader
 
+> 🌐 [中文](CHART_LOADER.zh.md)
+
 A unified chart loading system for Phigros charts that supports multiple formats and packaging methods.
 
 ## Features

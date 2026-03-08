@@ -79,7 +79,7 @@ The `chart_path` can be the first positional argument, or supplied via any suppo
 
 | Flag | Description |
 |------|-------------|
-| `--play` | Interactive mode (mouse/touch input) |
+| `--play` | Interactive mode (mouse/touch/keyboard input) |
 | `--score-only` | Headless engine scoring (fastest, no window) |
 | `--duration <sec>` | Auto-quit after N seconds |
 | `--audio-offset <ms>` | Audio latency compensation (positive = advance notes) |
@@ -407,6 +407,16 @@ These are active in interactive (`--play`) and default autoplay modes:
 | `Space` | Pause / resume |
 | `R` | Restart chart from beginning |
 | `Esc` | Quit |
+
+### Gameplay Keys (play mode)
+
+Default gameplay keys for hitting notes in `--play` mode:
+
+| Key | Action |
+|-----|--------|
+| `D` `F` `J` `K` | Hit notes (temporal-only matching, no spatial check) |
+
+Keyboard input uses temporal-only matching — any gameplay key press hits the nearest unjudged note within the timing window, regardless of screen position. Held keys auto-catch drag notes and sustain holds. Configurable via `InputManager::gameplay_scancodes[]`.
 
 ---
 

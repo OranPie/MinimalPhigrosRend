@@ -78,7 +78,7 @@ Usage: phigros_render <chart_path> [options]
 
 | 参数 | 说明 |
 |------|------|
-| `--play` | 交互模式（支持鼠标/触摸输入） |
+| `--play` | 交互模式（支持鼠标/触摸/键盘输入） |
 | `--score-only` | 无头引擎评分（最快，不显示窗口） |
 | `--duration <sec>` | 运行 N 秒后自动退出 |
 | `--audio-offset <ms>` | 音频延迟补偿（正值 = 提前音符） |
@@ -402,6 +402,16 @@ python3 scripts/gen_chartscript.py --charts_dir charts/ --output my_playlist.cha
 | `Space` | 暂停 / 继续 |
 | `R` | 从头重新开始 |
 | `Esc` | 退出 |
+
+### 游玩按键（游玩模式）
+
+`--play` 模式下用于打击音符的默认游玩按键：
+
+| 按键 | 操作 |
+|------|------|
+| `D` `F` `J` `K` | 打击音符（仅时间匹配，无空间检测） |
+
+键盘输入使用仅时间匹配 — 任意游玩按键按下时会命中判定窗口内最近的未判定音符，不考虑屏幕位置。按住按键可自动捕获 Drag 音符并维持 Hold。可通过 `InputManager::gameplay_scancodes[]` 配置。
 
 ---
 

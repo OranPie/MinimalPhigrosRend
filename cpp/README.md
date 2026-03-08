@@ -50,6 +50,7 @@ make -j$(nproc)
 
 | Key | Action |
 |-----|--------|
+| D / F / J / K | Hit notes |
 | Space | Pause / Resume |
 | R | Restart |
 | Esc | Quit |
