@@ -512,9 +512,14 @@ private:
         ctx.draw_list.clear();
         ctx.draw_list.cmds.reserve(s_last_dl_sz + 32);
         ctx.batch.dl = &ctx.draw_list;
+
+        // RPE isCover: non-cover lines drawn first (behind notes),
+        // cover lines drawn last (in front of notes).
         ctx.hold_ren.draw(ctx.batch, ctx.respack, fr.notes, t_r, W, H, cfg.expand_factor);
-        ctx.line_ren.draw(ctx.batch, ctx.respack.white_tex, fr.lines, W, H, cfg.expand_factor);
+        ctx.line_ren.draw(ctx.batch, ctx.respack.white_tex, fr.lines, W, H, cfg.expand_factor, /*cover_pass=*/false);
         ctx.note_ren.draw(ctx.batch, ctx.respack, fr.notes, t_r, W, H, cfg.expand_factor);
+        ctx.line_ren.draw(ctx.batch, ctx.respack.white_tex, fr.lines, W, H, cfg.expand_factor, /*cover_pass=*/true);
+
         ctx.hitfx_ren.draw(ctx.batch, ctx.respack, effects, t_r,
                            cfg.show_hitfx, cfg.show_particles,
                            static_cast<float>(cfg.hitfx_intensity),

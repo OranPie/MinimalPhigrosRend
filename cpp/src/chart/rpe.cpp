@@ -8,10 +8,13 @@
 #include <set>
 #include <stdexcept>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
+#include <iostream>
 
 using json = nlohmann::json;
 using namespace phigros::math;
+using phigros::CtrlPoint;
 
 namespace phigros::chart {
 
@@ -134,7 +137,7 @@ static PiecewiseColor build_rpe_color_track(
 
 // Build text track from RPE extended textEvents
 static PiecewiseText build_rpe_text_track(
-    const json& events, const BpmMap& bpm_map, double bpmfactor)
+    const json& events, const BpmMap& bpm_map, double bpmfactor, int rpe_easing_shift)
 {
     if (!events.is_array() || events.empty())
         return PiecewiseText({}, "");
@@ -154,7 +157,13 @@ static PiecewiseText build_rpe_text_track(
         double t1 = bpm_map.beat_to_sec(b1, bpmfactor);
         std::string s0 = e.value("start", "");
         std::string s1 = e.value("end", s0);
-        segs.push_back({t0, t1, std::move(s0), std::move(s1)});
+        // font: absent from v152+ when using default "cmdysj"; present before v152
+        std::string font = e.value("font", "");
+        // Easing for %P% interpolation
+        int easing_type = e.value("easingType", 1) + rpe_easing_shift;
+        double easing_L = e.value("easingLeft", 0.0);
+        double easing_R = e.value("easingRight", 1.0);
+        segs.push_back({t0, t1, std::move(s0), std::move(s1), std::move(font), easing_type, easing_L, easing_R});
     }
     return PiecewiseText(std::move(segs), "");
 }
@@ -248,6 +257,11 @@ ChartData load_rpe(const json& data, int W, int H, int rpe_easing_shift) {
     auto meta = data.value("META", json::object());
     double offset_ms = meta.value("offset", 0.0);
     result.offset = offset_ms / 1000.0;
+    // RPE META: song and background paths (relative to chart root)
+    if (meta.contains("song") && meta["song"].is_string())
+        result.meta_song_path = meta["song"].get<std::string>();
+    if (meta.contains("background") && meta["background"].is_string())
+        result.meta_bg_path = meta["background"].get<std::string>();
 
     // Build BPM map
     auto bpm_list = data.value("BPMList", json::array());
@@ -321,6 +335,21 @@ ChartData load_rpe(const json& data, int W, int H, int rpe_easing_shift) {
         line.color_rgb = rgb;
         line.name = jl.value("name", "");
 
+        // attachUI: binds line to a HUD element; warn once per unique value
+        if (jl.contains("attachUI") && !jl["attachUI"].is_null()) {
+            std::string ui = jl.value("attachUI", "");
+            if (!ui.empty()) {
+                line.attach_ui = ui;
+                static std::unordered_set<std::string> warned;
+                if (warned.find(ui) == warned.end()) {
+                    std::cerr << "[RPE] attachUI=\"" << ui
+                              << "\" — UI element binding is not yet rendered; "
+                                 "line will be hidden as per spec.\n";
+                    warned.insert(ui);
+                }
+            }
+        }
+
         // Extended fields
         auto ext = jl.value("extended", json::object());
         if (ext.contains("colorEvents") && ext["colorEvents"].is_array() && !ext["colorEvents"].empty())
@@ -334,7 +363,7 @@ ChartData load_rpe(const json& data, int W, int H, int rpe_easing_shift) {
                 build_rpe_eased_track(ext["scaleYEvents"], bpm_map, bpmfactor, rpe_easing_shift, 1.0));
         if (ext.contains("textEvents") && ext["textEvents"].is_array() && !ext["textEvents"].empty())
             line.text = std::make_shared<PiecewiseText>(
-                build_rpe_text_track(ext["textEvents"], bpm_map, bpmfactor));
+                build_rpe_text_track(ext["textEvents"], bpm_map, bpmfactor, rpe_easing_shift));
         if (ext.contains("gifEvents") && ext["gifEvents"].is_array() && !ext["gifEvents"].empty())
             line.gif_progress = std::make_shared<PiecewiseEased>(
                 build_rpe_eased_track(ext["gifEvents"], bpm_map, bpmfactor, rpe_easing_shift, 0.0));
@@ -347,8 +376,48 @@ ChartData load_rpe(const json& data, int W, int H, int rpe_easing_shift) {
             line.anchor = {jl["anchor"][0].get<double>(), jl["anchor"][1].get<double>()};
         line.is_gif = jl.value("isGif", false);
 
+        // zOrder: explicit draw order (higher = on top)
+        line.z_order = jl.value("zOrder", 0);
+
+        // isCover: line acts as a cover layer drawn over notes (default 1 per RPE docs)
+        line.is_cover = (jl.value("isCover", 1) != 0);
+
+        // inclineEvents: perspective tilt track
+        if (ext.contains("inclineEvents") && ext["inclineEvents"].is_array() && !ext["inclineEvents"].empty())
+            line.incline = std::make_shared<PiecewiseEased>(
+                build_rpe_eased_track(ext["inclineEvents"], bpm_map, bpmfactor, rpe_easing_shift, 0.0));
+
+        // Control events: per-x-position note property modifiers
+        auto parse_ctrl = [](const json& arr, const std::string& value_key) -> std::vector<CtrlPoint> {
+            std::vector<CtrlPoint> pts;
+            if (!arr.is_array()) return pts;
+            for (const auto& e : arr) {
+                CtrlPoint p;
+                p.x      = e.value("x", 0.0f);
+                p.value  = e.value(value_key, 1.0f);
+                p.easing = e.value("easing", 1);
+                pts.push_back(p);
+            }
+            std::sort(pts.begin(), pts.end(), [](const CtrlPoint& a, const CtrlPoint& b) {
+                return a.x < b.x;
+            });
+            return pts;
+        };
+
+        if (jl.contains("alphaControl"))
+            line.alpha_ctrl = parse_ctrl(jl["alphaControl"], "alpha");
+        if (jl.contains("posControl"))
+            line.pos_ctrl   = parse_ctrl(jl["posControl"],   "pos");
+        if (jl.contains("sizeControl"))
+            line.size_ctrl  = parse_ctrl(jl["sizeControl"],  "size");
+        if (jl.contains("yControl"))
+            line.y_ctrl     = parse_ctrl(jl["yControl"],     "y");
+        if (jl.contains("skewControl"))
+            line.skew_ctrl  = parse_ctrl(jl["skewControl"],  "skew");
+
         int father = jl.value("father", -1);
-        bool rwf = jl.value("rotateWithFather", true);
+        // rotateWithFather: absent field defaults to false for pre-v163 compatibility (RPE docs)
+        bool rwf = jl.value("rotateWithFather", false);
         line.father = father;
         line.rotate_with_father = rwf;
         fathers.push_back(father);
@@ -416,6 +485,9 @@ ChartData load_rpe(const json& data, int W, int H, int rpe_easing_shift) {
 
             if (n.contains("hitsound") && !n["hitsound"].is_null())
                 note.hitsound_path = n.value("hitsound", "");
+
+            // visibleTime: seconds before hit that note becomes visible (default 999999)
+            note.visible_time = n.value("visibleTime", 999999.0f);
 
             result.notes.push_back(std::move(note));
         }

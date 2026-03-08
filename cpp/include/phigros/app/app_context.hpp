@@ -19,11 +19,13 @@
 #include "phigros/io/respack.hpp"
 #include "phigros/io/audio.hpp"
 #include "phigros/config/render_config.hpp"
+#include "phigros/chart/chart_loader.hpp"
 
 #include <string>
 #include <iostream>
 #include <filesystem>
 #include <algorithm>
+#include <unordered_map>
 
 namespace phigros::app {
 
@@ -64,6 +66,13 @@ struct AppContext {
     bool        started_audio = false;
     std::string audio_path;
 
+    // Zip-aware texture cache for RPE line textures (texture_path field).
+    // Key: path as it appears in the chart JSON (relative to chart root).
+    std::unordered_map<std::string, render::Texture> line_tex_cache;
+    std::string chart_dir;      // parent directory of chart file
+    bool        chart_is_zip  = false;
+    std::string chart_zip_file; // zip archive path when chart_is_zip
+
     // Init all objects. chart_offset is passed to audio for seeking.
     void init(const std::string& chart_path,
               double             chart_offset,
@@ -88,6 +97,14 @@ struct AppContext {
         batch.init(window.ren);
         draw_list.reserve(2048);
 
+        // Resolve chart base for texture lookup
+        if (chart::is_zip_path(chart_path)) {
+            chart_is_zip  = true;
+            chart_zip_file = chart::split_zip_path(chart_path).first;
+        } else {
+            chart_dir = fs::path(chart_path).parent_path().string();
+        }
+
         // Respack
         std::string rp = respack_override.empty() ? cfg.respack_path : respack_override;
         respack = io::load_respack(window.ren, rp);
@@ -109,6 +126,36 @@ struct AppContext {
         hold_ren.init(W, H, cfg.note_scale_x, cfg.note_scale_y);
         trail.init(window.ren, W, H, cfg);
         motion_blur.init(window.ren, W, H, cfg);
+
+        // Wire up zip-aware texture lookup for RPE line textures
+        line_ren.texture_lookup = [this](const std::string& path) -> const render::Texture* {
+            auto it = line_tex_cache.find(path);
+            if (it != line_tex_cache.end())
+                return it->second.valid() ? &it->second : nullptr;
+            render::Texture tex;
+            if (chart_is_zip) {
+                auto data = chart::extract_zip_file(chart_zip_file, path);
+                if (!data.empty())
+                    tex = render::Texture::from_memory(window.ren, data.data(), (int)data.size());
+            } else if (!chart_dir.empty()) {
+                auto full = fs::path(chart_dir) / path;
+                if (fs::exists(full))
+                    tex = render::Texture::from_file(window.ren, full.string());
+            }
+            if (!tex.valid())
+                std::cerr << "[LineTexture] Failed to load: " << path << "\n";
+            line_tex_cache[path] = std::move(tex);
+            return line_tex_cache[path].valid() ? &line_tex_cache[path] : nullptr;
+        };
+
+        // Wire up text draw for RPE textEvents (goes through SpriteBatch for DrawList compat)
+        line_ren.text_draw = [this](const std::string& text, double x, double y,
+                                    double rot, float sx, float sy,
+                                    uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+            if (!hud_ren.has_font) return;
+            hud_ren.draw_text_rotated(batch, hud_ren.font_large, text,
+                                      x, y, rot, sx, sy, r, g, b, a);
+        };
 
         if (trail.enabled())
             std::cout << "[Trail] alpha=" << cfg.trail_alpha.value()
@@ -145,6 +192,8 @@ struct AppContext {
     }
 
     void destroy() {
+        for (auto& [k, tex] : line_tex_cache) tex.destroy();
+        line_tex_cache.clear();
         trail.destroy();
         motion_blur.destroy();
         audio.destroy();

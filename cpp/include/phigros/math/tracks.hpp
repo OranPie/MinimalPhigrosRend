@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <cstddef>
+#include <cstdio>
 #include <algorithm>
 #include "phigros/math/easing.hpp"
 #include "phigros/math/util.hpp"
@@ -191,6 +192,11 @@ private:
 struct TextSeg {
     double t0, t1;
     std::string s0, s1;
+    // RPE font field: empty = default "cmdysj". Stored for completeness; renderer uses loaded font.
+    std::string font;
+    // RPE easing for %P% interpolation
+    int easing_type = 1;
+    double easing_L = 0.0, easing_R = 1.0;
 };
 
 class PiecewiseText {
@@ -202,15 +208,17 @@ public:
     PiecewiseText(std::vector<TextSeg> s, std::string def = "")
         : segs(std::move(s)), default_val(std::move(def)) {}
 
-    const std::string& eval(double t) const {
+    // Evaluate text at time t. Returns computed string (not reference) to support %P% substitution.
+    std::string eval(double t) const {
         if (segs.empty()) return default_val;
         seek(t);
         const auto& s = segs[cursor_];
-        if (t <= s.t0) return s.s0;
-        if (t >= s.t1) return s.s1;
-        if (s.s0 == s.s1) return s.s0;
+        if (t <= s.t0) return process_text(s.s0, s, 0.0);
+        if (t >= s.t1) return process_text(s.s1, s, 1.0);
+        if (s.s0 == s.s1) return process_text(s.s0, s, 0.5);
         double mid = (s.t0 + s.t1) * 0.5;
-        return t < mid ? s.s0 : s.s1;
+        double raw_p = (t - s.t0) / (s.t1 - s.t0);
+        return process_text(t < mid ? s.s0 : s.s1, s, raw_p);
     }
 
 private:
@@ -224,6 +232,52 @@ private:
             i = lo;
         }
         cursor_ = i;
+    }
+
+    // Process %P% substitution: replace %P% with easing-interpolated value between s0 and s1 numeric values
+    std::string process_text(const std::string& text, const TextSeg& seg, double raw_progress) const {
+        if (text.find("%P%") == std::string::npos) return text;
+
+        // Extract numeric values from s0 and s1
+        double v0 = parse_number(seg.s0);
+        double v1 = parse_number(seg.s1);
+
+        // Apply easing bounds
+        double p = raw_progress;
+        if (p <= seg.easing_L) p = 0.0;
+        else if (p >= seg.easing_R) p = 1.0;
+        else p = (p - seg.easing_L) / std::max(1e-9, seg.easing_R - seg.easing_L);
+        p = clamp(p, 0.0, 1.0);
+
+        // Apply easing function
+        double eased = apply_easing(p, seg.easing_type);
+        double value = lerp(v0, v1, eased);
+
+        // Format and substitute
+        std::string result = text;
+        size_t pos = result.find("%P%");
+        if (pos != std::string::npos) {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%.0f", value);
+            result.replace(pos, 3, buf);
+        }
+        return result;
+    }
+
+    static double parse_number(const std::string& s) {
+        try {
+            size_t idx = 0;
+            double val = std::stod(s, &idx);
+            return val;
+        } catch (...) {
+            return 0.0;
+        }
+    }
+
+    static double apply_easing(double t, int type) {
+        // Use easing functions from easing.hpp
+        if (type < 1 || type > 29) return t;
+        return easing_from_type(type)(t);
     }
 };
 

@@ -71,13 +71,15 @@ struct NoteRenderer {
             // Outline: draw at 1.08× size with dark colour before main sprite
             if (note_outline && !ns.miss) {
                 uint8_t oa = static_cast<uint8_t>(a * 0.5);
+                double draw_angle = ns.line_rot + ns.skew * (M_PI / 180.0);
                 if (oa > 0)
                     batch.draw_texture(tex, draw_x, draw_y, ws * 1.08, hs * 1.08,
-                                       ns.line_rot, 0, 0, 0, oa);
+                                       draw_angle, 0, 0, 0, oa);
             }
 
-            // Rotate note to match line angle
-            batch.draw_texture(tex, draw_x, draw_y, ws, hs, ns.line_rot, r, g, b, a);
+            // Rotate note to match line angle, plus skewControl offset
+            double draw_angle = ns.line_rot + ns.skew * (M_PI / 180.0);
+            batch.draw_texture(tex, draw_x, draw_y, ws, hs, draw_angle, r, g, b, a);
         }
     }
 };

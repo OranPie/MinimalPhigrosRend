@@ -124,6 +124,74 @@ struct HudRenderer {
         return w;
     }
 
+    // Draw text centered at (cx, cy), rotated by rot_rad, scaled by sx/sy.
+    // Goes through SpriteBatch so it works with DrawList recording (motion blur, trail).
+    // Handles \n newlines (v153+): each line is offset perpendicular to the baseline.
+    void draw_text_rotated(const SpriteBatch& batch, const FontAtlas& font,
+                           const std::string& text,
+                           double cx, double cy, double rot_rad,
+                           float sx, float sy,
+                           uint8_t r, uint8_t g, uint8_t b, uint8_t a) const {
+        if (!font.valid || text.empty()) return;
+
+        // Split on \n
+        std::vector<std::string_view> lines_sv;
+        std::string_view sv(text);
+        size_t pos = 0, found;
+        while ((found = sv.find('\n', pos)) != std::string_view::npos) {
+            lines_sv.push_back(sv.substr(pos, found - pos));
+            pos = found + 1;
+        }
+        lines_sv.push_back(sv.substr(pos));
+
+        const float cos_r = static_cast<float>(std::cos(rot_rad));
+        const float sin_r = static_cast<float>(std::sin(rot_rad));
+        const float line_h = font.font_size * sy;
+        const int n = static_cast<int>(lines_sv.size());
+
+        for (int li = 0; li < n; ++li) {
+            const std::string_view& line = lines_sv[li];
+            if (line.empty()) continue;
+
+            // Vertical offset for this line (centered across all lines)
+            float vy = (li - (n - 1) * 0.5f) * line_h;
+            // Perpendicular direction (rotated 90° from baseline)
+            double lx_off = -sin_r * vy;
+            double ly_off =  cos_r * vy;
+
+            // Total advance width for centering this line
+            float total_adv = 0;
+            for (char ch : line) {
+                if (ch < 32 || ch >= 128) continue;
+                total_adv += font.cdata[ch - 32].xadvance;
+            }
+            total_adv *= sx;
+
+            float cursor = -total_adv * 0.5f;
+            for (char ch : line) {
+                if (ch < 32 || ch >= 128) continue;
+                const stbtt_bakedchar& bc = font.cdata[ch - 32];
+
+                float gw = static_cast<float>(bc.x1 - bc.x0) * sx;
+                float gh = static_cast<float>(bc.y1 - bc.y0) * sy;
+
+                // Glyph center in local (unrotated) space
+                float lx = cursor + bc.xoff * sx + gw * 0.5f;
+                float ly = bc.yoff * sy + gh * 0.5f;
+
+                // Rotate into world space and apply line offset
+                double wx = cx + lx_off + cos_r * lx - sin_r * ly;
+                double wy = cy + ly_off + sin_r * lx + cos_r * ly;
+
+                SDL_Rect src{ bc.x0, bc.y0, bc.x1 - bc.x0, bc.y1 - bc.y0 };
+                batch.draw_texture(font.atlas_tex, wx, wy, gw, gh,
+                                   rot_rad, r, g, b, a, &src);
+
+                cursor += bc.xadvance * sx;
+            }
+        }
+    }
+
     void draw(const SpriteBatch& batch, const hud::HudState& hud, double fps = 0) const {
         int W = screen_w, H = screen_h;
 

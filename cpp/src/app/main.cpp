@@ -8,6 +8,7 @@
 #include "phigros/chart/parser.hpp"
 #include "phigros/chart/compiler.hpp"
 #include "phigros/chart/phbc_io.hpp"
+#include "phigros/chart/chart_loader.hpp"
 #include "phigros/engine/kinematics.hpp"
 #include "phigros/engine/visibility.hpp"
 #include "phigros/engine/judge.hpp"
@@ -60,8 +61,33 @@ static phigros::ChartData load_chart(const std::string& path,
         std::ifstream f(path, std::ios::binary);
         if (!f) throw std::runtime_error("Cannot open .phbc file: " + path);
         auto compiled = phigros::chart::read_phbc(f, password);
-        return compiled.to_chart_data(); // is_compiled = true → skip precompute_t_enter
+        return compiled.to_chart_data();
     }
+
+    // Zip chart reference (format: "path.zip:file.json")
+    if (phigros::chart::is_zip_path(path)) {
+        auto [zip_path, file_in_zip] = phigros::chart::split_zip_path(path);
+        auto data = phigros::chart::extract_zip_file(zip_path, file_in_zip);
+        if (data.empty()) throw std::runtime_error("Failed to extract from zip: " + path);
+        std::string json_str(data.begin(), data.end());
+        json j = json::parse(json_str);
+        if (j.contains("META"))
+            return phigros::chart::parse_rpe(j, cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
+        return phigros::chart::parse_official(j, cfg.window_w, cfg.window_h);
+    }
+
+    // Folder: pick first chart entry found
+    if (fs::is_directory(path)) {
+        auto entries = phigros::chart::load_folder_chart(path);
+        if (entries.empty()) throw std::runtime_error("No charts found in folder: " + path);
+        // Default to IN, fallback to first
+        const phigros::chart::ChartEntry* chosen = &entries[0];
+        for (const auto& e : entries) {
+            if (e.difficulty == "IN") { chosen = &e; break; }
+        }
+        return load_chart(chosen->chart_path, cfg, password);
+    }
+
     std::string fmt = detect_format(path);
     if (fmt == "rpe" || fmt == "official") {
         std::ifstream f(path);
@@ -96,29 +122,20 @@ int main(int argc, char* argv[]) {
 
     // ── List-charts mode ──────────────────────────────────────────────────────
     if (!args.list_charts_dir.empty()) {
-        namespace fs = std::filesystem;
-        int count = 0;
-        printf("%-50s %-10s %-10s\n", "Chart", "Format", "Path");
+        auto entries = phigros::chart::scan_charts_directory(args.list_charts_dir);
+        printf("%-45s %-6s %-8s %-6s %-6s\n", "Name", "Diff", "Type", "Music", "Image");
         printf("%s\n", std::string(80, '-').c_str());
-        try {
-            for (const auto& e : fs::recursive_directory_iterator(args.list_charts_dir)) {
-                if (!e.is_regular_file()) continue;
-                auto ext = e.path().extension().string();
-                std::string fmt;
-                if (ext == ".phbc") fmt = "phbc";
-                else if (ext == ".json") fmt = "json";
-                else if (ext == ".pec")  fmt = "pec";
-                else continue;
-                std::string name = e.path().parent_path().filename().string();
-                if (name.size() > 47) name = name.substr(0,44) + "...";
-                printf("%-50s %-10s %s\n", name.c_str(), fmt.c_str(),
-                       e.path().string().c_str());
-                ++count;
-            }
-        } catch (const std::exception& e2) {
-            std::cerr << "[Error] " << e2.what() << "\n"; return 1;
+        for (const auto& e : entries) {
+            std::string name = e.name;
+            if (name.size() > 43) name = name.substr(0, 40) + "...";
+            printf("%-45s %-6s %-8s %-6s %-6s\n",
+                   name.c_str(),
+                   e.difficulty.empty() ? "-" : e.difficulty.c_str(),
+                   e.source_type.c_str(),
+                   e.assets.music_path.empty() ? "no" : "yes",
+                   e.assets.illustration_path.empty() ? "no" : "yes");
         }
-        printf("\n%d chart(s) found.\n", count);
+        printf("\n%d chart(s) found.\n", (int)entries.size());
         return 0;
     }
 

@@ -28,6 +28,15 @@ struct LineSnapshot {
     int lid;
     double x, y, rot, cos_rot, sin_rot, alpha01, scroll;
     math::RGB color;
+    float incline = 0.0f;   // RPE inclineEvents: perspective tilt (degrees)
+    bool is_cover = false;  // RPE isCover: drawn over notes
+    int z_order = 0;        // RPE zOrder
+    float scale_x = 1.0f;  // RPE scaleXEvents
+    float scale_y = 1.0f;  // RPE scaleYEvents
+    // Pointer into stable Line::texture_path — avoids per-frame heap allocation.
+    // Null or pointing to empty string means default line rendering.
+    const std::string* texture_path = nullptr;
+    std::string text;         // RPE textEvents current value (computed per-frame)
 };
 
 struct NoteSnapshot {
@@ -45,6 +54,7 @@ struct NoteSnapshot {
     bool mh;                 // multi-hit flag
     bool holding = false;    // true while a hold note is actively held
     bool draw_hold_head = true; // false when holding and respack holdKeepHead=false
+    float skew = 0.0f;       // RPE skewControl: note skew angle (degrees)
 };
 
 struct FrameSnapshot {
@@ -92,13 +102,33 @@ inline FrameSnapshot build_frame(
                 ? &(*cfg.force_line_alpha01_by_lid) : nullptr);
         if (i < ls_arr.size()) ls_arr[i] = ls;
         else                   ls_heap[i] = ls;
+        float incline_deg = ln.incline ? static_cast<float>(ln.incline->eval(t)) : 0.0f;
+        float sx = ln.scale_x ? static_cast<float>(ln.scale_x->eval(t)) : 1.0f;
+        float sy = ln.scale_y ? static_cast<float>(ln.scale_y->eval(t)) : 1.0f;
+        std::string line_text = ln.text ? ln.text->eval(t) : std::string{};
+        // attachUI lines are hidden per RPE spec (UI element takes over rendering).
+        // Lines with textEvents are also always hidden — only the text is shown.
+        double eff_alpha = (!ln.attach_ui.empty() || ln.text) ? 0.0 : ls.alpha01;
+        // Color: when line has textEvents but no colorEvents, default is white per RPE spec.
+        // colorEvents (ln.color) can override this.
+        const math::RGB text_white{255, 255, 255};
+        auto line_color = ln.compiled_color ? ln.compiled_color(t)
+                        : (ln.color ? ln.color->eval(t)
+                                    : (ln.text ? text_white : ln.color_rgb));
         frame.lines.push_back({
             ln.lid, ls.x, ls.y, ls.rot, ls.cos_rot, ls.sin_rot,
-            ls.alpha01, ls.scroll,
-            ln.compiled_color ? ln.compiled_color(t)
-                              : (ln.color ? ln.color->eval(t) : ln.color_rgb)
+            eff_alpha, ls.scroll,
+            line_color,
+            incline_deg, ln.is_cover, ln.z_order,
+            sx, sy, &ln.texture_path, std::move(line_text)
         });
     }
+
+    // Sort lines by z_order for correct draw order
+    std::stable_sort(frame.lines.begin(), frame.lines.end(),
+        [](const LineSnapshot& a, const LineSnapshot& b) {
+            return a.z_order < b.z_order;
+        });
 
     // Evaluate notes — only screen-position culling is applied.
     double flow_mul = cfg.note_flow_speed_multiplier;
@@ -125,6 +155,9 @@ inline FrameSnapshot build_frame(
         if (ns.miss) return;
         if (note.line_id < 0 || note.line_id >= static_cast<int>(n_lines)) return;
 
+        // visible_time: note is hidden until (t_hit - visible_time) seconds before hit
+        if (note.visible_time < 999998.0 && t < note.t_hit - note.visible_time) return;
+
         // Optional t_enter/t_end culling for dense charts.
         if (!cfg.no_cull && !cfg.no_cull_enter_time) {
             if (t < note.t_enter) return;
@@ -135,11 +168,37 @@ inline FrameSnapshot build_frame(
             ? ls_arr[note.line_id]
             : ls_heap[note.line_id];
 
+        // Evaluate control events for this note's scroll distance from the judge line.
+        // The 'x' field in RPE control events is "note与判定线的纵向距离" —
+        // the note's perpendicular distance from the line in RPE y-units (not x position).
+        const auto& ln = chart.lines[note.line_id];
+        float scroll_dist_rpe = static_cast<float>((note.scroll_hit - ls.scroll) / (H / 900.0));
+        float ctrl_alpha = eval_ctrl(ln.alpha_ctrl, scroll_dist_rpe, 1.0f);
+        float ctrl_size  = eval_ctrl(ln.size_ctrl,  scroll_dist_rpe, 1.0f);
+        float ctrl_skew  = eval_ctrl(ln.skew_ctrl,  scroll_dist_rpe, 0.0f);
+        // posControl.pos = multiplier for positionX (not a y-offset)
+        float ctrl_pos   = eval_ctrl(ln.pos_ctrl,   scroll_dist_rpe, 1.0f);
+        float ctrl_y     = eval_ctrl(ln.y_ctrl,     scroll_dist_rpe, 0.0f);
+
         auto head = engine::note_world_pos_cs(
             ls.x, ls.y, ls.cos_rot, ls.sin_rot, ls.scroll, note,
             note.scroll_hit, false, flow_mul,
             cfg.note_speed_mul_affects_travel,
-            note.kind == 3 && ns.holding);  // clamp head to line while holding
+            note.kind == 3 && ns.holding);
+
+        // posControl: pos is a multiplier for positionX — shift head along the line tangent
+        if (ctrl_pos != 1.0f) {
+            double dx_extra = (ctrl_pos - 1.0) * note.x_local_px;
+            head.x += ls.cos_rot * dx_extra;
+            head.y += ls.sin_rot * dx_extra;
+        }
+        // yControl: y is an additional perpendicular offset (RPE y-units)
+        if (ctrl_y != 0.0f) {
+            double sgn = note.above ? -1.0 : 1.0; // screen y: above=front → negative normal
+            double dy = sgn * ctrl_y * (H / 900.0);
+            head.x += -ls.sin_rot * dy;
+            head.y +=  ls.cos_rot * dy;
+        }
 
         double wx_tail = head.x, wy_tail = head.y;
         if (note.kind == 3) {
@@ -156,8 +215,8 @@ inline FrameSnapshot build_frame(
             double hx = head.x, hy = head.y;
             apply_expand_xy(hx, hy, W, H, ex);
 
-            const double half_w = std::max(1.0, base_w * note.size_px * 0.5 * over);
-            const double half_h = std::max(1.0, base_h * note.size_px * 0.5 * over);
+            const double half_w = std::max(1.0, base_w * note.size_px * ctrl_size * 0.5 * over);
+            const double half_h = std::max(1.0, base_h * note.size_px * ctrl_size * 0.5 * over);
 
             bool vis = point_visible(hx, hy, half_w, half_h);
             if (!vis && note.kind == 3) {
@@ -171,14 +230,12 @@ inline FrameSnapshot build_frame(
         }
 
         auto color = note.tint_rgb;
-        double note_alpha = note.alpha01 * cfg.note_alpha;
+        double note_alpha = note.alpha01 * ctrl_alpha * cfg.note_alpha;
         switch (cfg.line_alpha_mode) {
         case config::LineAlphaMode::Always:
             note_alpha *= ls.alpha01;
             break;
         case config::LineAlphaMode::NegativeOnly:
-            // Only negative raw line alpha attenuates notes.
-            // Positive/zero raw alpha leaves note alpha unchanged.
             if (ls.alpha_raw < 0.0)
                 note_alpha *= ls.alpha01;
             break;
@@ -187,10 +244,12 @@ inline FrameSnapshot build_frame(
 
         frame.notes.push_back({
             note.nid, note.kind, head.x, head.y,
-            wx_tail, wy_tail, note_alpha, ls.rot, note.size_px, color,
+            wx_tail, wy_tail, note_alpha, ls.rot,
+            note.size_px * ctrl_size, color,
             note.kind == 3, ns.judged, ns.miss, note.mh,
             ns.holding,
-            !(note.kind == 3 && ns.holding)  // draw_hold_head: hide head sprite while holding
+            !(note.kind == 3 && ns.holding),
+            ctrl_skew
         });
     };
 

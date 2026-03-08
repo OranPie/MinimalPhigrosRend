@@ -147,6 +147,7 @@ add_library(phigros_core_lib STATIC
     src/chart/phbc_io.cpp
     src/chart/phbc_compress.cpp
     src/chart/phbc_crypto.cpp
+    src/chart/chart_loader.cpp
 )
 target_include_directories(phigros_core_lib PUBLIC include)
 target_include_directories(phigros_core_lib PRIVATE "${VENDOR_DIR}/miniz")
@@ -202,6 +203,15 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/bench.cpp")
         target_link_libraries(bench PRIVATE stdc++fs)
     endif()
 endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_zip_extract.cpp")
+    add_executable(test_zip_extract tests/test_zip_extract.cpp)
+    target_link_libraries(test_zip_extract PRIVATE phigros_core_lib vendor_miniz)
+endif()
+
+# --- Chart scanner tool ---
+add_executable(chart_scanner src/chart/chart_scanner.cpp)
+target_link_libraries(chart_scanner PRIVATE phigros_core_lib)
 
 # --- Render executable ---
 add_executable(phigros_render src/app/main.cpp)

@@ -1,0 +1,10 @@
+{
+  "name": "Alpha 255",
+  "description": "Force all non-fake note alpha to maximum (255).",
+  "ops": [
+    {
+      "type": "opacity",
+      "alpha": 1.0
+    }
+  ]
+}

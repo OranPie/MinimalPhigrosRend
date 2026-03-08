@@ -36,6 +36,10 @@ struct Note {
     // RPE custom hitsound
     std::string hitsound_path;
 
+    // RPE visibleTime: note is invisible until t_hit - visible_time seconds before hit.
+    // Default 999999 = always visible. Stored in seconds.
+    double visible_time = 999999.0;
+
     // Precomputed visibility
     double t_enter = -1e9;
     bool mh = false; // multi-hit simultaneous flag
@@ -46,6 +50,16 @@ using TrackFn = std::function<double(double)>;
 
 // Color callable: eval(t) → RGB (used by compiled charts to override per-line color)
 using ColorFn = std::function<math::RGB(double)>;
+
+// RPE control event: per-scroll-distance note property modifier.
+// The 'x' field is the note's perpendicular distance from the judge line in RPE y-units
+// (i.e. scroll distance: positive = note is ahead of the line, not yet hit).
+// Used for alphaControl, posControl, sizeControl, yControl, skewControl.
+struct CtrlPoint {
+    float x     = 0.0f;  // note's y-distance from judge line (RPE y-units, scroll distance)
+    float value = 1.0f;  // property value at this distance
+    int   easing = 1;    // easing type (1=linear)
+};
 
 struct Line {
     int lid = 0;
@@ -81,7 +95,45 @@ struct Line {
     int father = -1;
     bool rotate_with_father = true;
     std::string name;
+
+    // RPE attachUI: binds this line to a UI element (pause/combonumber/combo/score/bar/name/level).
+    // When set, the line is hidden and the UI element is controlled by this line's events.
+    // Rendering of the actual UI element is handled by the HUD layer; this field is informational.
+    std::string attach_ui;
+
+    // RPE z-ordering (higher = drawn on top). Default 0 = index order.
+    int z_order = 0;
+
+    // RPE isCover: line acts as a cover layer (drawn over notes).
+    bool is_cover = false;
+
+    // RPE inclineEvents: perspective tilt angle (degrees). Positive = tilt right.
+    std::shared_ptr<math::PiecewiseEased> incline;
+
+    // RPE control events: per-x-position note property modifiers.
+    // Evaluated at render time based on note.x_local_px to modulate note appearance.
+    std::vector<CtrlPoint> alpha_ctrl;  // alphaControl: modulate note alpha by scroll dist
+    std::vector<CtrlPoint> pos_ctrl;    // posControl:   multiply note positionX by scroll dist
+    std::vector<CtrlPoint> size_ctrl;   // sizeControl:  modulate note size by scroll dist
+    std::vector<CtrlPoint> y_ctrl;      // yControl:     add perpendicular offset by scroll dist
+    std::vector<CtrlPoint> skew_ctrl;   // skewControl:  modulate note skew by scroll dist
 };
+
+// Evaluate a control-point curve at a given x (RPE units, -675..675).
+// Returns interpolated value; if pts is empty returns def.
+inline float eval_ctrl(const std::vector<CtrlPoint>& pts, float x, float def = 1.0f) {
+    if (pts.empty()) return def;
+    if (x <= pts.front().x) return pts.front().value;
+    if (x >= pts.back().x)  return pts.back().value;
+    for (size_t i = 1; i < pts.size(); ++i) {
+        if (x <= pts[i].x) {
+            float t = (x - pts[i-1].x) / (pts[i].x - pts[i-1].x);
+            // easing=1 → linear; others could be extended later
+            return pts[i-1].value + t * (pts[i].value - pts[i-1].value);
+        }
+    }
+    return pts.back().value;
+}
 
 struct NoteState {
     const Note* note = nullptr;
@@ -102,6 +154,11 @@ struct ChartData {
     double offset = 0.0; // seconds
     std::vector<Line> lines;
     std::vector<Note> notes; // sorted by t_hit
+
+    // Optional paths from RPE META (relative to chart root).
+    // Populated by load_rpe(); empty if not present or not an RPE chart.
+    std::string meta_song_path;
+    std::string meta_bg_path;
 
     // Precomputed at load time — avoids O(N) loops every build_frame() call
     double chart_end_t    = 0.0; // max(note.t_end) over all notes
