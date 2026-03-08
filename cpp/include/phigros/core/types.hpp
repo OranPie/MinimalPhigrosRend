@@ -147,6 +147,9 @@ struct NoteState {
     bool hold_finalized = false;
     bool hold_failed = false;
     double release_t = 0.0; // time of early release (for hold scoring)
+    double judge_t = 0.0;
+    double judge_delta_ms = 0.0;
+    std::string judge_grade;
 };
 
 // Result of loading a chart

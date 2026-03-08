@@ -16,6 +16,17 @@ enum class LineAlphaMode : uint8_t {
 };
 
 struct RenderConfig {
+    struct SimulatePlayConfig {
+        bool enabled = false;
+        std::string mode = "aggressive";
+        int max_pointers = 2;
+        double jitter_ms = 12.0;
+        bool render_pointer = true;
+        bool render_trail = true;
+        double trail_seconds = 0.16;
+        double cursor_radius_px = 20.0;
+    };
+
     // Window
     int window_w = 1280;
     int window_h = 720;
@@ -79,6 +90,7 @@ struct RenderConfig {
     double hold_tail_tol = 0.8;
     int hold_fx_interval_ms = 200;
     double audio_offset_ms = 0.0; // positive = advance notes relative to audio
+    SimulatePlayConfig simulateplay;
 
     // RPE
     int rpe_easing_shift = 0;
@@ -194,6 +206,21 @@ inline RenderConfig load_config(const std::string& path) {
         if (g.contains("hold_tail_tol") && !g["hold_tail_tol"].is_null()) cfg.hold_tail_tol = g["hold_tail_tol"].get<double>();
         if (g.contains("hold_fx_interval_ms") && !g["hold_fx_interval_ms"].is_null()) cfg.hold_fx_interval_ms = g["hold_fx_interval_ms"].get<int>();
         if (g.contains("audio_offset_ms") && !g["audio_offset_ms"].is_null()) cfg.audio_offset_ms = g["audio_offset_ms"].get<double>();
+        if (g.contains("simulateplay") && g["simulateplay"].is_object()) {
+            auto& s = g["simulateplay"];
+            if (s.contains("enabled") && !s["enabled"].is_null()) cfg.simulateplay.enabled = s["enabled"].get<bool>();
+            if (s.contains("mode") && !s["mode"].is_null()) cfg.simulateplay.mode = s["mode"].get<std::string>();
+            if (s.contains("max_pointers") && !s["max_pointers"].is_null()) cfg.simulateplay.max_pointers = s["max_pointers"].get<int>();
+            if (s.contains("jitter_ms") && !s["jitter_ms"].is_null()) cfg.simulateplay.jitter_ms = s["jitter_ms"].get<double>();
+            if (s.contains("render_pointer") && !s["render_pointer"].is_null()) cfg.simulateplay.render_pointer = s["render_pointer"].get<bool>();
+            if (s.contains("render_trail") && !s["render_trail"].is_null()) cfg.simulateplay.render_trail = s["render_trail"].get<bool>();
+            if (s.contains("trail_seconds") && !s["trail_seconds"].is_null()) cfg.simulateplay.trail_seconds = s["trail_seconds"].get<double>();
+            if (s.contains("cursor_radius_px") && !s["cursor_radius_px"].is_null()) cfg.simulateplay.cursor_radius_px = s["cursor_radius_px"].get<double>();
+            cfg.simulateplay.max_pointers = std::max(1, std::min(8, cfg.simulateplay.max_pointers));
+            cfg.simulateplay.jitter_ms = std::max(0.0, std::min(80.0, cfg.simulateplay.jitter_ms));
+            cfg.simulateplay.trail_seconds = std::max(0.02, std::min(1.0, cfg.simulateplay.trail_seconds));
+            cfg.simulateplay.cursor_radius_px = std::max(4.0, std::min(80.0, cfg.simulateplay.cursor_radius_px));
+        }
     }
 
     if (j.contains("rpe")) {
@@ -266,6 +293,16 @@ inline nlohmann::json config_to_json(const RenderConfig& cfg) {
     j["gameplay"]["hold_tail_tol"]     = cfg.hold_tail_tol;
     j["gameplay"]["hold_fx_interval_ms"] = cfg.hold_fx_interval_ms;
     j["gameplay"]["audio_offset_ms"]   = cfg.audio_offset_ms;
+    j["gameplay"]["simulateplay"] = {
+        {"enabled", cfg.simulateplay.enabled},
+        {"mode", cfg.simulateplay.mode},
+        {"max_pointers", cfg.simulateplay.max_pointers},
+        {"jitter_ms", cfg.simulateplay.jitter_ms},
+        {"render_pointer", cfg.simulateplay.render_pointer},
+        {"render_trail", cfg.simulateplay.render_trail},
+        {"trail_seconds", cfg.simulateplay.trail_seconds},
+        {"cursor_radius_px", cfg.simulateplay.cursor_radius_px}
+    };
 
     j["rpe"]["rpe_easing_shift"] = cfg.rpe_easing_shift;
     j["debug"]["basic_debug"]    = cfg.basic_debug;

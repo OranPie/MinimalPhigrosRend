@@ -1,0 +1,29 @@
+{
+  "window": { "w": 1280, "h": 720 },
+  "render": {
+    "show_hitfx": true,
+    "show_particles": true
+  },
+  "assets": {
+    "respack": "./respack.zip",
+    "bg_dim": 120,
+    "bg_blur": 10
+  },
+  "gameplay": {
+    "autoplay": true,
+    "simulateplay": {
+      "enabled": true,
+      "mode": "aggressive",
+      "max_pointers": 2,
+      "jitter_ms": 10.0,
+      "render_pointer": true,
+      "render_trail": false,
+      "trail_seconds": 0.18,
+      "cursor_radius_px": 20.0
+    },
+    "hold_tail_tol": 0.8,
+    "hold_fx_interval_ms": 200,
+    "audio_offset_ms": 0.0
+  },
+  "backend": "sdl_hw"
+}

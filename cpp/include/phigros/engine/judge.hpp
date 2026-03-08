@@ -54,6 +54,9 @@ public:
             bump();
             ns.judged = true;
             ns.hit = true;
+            ns.judge_t = t;
+            ns.judge_delta_ms = (t - ns.note->t_hit) * 1000.0;
+            ns.judge_grade = "PERFECT";
             acc_sum += judge_weight("PERFECT");
             ++judged_cnt;
             return "PERFECT";
@@ -62,6 +65,9 @@ public:
             bump();
             ns.judged = true;
             ns.hit = true;
+            ns.judge_t = t;
+            ns.judge_delta_ms = (t - ns.note->t_hit) * 1000.0;
+            ns.judge_grade = "GOOD";
             acc_sum += judge_weight("GOOD");
             ++judged_cnt;
             return "GOOD";
@@ -70,6 +76,9 @@ public:
             break_combo();
             ns.judged = true;
             ns.hit = true;
+            ns.judge_t = t;
+            ns.judge_delta_ms = (t - ns.note->t_hit) * 1000.0;
+            ns.judge_grade = "BAD";
             acc_sum += judge_weight("BAD");
             ++judged_cnt;
             return "BAD";
@@ -88,6 +97,7 @@ public:
     void mark_miss(NoteState& ns) {
         ns.judged = true;
         ns.miss = true;
+        ns.judge_grade = "MISS";
         break_combo();
         acc_sum += judge_weight("MISS");
         ++judged_cnt;
@@ -105,6 +115,9 @@ public:
         ns.hit = true;
         ns.holding = true;
         ns.hold_grade = grade;
+        ns.judge_t = t;
+        ns.judge_delta_ms = (t - ns.note->t_hit) * 1000.0;
+        ns.judge_grade = grade;
         return grade;
     }
 
@@ -116,11 +129,13 @@ public:
         ns.holding = false;
 
         if (ns.hit && !ns.hold_failed) {
+            ns.judge_grade = ns.hold_grade;
             acc_sum += judge_weight(ns.hold_grade);
             ++judged_cnt;
             bump();
         } else {
             ns.miss = true;
+            ns.judge_grade = "MISS";
             break_combo();
             acc_sum += judge_weight("MISS");
             ++judged_cnt;

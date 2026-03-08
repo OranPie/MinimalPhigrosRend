@@ -253,7 +253,17 @@ The renderer accepts a JSON (or JSONC — JSON with `//` comments) config file v
     "autoplay": true,              // auto-play (no input required)
     "hold_tail_tol": 0.8,          // hold early-release tolerance [0, 1]
     "hold_fx_interval_ms": 200,    // hold tick hit-fx interval (ms)
-    "audio_offset_ms": 0.0         // positive = advance notes relative to audio
+    "audio_offset_ms": 0.0,        // positive = advance notes relative to audio
+    "simulateplay": {
+      "enabled": false,            // human-like autoplay with pointer visuals
+      "mode": "aggressive",      // conservative | aggressive | extreme
+      "max_pointers": 2,
+      "jitter_ms": 12.0,          // timing deviation amplitude
+      "render_pointer": true,
+      "render_trail": true,
+      "trail_seconds": 0.16,
+      "cursor_radius_px": 20.0
+    }
   },
 
   "rpe": {
@@ -336,6 +346,24 @@ The renderer accepts a JSON (or JSONC — JSON with `//` comments) config file v
 | `hold_tail_tol` | float | 0.8 | Hold early-release tolerance |
 | `hold_fx_interval_ms` | int | 200 | Hold tick fx interval (ms) |
 | `audio_offset_ms` | float | 0.0 | Audio offset compensation |
+
+#### `gameplay.simulateplay`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | false | Enable simulated pointer play instead of perfect autoplay |
+| `mode` | string | `"aggressive"` | `"conservative"`, `"aggressive"`, or `"extreme"` |
+| `max_pointers` | int | 2 | Maximum concurrent virtual fingers |
+| `jitter_ms` | float | 12.0 | Target timing deviation amplitude in milliseconds |
+| `render_pointer` | bool | true | Draw virtual finger positions |
+| `render_trail` | bool | true | Draw virtual pointer trails |
+| `trail_seconds` | float | 0.16 | Lifetime of pointer trail samples |
+| `cursor_radius_px` | float | 20.0 | Virtual pointer marker size |
+
+When enabled, the renderer judges notes at the simulated pointer's actual hit time
+(`deltaMs`) instead of snapping every autoplay hit to the note time. Hit effects are
+spawned from those judged times and the virtual fingers are rendered into the scene,
+so regular scene trail / motion-blur settings also affect them.
 
 ---
 

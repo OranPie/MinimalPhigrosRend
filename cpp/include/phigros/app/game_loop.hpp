@@ -29,6 +29,9 @@
 #include <algorithm>
 #include <filesystem>
 #include <iomanip>
+#include <deque>
+#include <sstream>
+#include <cmath>
 
 #ifdef PHIGROS_WASM
 #include <emscripten.h>
@@ -85,6 +88,7 @@ struct GameLoop {
     // ── UI helpers ───────────────────────────────────────────────────────────
     render::ResultScreen result_screen;
     render::PauseOverlay pause_overlay;
+    std::deque<std::string> recent_judges;
 
     // ── Per-frame profiling ───────────────────────────────────────────────────
     // Tracks wall-clock time for 5 render phases. Enabled by --profile flag.
@@ -182,6 +186,13 @@ struct GameLoop {
         effects.particle_count = cfg.particle_count;
         manual_judge.hitfx_color_perfect = ctx.respack.cfg.color_perfect;
         manual_judge.hitfx_color_good = ctx.respack.cfg.color_good;
+        autoplay = engine::SimulatePlayer(parse_sim_mode(cfg.simulateplay.mode),
+                                          cfg.simulateplay.max_pointers);
+        autoplay.set_humanize(cfg.simulateplay.enabled, cfg.simulateplay.jitter_ms);
+        autoplay.set_visuals(cfg.simulateplay.enabled && cfg.simulateplay.render_pointer,
+                             cfg.simulateplay.enabled && cfg.simulateplay.render_trail,
+                             cfg.simulateplay.trail_seconds,
+                             cfg.simulateplay.cursor_radius_px);
 
         // Timing constants
         sim_dt = 1.0 / std::max(1.0, args.sim_fps);
@@ -274,6 +285,7 @@ struct GameLoop {
             ctx.bg.draw(ctx.batch, cfg.bg_dim);
             render_scene_at(t, frame);
             ctx.hud_ren.draw(ctx.batch, frame.hud, fps_display);
+        draw_judge_log();
             pause_overlay.draw(ctx.batch, ctx.hud_ren, W, H);
             ctx.window.end_frame();
             return !ctx.window.quit_requested;
@@ -341,26 +353,22 @@ struct GameLoop {
             }
         } else {
             static std::vector<int> s_hit_notes;
+            static std::vector<engine::SimHitEvent> s_hit_events;
             s_hit_notes.clear();
-            autoplay.step(t, chart.notes, states, chart.lines, judge, W, H, &s_hit_notes);
+            s_hit_events.clear();
+            autoplay.step(t, chart.notes, states, chart.lines, judge, W, H,
+                          &s_hit_notes, &s_hit_events);
             // Emit hit effects for each note judged this step (mirrors Python autoplay)
             if (t >= 0.0 && cfg.show_hitfx) {
-                for (int i : s_hit_notes) {
-                    const auto& n = chart.notes[i];
-                    if (n.line_id < 0 || n.line_id >= static_cast<int>(chart.lines.size())) continue;
-                    auto ls = engine::eval_line_state(chart.lines[n.line_id], t,
-                        cfg.force_line_alpha01,
-                        cfg.force_line_alpha01_by_lid ? &(*cfg.force_line_alpha01_by_lid) : nullptr);
-                    auto pos = engine::note_world_pos_cs(
-                        ls.x, ls.y, ls.cos_rot, ls.sin_rot, ls.scroll, n,
-                        n.scroll_hit, false, cfg.note_flow_speed_multiplier,
-                        cfg.note_speed_mul_affects_travel, n.kind == 3);  // holds clamp to line
-                    auto g = judge.grade_window(n.t_hit, t).value_or("PERFECT");
-                    auto col = resolve_hitfx_color(n, g);
-                    effects.add_hitfx(pos.x, pos.y, t, col);
+                for (const auto& ev : s_hit_events) {
+                    if (ev.note_idx < 0 || ev.note_idx >= static_cast<int>(chart.notes.size())) continue;
+                    const auto& n = chart.notes[ev.note_idx];
+                    auto col = resolve_hitfx_color(n, ev.grade);
+                    effects.add_hitfx(ev.x, ev.y, ev.judge_t, col);
                     if (cfg.show_particles)
-                        effects.add_particle_burst(pos.x, pos.y, t * 1000.0,
+                        effects.add_particle_burst(ev.x, ev.y, ev.judge_t * 1000.0,
                             ctx.respack.cfg.hitfx_duration * 1000.0, col);
+                    push_judge_log(ev.note_idx);
                 }
             }
         }
@@ -547,9 +555,47 @@ private:
                                static_cast<float>(cfg.hitfx_intensity),
                                W, H, cfg.expand_factor);
         }
+        draw_simulateplay_overlay(t_r);
         s_last_dl_sz = ctx.draw_list.cmds.size();
         ctx.batch.dl = nullptr;
         render::SdlExecutor::execute(ctx.window.ren, ctx.draw_list);
+    }
+
+    void draw_simulateplay_overlay(double t_r) {
+        if (is_play_mode || !cfg.simulateplay.enabled || !autoplay.render_enabled()) return;
+
+        const auto& visuals = autoplay.visuals();
+        const double radius = autoplay.cursor_radius_px();
+        for (const auto& pointer : visuals) {
+            if (autoplay.trail_enabled()) {
+                for (size_t i = 0; i < pointer.trail.size(); ++i) {
+                    const auto& sample = pointer.trail[i];
+                    double age = std::max(0.0, t_r - sample.t);
+                    double alpha01 = std::max(0.0, 1.0 - age / std::max(0.02, cfg.simulateplay.trail_seconds));
+                    uint8_t a = static_cast<uint8_t>(std::clamp(alpha01 * 120.0, 0.0, 255.0));
+                    if (a == 0) continue;
+                    double x = sample.x, y = sample.y;
+                    render::apply_expand_xy(x, y, W, H, cfg.expand_factor);
+                    double sz = std::max(4.0, radius * (0.4 + alpha01 * 0.8));
+                    ctx.batch.draw_rect(x - sz * 0.5, y - sz * 0.5, sz, sz,
+                                        180, 240, 255, a);
+                }
+            }
+
+            if (pointer.fade_alpha <= 0.001 && pointer.trail.empty()) continue;
+            double x = pointer.x, y = pointer.y;
+            render::apply_expand_xy(x, y, W, H, cfg.expand_factor);
+            double fade = std::clamp(pointer.fade_alpha, 0.0, 1.0);
+            double swell = 1.0 + 0.18 * pointer.fade_progress;
+            uint8_t inner_a = static_cast<uint8_t>((pointer.down ? 220.0 : 150.0) * fade);
+            uint8_t outer_a = static_cast<uint8_t>((pointer.flick ? 255.0 : 190.0) * fade);
+            double inner = (pointer.down ? radius * 0.75 : radius * 0.60) * swell;
+            double outer = radius * swell;
+            ctx.batch.draw_rect(x - inner * 0.5, y - inner * 0.5, inner, inner,
+                                235, 248, 255, inner_a);
+            ctx.batch.draw_rect(x - outer * 0.5, y - outer * 0.5, outer, outer,
+                                80, 220, 255, outer_a);
+        }
     }
 
     void draw_hitfx_only(double t_r) {
@@ -562,6 +608,43 @@ private:
                            W, H, cfg.expand_factor);
         ctx.batch.dl = nullptr;
         render::SdlExecutor::execute(ctx.window.ren, ctx.draw_list);
+    }
+
+    void push_judge_log(int note_idx) {
+        if (note_idx < 0 || note_idx >= static_cast<int>(states.size())) return;
+        const auto& s = states[note_idx];
+        if (s.judge_grade.empty()) return;
+
+        std::ostringstream oss;
+        oss << "note " << note_idx
+            << " " << s.judge_grade
+            << " " << std::showpos << std::fixed << std::setprecision(1)
+            << s.judge_delta_ms << "ms";
+
+        if (s.note && s.note->kind == 3) {
+            double held_ms = 0.0;
+            if (s.released_early) held_ms = std::max(0.0, (s.release_t - s.note->t_hit) * 1000.0);
+            else if (s.hold_finalized) held_ms = std::max(0.0, (s.note->t_end - s.note->t_hit) * 1000.0);
+            else held_ms = std::max(0.0, (s.judge_t - s.note->t_hit) * 1000.0);
+            oss << " " << std::noshowpos << std::fixed << std::setprecision(1)
+                << held_ms << "ms";
+        }
+
+        recent_judges.push_front(oss.str());
+        while (recent_judges.size() > 8) recent_judges.pop_back();
+    }
+
+    void draw_judge_log() {
+        if (!cfg.simulateplay.enabled || !ctx.hud_ren.has_font || recent_judges.empty()) return;
+        const double x = 16.0;
+        const double y0 = H - 28.0 - 8.0 * 22.0;
+        int row = 0;
+        for (const auto& line : recent_judges) {
+            uint8_t a = static_cast<uint8_t>(std::max(120, 240 - row * 14));
+            ctx.hud_ren.draw_text(ctx.batch, ctx.hud_ren.font_small, line, x, y0 + row * 22.0,
+                                  220, 235, 255, a);
+            ++row;
+        }
     }
 
     void do_restart() {
@@ -578,8 +661,21 @@ private:
         manual_judge  = engine::ManualJudge{};
         manual_judge.hitfx_color_perfect = ctx.respack.cfg.color_perfect;
         manual_judge.hitfx_color_good = ctx.respack.cfg.color_good;
+        autoplay.reset();
+        autoplay.set_humanize(cfg.simulateplay.enabled, cfg.simulateplay.jitter_ms);
+        autoplay.set_visuals(cfg.simulateplay.enabled && cfg.simulateplay.render_pointer,
+                             cfg.simulateplay.enabled && cfg.simulateplay.render_trail,
+                             cfg.simulateplay.trail_seconds,
+                             cfg.simulateplay.cursor_radius_px);
         replay_player.cursor = 0;
+        recent_judges.clear();
         ctx.reload_audio(chart.offset);
+    }
+
+    static engine::SimMode parse_sim_mode(const std::string& mode) {
+        if (mode == "conservative") return engine::SimMode::Conservative;
+        if (mode == "extreme") return engine::SimMode::Extreme;
+        return engine::SimMode::Aggressive;
     }
 
     void do_capture() {

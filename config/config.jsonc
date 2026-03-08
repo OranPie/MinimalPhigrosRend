@@ -52,9 +52,16 @@
   },
   "gameplay": {
     "autoplay": true,
-    "simulateplay": false,
-    "simulateplay_mode": "conve",
-    "simulateplay_max_pointers": 10,
+    "simulateplay": {
+      "enabled": false,
+      "mode": "aggressive",
+      "max_pointers": 2,
+      "jitter_ms": 12.0,
+      "render_pointer": true,
+      "render_trail": true,
+      "trail_seconds": 0.16,
+      "cursor_radius_px": 20.0
+    },
     "simulateplay_ipad": false,
     "ipad_bundle_id": null,
     "ipad_udid": null,
