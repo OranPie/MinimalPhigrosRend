@@ -213,6 +213,37 @@ These are set via the C++ API or programmatically:
 
 ---
 
+## CLI + Scoring Semantics
+
+This page documents JSONC config fields. The following runtime behaviors are controlled by CLI flags (not JSON fields):
+
+- `--duration <sec>`: stop simulation/recording after `N` seconds.
+- `--truncate-at-duration`: when used with `--duration`, scoring denominator is truncated to notes inside the duration window.
+- `--sim-fps <fps>`: internal simulation sampling rate (used by headless/render loop timing).
+- `--record-fps <fps>`: output video FPS.
+
+Score formula:
+
+```text
+score = int(real_acc * 900000 + max_combo/total_notes * 100000)
+```
+
+Notes about `total_notes`:
+
+- Default: playable notes (`fake=false`) of the whole chart.
+- With `--duration N --truncate-at-duration`:
+  - non-hold note counts when `t_hit <= N`
+  - hold note counts when `t_end <= N`
+
+Duration progress behavior:
+
+- In recording mode, progress percentage uses effective end time:
+  - `min(chart_end, duration)` when `--duration` is set
+  - `chart_end` otherwise
+- So a `--duration 20` capture should end at `100.0%` progress.
+
+---
+
 ## Round-trip serialization
 
 The C++ API can save the current config back to JSON:

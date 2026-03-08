@@ -132,6 +132,9 @@ Notes 在解析后按 **`t_hit` 排序** — 这是二分查找可见性边界�
 score = int( acc_sum/N × 900000 + max_combo/N × 100000 )
 ```
 
+其中 `N` 为可判定音符分母（`fake=false`）。  
+当启用 `--duration` 且同时启用 `--truncate-at-duration` 时，`N` 会截断为 duration 窗口内音符数量。
+
 ### `render/` — 帧构建与绘制
 
 | 文件 | 说明 |
@@ -199,7 +202,7 @@ Footer:  crc32[4]
 6. 跳过中间模拟步骤（无头多步模式）
 7. `build_frame()`
 8. 渲染（拖影 / 运动模糊 / 普通路径）
-9. HUD + 结算界面叠加层
+9. HUD + 结算界面叠加层（`score/acc/combo` 面板 + 进度条）
 10. 视频录制 / 截图
 
 ---

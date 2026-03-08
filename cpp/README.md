@@ -13,7 +13,7 @@ Cross-platform: Desktop (SDL3), Web (WASM/Emscripten + SDL2), Mobile.
 - Replay record + playback (`--save-replay` / `--play-replay`)
 - Video export via FFmpeg subprocess (`--record`)
 - Trail effect, motion blur, note outline, hold-glow
-- bgfx GPU renderer backend (`--backend bgfx`)
+- SDL render backends (`--backend sdl|sdl_hw|sdl_sw`)
 - WASM build for browser deployment
 
 ## Quick Start
@@ -43,7 +43,10 @@ make -j$(nproc)
 ./phigros_render charts/MyChart/IN.json --benchmark --benchmark-iterations 20
 
 # Record video (requires FFmpeg in PATH)
-./phigros_render charts/MyChart/IN.json --record output.mp4 --record-preset medium
+./phigros_render charts/MyChart/IN.json --record output.mp4 --record-preset balanced --record-fps 60
+
+# 20s capture, duration-truncated scoring denominator
+./phigros_render charts/MyChart/IN.json --record out_20s.mp4 --duration 20 --truncate-at-duration
 ```
 
 ### Key Bindings (play mode)
@@ -104,7 +107,7 @@ See [`docs/CONFIG.md`](docs/CONFIG.md) for a full reference of all config fields
 ## CLI Reference
 
 ```
-./phigros_render <chart.json> [options]
+./phigros_render <chart_path> [options]
 
 Input:
   --config <path>              JSONC config file
@@ -112,6 +115,11 @@ Input:
 Playback:
   --play                       Interactive play mode
   --score-only                 Print score and exit (headless)
+  --duration <sec>             Auto-quit after N seconds
+  --truncate-at-duration       Use notes within duration as score denominator
+  --audio-offset <ms>          Audio latency compensation (ms)
+  --width <px>                 Window width override
+  --height <px>                Window height override
   --headless                   Run without window (for benchmarking/CI)
 
 Replay:
@@ -120,25 +128,45 @@ Replay:
 
 Video:
   --record <output.mp4>        Record to video file (requires FFmpeg)
-  --record-preset <name>       FFmpeg preset (ultrafast/medium/slow)
-  --record-fps <int>           Recording framerate (default: 60)
+  --record-preset <name>       fast|balanced|quality|archive
+  --record-codec <codec>       libx264/libx265/libvpx-vp9/h264_nvenc/...
+  --record-hw <type>           nvenc|qsv|vaapi|amf|videotoolbox
+  --record-fps <fps>           Recording framerate (default: 60)
+  --sim-fps <fps>              Internal simulation sampling rate (default: 240)
+  --record-resolution WxH      Output video resolution
+  --record-capture-resolution WxH  Render/readback resolution
+  --record-queue-depth <N>     Async encoder queue depth
   --record-start <sec>         Start time for recording
   --record-end <sec>           End time for recording
 
 Benchmark:
   --benchmark                  Run in benchmark mode (headless)
-  --benchmark-iterations <N>   Number of benchmark passes (default: 3)
+  --benchmark-iterations <N>   Number of benchmark passes (default: 10)
+  --profile                    Print per-phase frame timing stats
 
 Screenshot:
   --screenshot-dir <path>      Directory to save PNG frames
+  --screenshot-fps <fps>       Screenshot rate in chart-seconds
 
 Backend:
-  --backend sdl3|bgfx          Rendering backend (default: sdl3)
+  --backend sdl|sdl_hw|sdl_sw  Rendering backend
 
 Audio:
   --audio <path>               Path to BGM audio file
-  --audio-offset <ms>          Audio latency compensation (ms)
+Misc:
+  --info/-i                    Print chart metadata and exit
+  --list-charts <dir>          Discover charts under directory
+  --version/-v                 Print version and exit
 ```
+
+## Score And Duration
+
+- Score formula: `score = int(real_acc * 900000 + max_combo/total_notes * 100000)`.
+- `total_notes` is playable notes (`fake=false`), not raw `notes.size()`.
+- With `--duration N`, recording progress uses `N` as end target (reaches `100.0%` at stop).
+- With `--duration N --truncate-at-duration`, denominator is truncated to notes inside the duration window:
+  - non-hold: `t_hit <= N`
+  - hold: `t_end <= N`
 
 ## Testing
 

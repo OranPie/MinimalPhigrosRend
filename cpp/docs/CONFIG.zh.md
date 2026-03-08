@@ -203,6 +203,37 @@
 
 ---
 
+## CLI 与计分语义（补充）
+
+本页主要描述 JSONC 配置字段。以下运行时行为由 CLI 参数控制（不是 JSON 字段）：
+
+- `--duration <sec>`：在 `N` 秒后停止模拟/录制。
+- `--truncate-at-duration`：与 `--duration` 同时使用时，将计分分母截断到 duration 窗口内音符。
+- `--sim-fps <fps>`：内部模拟采样率（影响无头/录制循环采样）。
+- `--record-fps <fps>`：输出视频帧率。
+
+得分公式：
+
+```text
+score = int(real_acc * 900000 + max_combo/total_notes * 100000)
+```
+
+`total_notes` 规则：
+
+- 默认：整首谱面的可判定音符（`fake=false`）。
+- 使用 `--duration N --truncate-at-duration` 时：
+  - 非 Hold 音符：`t_hit <= N` 才计入分母
+  - Hold 音符：`t_end <= N` 才计入分母
+
+Duration 进度条语义：
+
+- 录制模式下进度百分比使用有效终点时间：
+  - 设置 `--duration` 时：`min(chart_end, duration)`
+  - 未设置 `--duration` 时：`chart_end`
+- 因此 `--duration 20` 的录制应在结束时显示 `100.0%`。
+
+---
+
 ## 往返序列化
 
 C++ API 可将当前配置保存回 JSON：

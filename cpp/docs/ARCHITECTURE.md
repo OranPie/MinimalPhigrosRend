@@ -132,6 +132,9 @@ Notes are **sorted by `t_hit`** after parsing — required for binary-search vis
 score = int( acc_sum/N × 900000 + max_combo/N × 100000 )
 ```
 
+Where `N` is the playable-note denominator (`fake=false`).  
+When `--duration` is set with `--truncate-at-duration`, `N` is truncated to notes inside the duration window.
+
 ### `render/` — Frame building and drawing
 
 | File | Description |
@@ -199,7 +202,7 @@ Compressed with miniz deflate.
 6. Skip intermediate sim ticks (headless multi-step)
 7. `build_frame()`
 8. Render (trail / motion blur / plain path)
-9. HUD + result overlay
+9. HUD + result overlay (`score/acc/combo` panel + progress)
 10. Video capture / screenshot
 
 ---

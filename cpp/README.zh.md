@@ -13,7 +13,7 @@
 - 回放录制与回放（`--save-replay` / `--play-replay`）
 - 通过 FFmpeg 子进程导出视频（`--record`）
 - 拖尾特效、动态模糊、音符描边、长按发光
-- bgfx GPU 渲染后端（`--backend bgfx`）
+- SDL 渲染后端（`--backend sdl|sdl_hw|sdl_sw`）
 - 支持构建为 WASM 在浏览器中部署
 
 ## 快速开始
@@ -43,7 +43,10 @@ make -j$(nproc)
 ./phigros_render charts/MyChart/IN.json --benchmark --benchmark-iterations 20
 
 # 录制视频（需要 PATH 中存在 FFmpeg）
-./phigros_render charts/MyChart/IN.json --record output.mp4 --record-preset medium
+./phigros_render charts/MyChart/IN.json --record output.mp4 --record-preset balanced --record-fps 60
+
+# 录制 20 秒，并按 duration 截断计分分母
+./phigros_render charts/MyChart/IN.json --record out_20s.mp4 --duration 20 --truncate-at-duration
 ```
 
 ### 按键绑定（游玩模式）
@@ -104,7 +107,7 @@ emmake make -j$(nproc)
 ## 命令行参考
 
 ```
-./phigros_render <chart.json> [options]
+./phigros_render <chart_path> [options]
 
 输入：
   --config <path>              JSONC 配置文件
@@ -112,6 +115,11 @@ emmake make -j$(nproc)
 回放控制：
   --play                       交互式游玩模式
   --score-only                 输出分数后退出（无窗口）
+  --duration <sec>             N 秒后自动退出
+  --truncate-at-duration       将 duration 内音符作为计分分母
+  --audio-offset <ms>          音频延迟补偿（毫秒）
+  --width <px>                 覆盖窗口宽度
+  --height <px>                覆盖窗口高度
   --headless                   无窗口运行（用于基准测试/CI）
 
 回放录制：
@@ -120,25 +128,45 @@ emmake make -j$(nproc)
 
 视频录制：
   --record <output.mp4>        录制到视频文件（需要 FFmpeg）
-  --record-preset <name>       FFmpeg 预设（ultrafast/medium/slow）
-  --record-fps <int>           录制帧率（默认：60）
+  --record-preset <name>       fast|balanced|quality|archive
+  --record-codec <codec>       libx264/libx265/libvpx-vp9/h264_nvenc/...
+  --record-hw <type>           nvenc|qsv|vaapi|amf|videotoolbox
+  --record-fps <fps>           录制帧率（默认：60）
+  --sim-fps <fps>              内部模拟采样率（默认：240）
+  --record-resolution WxH      输出视频分辨率
+  --record-capture-resolution WxH  编码前渲染/回读分辨率
+  --record-queue-depth <N>     异步编码队列深度
   --record-start <sec>         录制起始时间
   --record-end <sec>           录制结束时间
 
 基准测试：
   --benchmark                  以基准测试模式运行（无窗口）
-  --benchmark-iterations <N>   基准测试轮数（默认：3）
+  --benchmark-iterations <N>   基准测试轮数（默认：10）
+  --profile                    输出分阶段帧耗时统计
 
 截图：
   --screenshot-dir <path>      保存 PNG 帧的目录
+  --screenshot-fps <fps>       以谱面时间计的截图频率
 
 渲染后端：
-  --backend sdl3|bgfx          渲染后端（默认：sdl3）
+  --backend sdl|sdl_hw|sdl_sw  渲染后端
 
 音频：
   --audio <path>               背景音乐文件路径
-  --audio-offset <ms>          音频延迟补偿（毫秒）
+其他：
+  --info/-i                    输出谱面元信息后退出
+  --list-charts <dir>          递归发现目录内谱面
+  --version/-v                 输出版本后退出
 ```
+
+## 计分与 Duration 语义
+
+- 得分公式：`score = int(real_acc * 900000 + max_combo/total_notes * 100000)`。
+- `total_notes` 使用可判定音符数（`fake=false`），不是原始 `notes.size()`。
+- 使用 `--duration N` 时，录制进度条以 `N` 为终点，结束时应显示 `100.0%`。
+- 使用 `--duration N --truncate-at-duration` 时，计分分母截断为 duration 窗口内音符：
+  - 非 Hold：`t_hit <= N`
+  - Hold：`t_end <= N`
 
 ## 测试
 
