@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <iostream>
 
 namespace phigros::render {
 
@@ -80,6 +81,22 @@ struct TrailRenderer {
 
         for (int i = 0; i < n_slots; ++i)
             slots[i] = RenderTarget::create(ren, w, h);
+
+        // Check if render targets were created successfully (requires hardware-accelerated backend)
+        bool all_valid = true;
+        for (int i = 0; i < n_slots; ++i) {
+            if (!slots[i].valid()) {
+                all_valid = false;
+                break;
+            }
+        }
+        if (!all_valid) {
+            std::cerr << "[Trail] Failed to create render targets — requires hardware-accelerated backend (sdl_hw).\n"
+                      << "        Trail effect disabled. Use --backend sdl_hw or set \"backend\":\"sdl_hw\" in config.\n";
+            _enabled = false;
+            for (int i = 0; i < n_slots; ++i) slots[i].destroy();
+            return;
+        }
 
         // Build blur chain: progressively smaller targets for downscale blur
         if (blur_ramp) {

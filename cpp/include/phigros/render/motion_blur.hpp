@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include <iostream>
 
 namespace phigros::render {
 
@@ -53,6 +54,16 @@ struct MotionBlurRenderer {
 
         accum   = RenderTarget::create(ren, w, h);
         scratch = RenderTarget::create(ren, w, h);
+
+        // Check if render targets were created successfully (requires hardware-accelerated backend)
+        if (!accum.valid() || !scratch.valid()) {
+            std::cerr << "[MotionBlur] Failed to create render targets — requires hardware-accelerated backend (sdl_hw).\n"
+                      << "             Motion blur disabled. Use --backend sdl_hw or set \"backend\":\"sdl_hw\" in config.\n";
+            _enabled = false;
+            accum.destroy();
+            scratch.destroy();
+            return;
+        }
 
         precompute_weights();
     }
