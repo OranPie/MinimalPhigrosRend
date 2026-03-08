@@ -403,11 +403,23 @@ struct GameLoop {
             ctx.motion_blur.composite(ctx.window.ren);
             if (!cfg.hitfx_effect_apply) draw_hitfx_only(t);
         } else if (ctx.trail.enabled()) {
-            ctx.trail.begin_frame(ctx.window.ren);
             uint64_t t0_scene = prof.now();
-            render_scene_at(t, frame, cfg.hitfx_effect_apply);
+            int trail_samples = args.headless ? std::max(1, sim_steps_per_render) : 1;
+            double dt_chart = render_dt * cfg.chart_speed;
+            for (int i = 0; i < trail_samples; ++i) {
+                double frac = (trail_samples <= 1)
+                    ? 1.0
+                    : static_cast<double>(i + 1) / static_cast<double>(trail_samples);
+                double t_sub = t - dt_chart * (1.0 - frac);
+                ctx.trail.begin_frame(ctx.window.ren);
+                auto sub_fr = (i == trail_samples - 1)
+                    ? frame
+                    : render::build_frame(t_sub, chart, states, judge, cfg);
+                render_scene_at(t_sub, sub_fr, cfg.hitfx_effect_apply);
+                render::RenderTarget::unbind(ctx.window.ren);
+                ctx.trail.submit_frame();
+            }
             prof.record(1, t0_scene, prof.now());
-            render::RenderTarget::unbind(ctx.window.ren);
             ctx.bg.draw(ctx.batch, cfg.bg_dim);
             ctx.trail.composite(ctx.window.ren);
             if (!cfg.hitfx_effect_apply) draw_hitfx_only(t);

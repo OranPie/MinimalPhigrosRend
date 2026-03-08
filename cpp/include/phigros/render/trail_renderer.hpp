@@ -117,6 +117,11 @@ struct TrailRenderer {
         slots[head].bind(ren);
     }
 
+    // Commit one freshly rendered slot into the ring buffer timeline.
+    void submit_frame() {
+        ++frame_count;
+    }
+
     // Compute per-frame alpha using selected decay curve.
     double compute_alpha(int age) const {
         if (use_gaussian) {
@@ -166,9 +171,11 @@ struct TrailRenderer {
     }
 
     void composite(SDL_Renderer* ren) {
-        int available = std::min(frame_count + 1, n_slots);
+        int available = std::min(frame_count, n_slots);
+        if (available <= 0) return;
+        int newest = ((frame_count - 1) % n_slots + n_slots) % n_slots;
         for (int age = available - 1; age >= 0; --age) {
-            int slot_idx = ((head - age) % n_slots + n_slots) % n_slots;
+            int slot_idx = ((newest - age) % n_slots + n_slots) % n_slots;
             double slot_alpha = compute_alpha(age);
             uint8_t a = static_cast<uint8_t>(std::clamp(slot_alpha * 255.0, 0.0, 255.0));
             if (a == 0) continue;
@@ -205,7 +212,7 @@ struct TrailRenderer {
         if (glow > 0.01) {
             int glow_frames = std::min(3, available);
             for (int age = glow_frames - 1; age >= 0; --age) {
-                int slot_idx = ((head - age) % n_slots + n_slots) % n_slots;
+                int slot_idx = ((newest - age) % n_slots + n_slots) % n_slots;
                 double ga = glow * compute_alpha(age) * 0.5;
                 uint8_t ga8 = static_cast<uint8_t>(std::clamp(ga * 255.0, 0.0, 255.0));
                 if (ga8 == 0) continue;
@@ -213,8 +220,6 @@ struct TrailRenderer {
                 slots[slot_idx].blit_to(ren, ga8, SDL_BLENDMODE_ADD);
             }
         }
-
-        ++frame_count;
     }
 
     void destroy() {
