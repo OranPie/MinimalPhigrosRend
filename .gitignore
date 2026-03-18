@@ -47,3 +47,8 @@ QS.mp4
 cpp/build/
 cpp/build_bgfx/
 cpp/build_wasm/
+
+# Android Gradle build artifacts
+cpp/android/.gradle/
+cpp/android/app/build/
+cpp/android/build/
