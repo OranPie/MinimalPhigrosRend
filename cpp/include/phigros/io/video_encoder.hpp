@@ -3,6 +3,7 @@
 // Captures raw RGB24 frames and pipes them to FFmpeg for encoding.
 // Optional audio muxing with BGM + hitsounds.
 
+#include "phigros/core/logger.hpp"
 #include <string>
 #include <vector>
 #include <cstdio>
@@ -216,7 +217,7 @@ public:
         cmd_last_ = build_ffmpeg_cmd(output_path, false);
         pipe_ = popen(cmd_last_.c_str(), "w");
         if (!pipe_) {
-            std::cerr << "[VideoEncoder] Failed to start FFmpeg\n";
+            PHLOG_ERROR(Record, "VideoEncoder: failed to start FFmpeg");
             return false;
         }
         std::setvbuf(pipe_, nullptr, _IOFBF, 1 << 20);
@@ -254,8 +255,8 @@ public:
             }
         }
         if (written != frame_size_) {
-            std::cerr << "[VideoEncoder] Write failed (wrote " << written
-                      << "/" << frame_size_ << ")\n";
+            PHLOG_ERROR(Record, "VideoEncoder: write failed (wrote " << written
+                << "/" << frame_size_ << ")");
             return false;
         }
         return true;
@@ -411,9 +412,9 @@ public:
         capture_w_ = (rc.capture_width > 0) ? rc.capture_width : window_w;
         capture_h_ = (rc.capture_height > 0) ? rc.capture_height : window_h;
         if (capture_w_ != window_w || capture_h_ != window_h) {
-            std::cerr << "[Record] capture resolution (" << capture_w_ << "x" << capture_h_
-                      << ") does not match render size (" << window_w << "x" << window_h
-                      << "); using render size for readback\n";
+            PHLOG_WARN(Record, "Capture resolution (" << capture_w_ << "x" << capture_h_
+                << ") does not match render size (" << window_w << "x" << window_h
+                << "); using render size for readback");
             capture_w_ = window_w;
             capture_h_ = window_h;
         }
@@ -427,31 +428,31 @@ public:
         } else if (!rc.hw_type.empty()) {
             std::string mapped = hw_type_to_codec(rc.hw_type);
             if (mapped.empty()) {
-                std::cerr << "[Record] Unknown --record-hw value '" << rc.hw_type
-                          << "', using software codec '" << preset.codec << "'\n";
+                PHLOG_WARN(Record, "Unknown --record-hw value '" << rc.hw_type
+                    << "', using software codec '" << preset.codec << "'");
             } else {
                 preset.codec = mapped;
             }
         }
         if (!VideoEncoder::codec_available(preset.codec)) {
-            std::cerr << "[Record] Codec '" << preset.codec
-                      << "' is unavailable; falling back to '" << fallback_codec << "'\n";
+            PHLOG_WARN(Record, "Codec '" << preset.codec
+                << "' is unavailable; falling back to '" << fallback_codec << "'");
             preset.codec = fallback_codec;
         }
         if (is_hw_codec_name(preset.codec) && !VideoEncoder::codec_usable(preset.codec)) {
-            std::cerr << "[Record] Hardware codec '" << preset.codec
-                      << "' is not usable on this system; falling back to '"
-                      << fallback_codec << "'\n";
+            PHLOG_WARN(Record, "Hardware codec '" << preset.codec
+                << "' is not usable on this system; falling back to '"
+                << fallback_codec << "'");
             preset.codec = fallback_codec;
         }
         if (!VideoEncoder::codec_available(preset.codec)) {
-            std::cerr << "[Record] Codec '" << preset.codec
-                      << "' is unavailable in FFmpeg. Install the encoder or choose another codec.\n";
+            PHLOG_ERROR(Record, "Codec '" << preset.codec
+                << "' is unavailable in FFmpeg. Install the encoder or choose another codec.");
             return false;
         }
         if (!VideoEncoder::codec_usable(preset.codec)) {
-            std::cerr << "[Record] Codec '" << preset.codec
-                      << "' failed ffmpeg probe. Choose a different codec.\n";
+            PHLOG_ERROR(Record, "Codec '" << preset.codec
+                << "' failed ffmpeg probe. Choose a different codec.");
             return false;
         }
 
@@ -472,20 +473,20 @@ public:
             try {
                 worker_ = std::thread([this]() { worker_main(); });
             } catch (const std::exception& e) {
-                std::cerr << "[Record] Failed to start encoder worker: " << e.what() << "\n";
+                PHLOG_ERROR(Record, "Failed to start encoder worker: " << e.what());
                 encoder_.close();
                 return false;
             }
         }
 
         started_ = true;
-        std::string res_info = "capture=" + std::to_string(capture_w_) + "x" + std::to_string(capture_h_) +
-                               " output=" + std::to_string(out_w) + "x" + std::to_string(out_h);
-        std::cout << "[Record] " << res_info << " @ " << rc.fps
-                  << "fps, preset=" << preset.name
-                  << ", codec=" << preset.codec
-                  << ", queue=" << queue_capacity_
-                  << (async_enabled_ ? " (async)" : " (sync)") << std::endl;
+        PHLOG_INFO(Record, "Started: capture=" << capture_w_ << "x" << capture_h_
+            << " output=" << out_w << "x" << out_h
+            << " @ " << rc.fps << "fps"
+            << " preset=" << preset.name
+            << " codec=" << preset.codec
+            << " queue=" << queue_capacity_
+            << (async_enabled_ ? " (async)" : " (sync)"));
         return true;
     }
 
@@ -493,9 +494,8 @@ public:
     bool capture_rgba(const uint8_t* rgba, int w, int h) {
         if (!started_) return false;
         if (w != capture_w_ || h != capture_h_) {
-            std::cerr << "[Record] capture size mismatch: got "
-                      << w << "x" << h << ", expected "
-                      << capture_w_ << "x" << capture_h_ << "\n";
+            PHLOG_ERROR(Record, "Capture size mismatch: got " << w << "x" << h
+                << ", expected " << capture_w_ << "x" << capture_h_);
             return false;
         }
         size_t len = static_cast<size_t>(w) * h * 4;
@@ -534,40 +534,41 @@ public:
         int ret = encoder_.close();
         auto s = encoder_.stats_snapshot();
         double pipe_mb = s.bytes_written / (1024.0 * 1024.0);
-        std::cout << "\n[Record] Complete: " << s.frames_written << " frames"
-                  << ", " << static_cast<int>(pipe_mb) << " MB piped"
-                  << ", " << s.fps_wall() << " fps"
-                  << ", avg write " << s.avg_write_ms() << "ms"
-                  << " (max " << s.max_write_ms << "ms";
-        if (s.slow_writes > 0)
-            std::cout << ", " << s.slow_writes << " slow";
-        std::cout << ", queue_peak " << queue_peak_ << "/" << queue_capacity_
-                  << ")" << std::endl;
+        {
+            std::ostringstream oss;
+            oss << "Complete: " << s.frames_written << " frames"
+                << ", " << static_cast<int>(pipe_mb) << " MB piped"
+                << ", " << s.fps_wall() << " fps"
+                << ", avg write " << s.avg_write_ms() << "ms"
+                << " (max " << s.max_write_ms << "ms";
+            if (s.slow_writes > 0) oss << ", " << s.slow_writes << " slow";
+            oss << ", queue_peak " << queue_peak_ << "/" << queue_capacity_ << ")";
+            PHLOG_INFO(Record, oss.str());
+        }
 
         if (worker_failed_) {
-            std::cerr << "[Record] Async encoder worker failed before completion\n";
+            PHLOG_ERROR(Record, "Async encoder worker failed before completion");
             return false;
         }
 
         if (ret != 0) {
-            std::cerr << "[Record] FFmpeg exited with code " << ret << std::endl;
+            PHLOG_ERROR(Record, "FFmpeg exited with code " << ret);
             return false;
         }
 
         // Audio mux step
         if (!cfg_.audio_path.empty() && !video_tmp_.empty()) {
-            std::cout << "[Record] Muxing audio..." << std::endl;
+            PHLOG_INFO(Record, "Muxing audio…");
             bool ok = VideoEncoder::mux_audio(video_tmp_, cfg_.audio_path, cfg_.output);
             // Clean up temp video
             std::filesystem::remove(video_tmp_);
             if (!ok) {
-                std::cerr << "[Record] Audio mux failed\n";
-                // Rename temp as final output (video-only)
+                PHLOG_ERROR(Record, "Audio mux failed");
                 return false;
             }
-            std::cout << "[Record] Output: " << cfg_.output << std::endl;
+            PHLOG_INFO(Record, "Output: " << cfg_.output);
         } else {
-            std::cout << "[Record] Output: " << cfg_.output << std::endl;
+            PHLOG_INFO(Record, "Output: " << cfg_.output);
         }
 
         return true;
@@ -586,10 +587,18 @@ public:
         int eta_min = static_cast<int>(remaining) / 60;
         int eta_sec = static_cast<int>(remaining) % 60;
         size_t qsz = queue_size_snapshot();
+        // Use raw printf for the inline progress line (overwritten in-place with \r)
         std::printf("\r[Record] %.1f%% | f%d | %.0ffps | q%zu/%zu | %.1fx speed | ETA %d:%02d  ",
                     pct, s.frames_written, s.fps_wall(), qsz, queue_capacity_,
                     speed, eta_min, eta_sec);
         std::fflush(stdout);
+        // Also emit to logger at TRACE level (without \r, for log files)
+        PHLOG_TRACE(Record, "Progress " << static_cast<int>(pct) << "%"
+            << " frames=" << s.frames_written
+            << " fps=" << static_cast<int>(s.fps_wall())
+            << " queue=" << qsz << "/" << queue_capacity_
+            << " speed=" << speed << "x"
+            << " eta=" << eta_min << "m" << eta_sec << "s");
     }
 
 private:

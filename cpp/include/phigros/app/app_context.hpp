@@ -5,6 +5,7 @@
 
 #include "phigros/app/window.hpp"
 #include "phigros/app/input_manager.hpp"
+#include "phigros/core/logger.hpp"
 #include "phigros/render/sprite_batch.hpp"
 #include "phigros/render/draw_list.hpp"
 #include "phigros/render/background.hpp"
@@ -89,10 +90,12 @@ struct AppContext {
 
         const bool vsync = !headless && !no_vsync;
         window.init(W, H, "Phigros Renderer", headless, vsync, cfg.backend);
-        std::cout << "[Window] " << W << "x" << H
-                  << (headless ? " (headless)" : "")
-                  << (vsync ? "" : " (vsync off)")
-                  << " backend=" << window.normalize_backend(cfg.backend) << "\n";
+        PHLOG_INFO(Window, W << "x" << H
+            << (headless ? " (headless)" : "")
+            << (vsync ? "" : " (vsync off)")
+            << " backend=" << window.normalize_backend(cfg.backend));
+        PHLOG_DEBUG(Window, "render_driver=" << window.normalize_backend(cfg.backend)
+            << " vsync=" << vsync << " headless=" << headless);
 
         batch.init(window.ren);
         draw_list.reserve(2048);
@@ -108,14 +111,17 @@ struct AppContext {
         // Respack
         std::string rp = respack_override.empty() ? cfg.respack_path : respack_override;
         respack = io::load_respack(window.ren, rp);
-        std::cout << "[Respack] " << (respack.loaded ? "Loaded" : "Fallback")
-                  << " (" << rp << ")\n";
+        PHLOG_INFO(Respack, (respack.loaded ? "Loaded" : "Fallback") << " (" << rp << ")");
+        PHLOG_DEBUG(Respack, "color_perfect=(" << (int)respack.cfg.color_perfect.r
+            << "," << (int)respack.cfg.color_perfect.g
+            << "," << (int)respack.cfg.color_perfect.b
+            << ") hitfx_duration=" << respack.cfg.hitfx_duration << "s");
 
         // Background
         std::string bgp = bg_override.empty() ? cfg.bg_path : bg_override;
         if (!bgp.empty()) {
             bg.load(window.ren, bgp, W, H, cfg.bg_blur);
-            std::cout << "[Background] " << (bg.has_bg ? "Loaded" : "Failed") << "\n";
+            PHLOG_INFO(Render, "Background " << (bg.has_bg ? "loaded" : "failed") << ": " << bgp);
         }
 
         // Renderers
@@ -126,6 +132,10 @@ struct AppContext {
         hold_ren.init(W, H, cfg.note_scale_x, cfg.note_scale_y);
         trail.init(window.ren, W, H, cfg);
         motion_blur.init(window.ren, W, H, cfg);
+        PHLOG_DEBUG(Render, "note_scale_x=" << cfg.note_scale_x
+            << " note_scale_y=" << cfg.note_scale_y
+            << " line_w=" << line_ren.line_w
+            << " bg_dim=" << cfg.bg_dim);
 
         // Wire up zip-aware texture lookup for RPE line textures
         line_ren.texture_lookup = [this](const std::string& path) -> const render::Texture* {
@@ -143,7 +153,7 @@ struct AppContext {
                     tex = render::Texture::from_file(window.ren, full.string());
             }
             if (!tex.valid())
-                std::cerr << "[LineTexture] Failed to load: " << path << "\n";
+                PHLOG_WARN(Render, "LineTexture failed to load: " << path);
             line_tex_cache[path] = std::move(tex);
             return line_tex_cache[path].valid() ? &line_tex_cache[path] : nullptr;
         };
@@ -158,12 +168,12 @@ struct AppContext {
         };
 
         if (trail.enabled())
-            std::cout << "[Trail] alpha=" << cfg.trail_alpha.value()
-                      << " frames=" << cfg.trail_frames.value_or(6)
-                      << " decay=" << cfg.trail_decay.value_or(0.85) << "\n";
+            PHLOG_INFO(Render, "Trail enabled: alpha=" << cfg.trail_alpha.value()
+                << " frames=" << cfg.trail_frames.value_or(6)
+                << " decay=" << cfg.trail_decay.value_or(0.85));
         if (motion_blur.enabled())
-            std::cout << "[MotionBlur] samples=" << cfg.motion_blur_samples.value()
-                      << " shutter=" << cfg.motion_blur_shutter.value_or(0.5) << "\n";
+            PHLOG_INFO(Render, "MotionBlur enabled: samples=" << cfg.motion_blur_samples.value()
+                << " shutter=" << cfg.motion_blur_shutter.value_or(0.5));
 
         hud_ren.init(window.ren, font_path, W, H);
         hud_ren.screen_w = W;
@@ -176,8 +186,13 @@ struct AppContext {
         if (!audio_path.empty()) {
             if (audio.init()) {
                 has_audio = audio.load_bgm(audio_path, chart_offset);
-                if (has_audio) std::cout << "[Audio] Loaded: " << audio_path << "\n";
+                if (has_audio)
+                    PHLOG_INFO(Audio, "Loaded BGM: " << audio_path);
+                else
+                    PHLOG_WARN(Audio, "Failed to load BGM: " << audio_path);
             }
+        } else {
+            PHLOG_DEBUG(Audio, "No audio path found — will run silent");
         }
     }
 

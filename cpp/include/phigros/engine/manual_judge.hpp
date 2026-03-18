@@ -1,4 +1,5 @@
 #pragma once
+#include "phigros/core/logger.hpp"
 #include "phigros/engine/judge_input.hpp"
 #include "phigros/engine/judge.hpp"
 #include "phigros/engine/effects.hpp"
@@ -134,6 +135,8 @@ struct ManualJudge {
                     judged_this_frame.insert(best_nidx);
                     _emit_effect(effects, frame, best_nidx, t, note, *grade);
                     if (on_judgment) on_judgment(best_nidx, (float)t, "hold_start:" + *grade);
+                    PHLOG_DEBUG(Input, "HoldStart note=" << best_nidx
+                        << " grade=" << *grade << " t=" << t << " ptr=" << a.id);
                 }
             } else {
                 auto grade = judge.try_hit(ns, t);
@@ -141,6 +144,8 @@ struct ManualJudge {
                     judged_this_frame.insert(best_nidx);
                     _emit_effect(effects, frame, best_nidx, t, note, *grade);
                     if (on_judgment) on_judgment(best_nidx, (float)t, *grade);
+                    PHLOG_DEBUG(Input, "Hit note=" << best_nidx
+                        << " grade=" << *grade << " t=" << t << " ptr=" << a.id);
                 }
             }
         }
@@ -203,6 +208,8 @@ struct ManualJudge {
                     if (catching_ptr >= 0) drag_chain_map[catching_ptr] = note.line_id;
                     _emit_effect(effects, frame, nidx, t, note, *grade);
                     if (on_judgment) on_judgment(nidx, (float)t, *grade);
+                    PHLOG_TRACE(Input, "DragCatch note=" << nidx
+                        << " line=" << note.line_id << " t=" << t << " ptr=" << catching_ptr);
                 }
             }
         }

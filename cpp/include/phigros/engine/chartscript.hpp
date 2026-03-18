@@ -74,6 +74,7 @@
 //   }
 
 #include "phigros/config/render_config.hpp"
+#include "phigros/core/logger.hpp"
 #include "phigros/core/mods.hpp"
 #include "phigros/core/mod_loader.hpp"
 #include <nlohmann/json.hpp>
@@ -307,7 +308,7 @@ inline std::vector<mods::AnyOp> parse_inline_mods(const nlohmann::json& arr) {
                 }
             }
         } catch (const std::exception& e) {
-            std::cerr << "[ChartScript] Warning: skipping invalid mod op: " << e.what() << "\n";
+            PHLOG_WARN(ChartScript, "skipping invalid mod op: " << e.what());
         }
     }
     return ops;
@@ -408,7 +409,7 @@ inline void resolve_preset(
     cfg.erase("preset");
     auto it = presets.find(pname);
     if (it == presets.end()) {
-        std::cerr << "[ChartScript] Warning: preset '" << pname << "' not found\n";
+        PHLOG_WARN(ChartScript, "preset '" << pname << "' not found");
         return;
     }
     // Preset values fill in only if not already set by the item
@@ -504,7 +505,7 @@ inline std::vector<Item> discover_charts(const Discover& d) {
     std::vector<Item> items;
 
     if (!fs::is_directory(d.directory)) {
-        std::cerr << "[ChartScript] discover directory not found: " << d.directory << "\n";
+        PHLOG_WARN(ChartScript, "discover directory not found: " << d.directory);
         return items;
     }
 
@@ -638,7 +639,7 @@ inline void resolve_groups(Script& script) {
         if (item.group.empty() || item._group_applied) continue;
         auto it = script.groups.find(item.group);
         if (it == script.groups.end()) {
-            std::cerr << "[ChartScript] Warning: group '" << item.group << "' not found\n";
+            PHLOG_WARN(ChartScript, "group '" << item.group << "' not found");
             continue;
         }
         const Group& g = it->second;
@@ -836,8 +837,7 @@ inline mods::Mod resolve_item_mods(const Item& item) {
             auto fm = mods::load_mod(item.mod_file);
             mod.ops.insert(mod.ops.end(), fm.ops.begin(), fm.ops.end());
         } catch (const std::exception& e) {
-            std::cerr << "[ChartScript] Warning: failed to load mod '"
-                      << item.mod_file << "': " << e.what() << "\n";
+            PHLOG_WARN(ChartScript, "failed to load mod '" << item.mod_file << "': " << e.what());
         }
     }
     return mod;
@@ -850,31 +850,33 @@ inline void print_script_summary(const Script& s) {
     const char* mode_str =
         s.mode == PlayMode::Shuffle ? "shuffle" :
         s.mode == PlayMode::Loop    ? "loop"    : "sequence";
-    std::cout << "[ChartScript] \"" << s.name << "\"  "
-              << s.items.size() << " item(s)  mode=" << mode_str;
-    if (s.repeat != 1) std::cout << "  repeat=" << (s.repeat == 0 ? "∞" : std::to_string(s.repeat));
-    if (!s.resume_file.empty()) std::cout << "  resume=" << s.resume_file;
+
+    std::ostringstream hdr;
+    hdr << "\"" << s.name << "\"  " << s.items.size() << " item(s)  mode=" << mode_str;
+    if (s.repeat != 1) hdr << "  repeat=" << (s.repeat == 0 ? "∞" : std::to_string(s.repeat));
+    if (!s.resume_file.empty()) hdr << "  resume=" << s.resume_file;
     if (s.transition.type != TransitionType::None) {
         const char* t = s.transition.type == TransitionType::Fade ? "fade" : "crossfade";
-        std::cout << "  transition=" << t << "(" << s.transition.duration << "s)";
+        hdr << "  transition=" << t << "(" << s.transition.duration << "s)";
     }
-    std::cout << "\n";
+    PHLOG_INFO(ChartScript, hdr.str());
 
     for (size_t i = 0; i < std::min(s.items.size(), size_t(10)); ++i) {
         const auto& it = s.items[i];
-        std::cout << "  [" << (i + 1) << "] " << it.input;
-        if (!it.name.empty())  std::cout << " (" << it.name << ")";
-        if (!it.level.empty()) std::cout << " [" << it.level << "]";
-        if (it.notes_window > 0) std::cout << " notes≤" << it.notes_window;
-        else if (it.end > 0) std::cout << " " << it.start << "s-" << it.end << "s";
-        if (!it.segments.empty()) std::cout << " ×" << it.segments.size() << "segs";
-        if (!it.group.empty())    std::cout << " @" << it.group;
-        if (it.weight > 1)        std::cout << " w=" << it.weight;
-        if (!it.inline_mods.empty()) std::cout << " +" << it.inline_mods.size() << "mods";
-        std::cout << "\n";
+        std::ostringstream line;
+        line << "  [" << (i + 1) << "] " << it.input;
+        if (!it.name.empty())  line << " (" << it.name << ")";
+        if (!it.level.empty()) line << " [" << it.level << "]";
+        if (it.notes_window > 0) line << " notes≤" << it.notes_window;
+        else if (it.end > 0) line << " " << it.start << "s-" << it.end << "s";
+        if (!it.segments.empty()) line << " ×" << it.segments.size() << "segs";
+        if (!it.group.empty())    line << " @" << it.group;
+        if (it.weight > 1)        line << " w=" << it.weight;
+        if (!it.inline_mods.empty()) line << " +" << it.inline_mods.size() << "mods";
+        PHLOG_INFO(ChartScript, line.str());
     }
     if (s.items.size() > 10)
-        std::cout << "  ... and " << (s.items.size() - 10) << " more\n";
+        PHLOG_INFO(ChartScript, "  … and " << (s.items.size() - 10) << " more");
 }
 
 } // namespace phigros::chartscript

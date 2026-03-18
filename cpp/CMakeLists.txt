@@ -212,6 +212,11 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_zip_extract.cpp")
     target_link_libraries(test_zip_extract PRIVATE phigros_core_lib vendor_miniz)
 endif()
 
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_logger.cpp")
+    add_executable(test_logger tests/test_logger.cpp)
+    target_link_libraries(test_logger PRIVATE phigros_core_lib)
+endif()
+
 # --- Chart scanner tool ---
 add_executable(chart_scanner src/chart/chart_scanner.cpp)
 target_link_libraries(chart_scanner PRIVATE phigros_core_lib)

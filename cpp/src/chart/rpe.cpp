@@ -1,5 +1,6 @@
 #include "phigros/chart/rpe.hpp"
 #include "phigros/chart/bpm_map.hpp"
+#include "phigros/core/logger.hpp"
 #include "phigros/math/easing.hpp"
 #include "phigros/math/tracks.hpp"
 #include "phigros/math/util.hpp"
@@ -342,9 +343,8 @@ ChartData load_rpe(const json& data, int W, int H, int rpe_easing_shift) {
                 line.attach_ui = ui;
                 static std::unordered_set<std::string> warned;
                 if (warned.find(ui) == warned.end()) {
-                    std::cerr << "[RPE] attachUI=\"" << ui
-                              << "\" — UI element binding is not yet rendered; "
-                                 "line will be hidden as per spec.\n";
+                    PHLOG_DEBUG(Chart, "RPE attachUI=\"" << ui
+                        << "\" — UI element binding not yet rendered; line hidden per spec.");
                     warned.insert(ui);
                 }
             }

@@ -1,6 +1,7 @@
 #pragma once
 #include "phigros/render/render_target.hpp"
 #include "phigros/config/render_config.hpp"
+#include "phigros/core/logger.hpp"
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -57,8 +58,8 @@ struct MotionBlurRenderer {
 
         // Check if render targets were created successfully (requires hardware-accelerated backend)
         if (!accum.valid() || !scratch.valid()) {
-            std::cerr << "[MotionBlur] Failed to create render targets — requires hardware-accelerated backend (sdl_hw).\n"
-                      << "             Motion blur disabled. Use --backend sdl_hw or set \"backend\":\"sdl_hw\" in config.\n";
+            PHLOG_WARN(Render, "MotionBlur: failed to create render targets — requires sdl_hw backend. "
+                "Motion blur disabled. Use --backend sdl_hw or set \"backend\":\"sdl_hw\" in config.");
             _enabled = false;
             accum.destroy();
             scratch.destroy();

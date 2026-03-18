@@ -1,6 +1,7 @@
 #pragma once
 #include "phigros/render/render_target.hpp"
 #include "phigros/config/render_config.hpp"
+#include "phigros/core/logger.hpp"
 #include <algorithm>
 #include <cmath>
 #include <string>
@@ -92,8 +93,8 @@ struct TrailRenderer {
             }
         }
         if (!all_valid) {
-            std::cerr << "[Trail] Failed to create render targets — requires hardware-accelerated backend (sdl_hw).\n"
-                      << "        Trail effect disabled. Use --backend sdl_hw or set \"backend\":\"sdl_hw\" in config.\n";
+            PHLOG_WARN(Render, "Trail: failed to create render targets — requires sdl_hw backend. "
+                "Trail effect disabled. Use --backend sdl_hw or set \"backend\":\"sdl_hw\" in config.");
             _enabled = false;
             for (int i = 0; i < n_slots; ++i) slots[i].destroy();
             return;

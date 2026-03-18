@@ -137,18 +137,19 @@ struct GameLoop {
             ++report_frame;
             if (!enabled || report_frame < REPORT_INTERVAL) return false;
             int n = report_frame;
-            std::cout << "[Profile] " << n << " frames";
+            std::ostringstream oss;
+            oss << n << " frames";
             for (int p = 0; p < PHASES; ++p) {
                 double mean = sum_ms[p] / n;
                 // p95 approximation from histogram
                 int hsz = std::min(hist_n, HIST);
                 std::sort(hist[p], hist[p] + hsz);
                 double p95 = hsz > 0 ? hist[p][static_cast<int>(hsz * 0.95)] : 0.0;
-                std::cout << "  |" << phase_name(p)
-                          << " avg=" << std::fixed << std::setprecision(2) << mean
-                          << "ms p95=" << p95 << "ms max=" << max_ms[p] << "ms";
+                oss << "  |" << phase_name(p)
+                    << " avg=" << std::fixed << std::setprecision(2) << mean
+                    << "ms p95=" << p95 << "ms max=" << max_ms[p] << "ms";
             }
-            std::cout << "\n";
+            PHLOG_INFO(Profile, oss.str());
             // Reset
             for (int p = 0; p < PHASES; ++p) {
                 sum_ms[p] = sum2_ms[p] = max_ms[p] = 0.0;
@@ -206,10 +207,10 @@ struct GameLoop {
         // Load replay if requested
         if (!args.play_replay_path.empty()) {
             if (!replay_player.load(args.play_replay_path)) {
-                std::cerr << "[Replay] Failed to load: " << args.play_replay_path << "\n";
+                PHLOG_ERROR(Engine, "Replay failed to load: " << args.play_replay_path);
             } else {
-                std::cout << "[Replay] Loaded: " << args.play_replay_path
-                          << " (" << replay_player.events.size() << " events)\n";
+                PHLOG_INFO(Engine, "Replay loaded: " << args.play_replay_path
+                    << " (" << replay_player.events.size() << " events)");
             }
         }
 
@@ -233,8 +234,12 @@ struct GameLoop {
             if (rc.audio_path.empty())
                 rc.audio_path = find_chart_audio(
                     std::filesystem::path(args.chart_path).parent_path().string());
+            PHLOG_DEBUG(Record, "Record config: output=" << rc.output
+                << " fps=" << rc.fps << " preset=" << rc.preset_name
+                << " queue_depth=" << rc.queue_depth
+                << (rc.audio_path.empty() ? " (no audio)" : " audio=" + rc.audio_path));
             if (!recorder.start(rc, W, H)) {
-                std::cerr << "[Record] Failed to start recording\n";
+                PHLOG_ERROR(Record, "Failed to start recording");
                 is_recording = false;
             } else {
                 readback_rgba.resize(static_cast<size_t>(W) * H * 4);
@@ -270,7 +275,10 @@ struct GameLoop {
                     ctx.input.process_event(e, W, H);
                     if (e.type == PHIGROS_SDL_EVENT_KEY_DOWN) {
                         auto sc = PHIGROS_KEY_SCANCODE(e);
-                        if (sc == SDL_SCANCODE_SPACE) paused = !paused;
+                        if (sc == SDL_SCANCODE_SPACE) {
+                            paused = !paused;
+                            PHLOG_DEBUG(Engine, paused ? "Paused" : "Resumed");
+                        }
                         if (sc == SDL_SCANCODE_R)     do_restart();
                     }
                 }
@@ -484,16 +492,16 @@ struct GameLoop {
 
     void finish() {
         if (is_recording) {
-            std::cout << "\n";
+            PHLOG_DEBUG(Record, "Finishing recording…");
             recorder.finish();
         }
         if (!args.save_replay_path.empty() && !replay_writer.events.empty()) {
             uint32_t hash = io::chart_path_hash(args.chart_path);
             if (replay_writer.save(args.save_replay_path, hash))
-                std::cout << "[Replay] Saved: " << args.save_replay_path
-                          << " (" << replay_writer.events.size() << " events)\n";
+                PHLOG_INFO(Engine, "Replay saved: " << args.save_replay_path
+                    << " (" << replay_writer.events.size() << " events)");
             else
-                std::cerr << "[Replay] Save failed: " << args.save_replay_path << "\n";
+                PHLOG_ERROR(Engine, "Replay save failed: " << args.save_replay_path);
         }
     }
 
@@ -513,6 +521,7 @@ private:
     void mark_result() {
         result_shown = true;
         result_t     = Window::get_time_sec();
+        PHLOG_DEBUG(Engine, "Chart complete — showing result screen");
     }
 
     // Binary search: first note index near t that might still need judgment.
@@ -648,6 +657,7 @@ private:
     }
 
     void do_restart() {
+        PHLOG_INFO(Engine, "Restarting chart");
         t = -1.0;
         paused = false;
         result_shown = false;
@@ -687,7 +697,7 @@ private:
         }
         ctx.window.read_pixels_rgba(readback_rgba.data());
         if (!recorder.capture_rgba(readback_rgba.data(), W, H)) {
-            std::cerr << "[Record] Capture failed, stopping recorder\n";
+            PHLOG_ERROR(Record, "Capture failed, stopping recorder");
             recorder.finish();
             is_recording = false;
             return;

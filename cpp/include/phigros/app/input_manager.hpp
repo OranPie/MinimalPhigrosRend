@@ -1,4 +1,5 @@
 #pragma once
+#include "phigros/core/logger.hpp"
 #include "phigros/app/sdl_compat.hpp"
 #include "phigros/engine/judge_input.hpp"
 #include <cstdint>
@@ -94,6 +95,7 @@ struct InputManager {
                 s->press_edge = true;
                 s->vx = s->vy = 0;
                 s->peak_speed = 0.0f;
+                PHLOG_TRACE(Input, "MouseDown (" << s->x << "," << s->y << ")");
             }
         } else if (e.type == PHIGROS_SDL_MOUSE_UP) {
             auto* s = find_slot(0);
@@ -104,6 +106,9 @@ struct InputManager {
                 s->flick = s->peak_speed > flick_vel_threshold;
                 s->down = false;
                 s->release_edge = true;
+                PHLOG_TRACE(Input, "MouseUp (" << s->x << "," << s->y
+                    << ") peak_speed=" << s->peak_speed
+                    << (s->flick ? " FLICK" : ""));
             }
         } else if (e.type == PHIGROS_SDL_MOUSE_MOVE) {
             auto* s = find_slot(0);
@@ -121,6 +126,8 @@ struct InputManager {
                 s->press_edge = true;
                 s->vx = s->vy = 0;
                 s->peak_speed = 0.0f;
+                PHLOG_TRACE(Input, "FingerDown id=" << fid
+                    << " (" << s->x << "," << s->y << ")");
             }
         } else if (e.type == PHIGROS_SDL_FINGER_UP) {
             int64_t fid = PHIGROS_FINGER_ID(e) + 1;
@@ -132,6 +139,10 @@ struct InputManager {
                 s->flick = s->peak_speed > flick_vel_threshold;
                 s->down = false;
                 s->release_edge = true;
+                PHLOG_TRACE(Input, "FingerUp id=" << fid
+                    << " (" << s->x << "," << s->y << ")"
+                    << " peak_speed=" << s->peak_speed
+                    << (s->flick ? " FLICK" : ""));
                 // Deactivate after release_edge is consumed next frame
             }
         } else if (e.type == PHIGROS_SDL_FINGER_MOVE) {
