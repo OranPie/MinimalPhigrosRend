@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 include(FetchContent)
 
+# ── Mobile platform configuration ─────────────────────────────────────────────
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/mobile.cmake" OPTIONAL)
+
 # --- nlohmann/json: prefer system package, fallback to FetchContent ---
 find_package(nlohmann_json QUIET)
 if(NOT nlohmann_json_FOUND)
@@ -287,4 +290,9 @@ if(HAS_LIBAV)
     endif()
     target_link_libraries(phigros_render PRIVATE ${LIBAV_LIBRARIES})
     target_compile_definitions(phigros_render PRIVATE PHIGROS_HAS_LIBAV=1)
+endif()
+
+# ── iOS app bundle (only when targeting iOS via Xcode) ────────────────────────
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    add_subdirectory(ios)
 endif()

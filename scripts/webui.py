@@ -296,6 +296,28 @@ app = Flask(__name__)
 def index():
     return HTML
 
+@app.route("/manifest.json")
+def pwa_manifest():
+    """PWA Web App Manifest for home-screen installation on mobile."""
+    manifest = {
+        "name": "Phigros Render",
+        "short_name": "PhigrosRend",
+        "description": "Phigros chart renderer and WASM player",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#0d1117",
+        "theme_color": "#0d1117",
+        "icons": [
+            {"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png"},
+        ],
+        "categories": ["games", "entertainment"],
+    }
+    return Response(
+        json.dumps(manifest, indent=2),
+        mimetype="application/manifest+json",
+    )
+
 @app.route("/charts")
 def list_charts_route():
     return jsonify(discover_charts())
@@ -451,7 +473,13 @@ HTML = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PhigrosRend">
+<link rel="manifest" href="/manifest.json">
 <title>Phigros Render</title>
 <style>
 :root{--bg:#0d1117;--s1:#161b22;--s2:#21262d;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--ok:#3fb950;--warn:#e3b341;--err:#f85149;--r:8px}
@@ -534,6 +562,28 @@ input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px}
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+/* ── Mobile navigation bar ── */
+.mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:56px;background:var(--s1);border-top:1px solid var(--border);z-index:100;justify-content:space-around;align-items:stretch}
+.mobile-nav button{flex:1;background:none;border:none;color:var(--muted);font-size:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;padding:6px 0;-webkit-tap-highlight-color:transparent}
+.mobile-nav button.active{color:var(--accent)}
+.mobile-nav button svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* ── Responsive layout ── */
+@media(max-width:768px){
+  body{padding-bottom:56px}
+  .main{flex-direction:column}
+  .sidebar{width:100%;min-width:unset;display:none;border-right:none;border-bottom:1px solid var(--border);max-height:50vh}
+  .sidebar.mob-active{display:flex}
+  .center{display:none;overflow-y:auto}
+  .center.mob-active{display:flex}
+  .output{width:100%;min-width:unset;border-left:none;border-top:1px solid var(--border);display:none}
+  .output.mob-active{display:flex}
+  .mobile-nav{display:flex}
+  .cfg-grid{grid-template-columns:1fr}
+  header span{display:none}
+  .selected-chart{flex-wrap:wrap}
+  .render-btns{flex-wrap:wrap}
+  .btn{padding:10px 14px;font-size:14px}
+}
 </style>
 </head>
 <body>
@@ -648,6 +698,26 @@ input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px}
 
 </div><!-- .main -->
 
+<!-- ── Mobile bottom navigation ── -->
+<nav class="mobile-nav" id="mobileNav">
+  <button id="mnCharts" class="active" onclick="mobSwitchTab('charts')">
+    <svg viewBox="0 0 24 24"><path d="M9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+    Charts
+  </button>
+  <button id="mnConfig" onclick="mobSwitchTab('config')">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 0-14.14 0M4.93 4.93a10 10 0 0 0 0 14.14M19.07 19.07a10 10 0 0 0 0-14.14M4.93 19.07a10 10 0 0 0 14.14 0"/></svg>
+    Config
+  </button>
+  <button id="mnOutput" onclick="mobSwitchTab('output')">
+    <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    Output
+  </button>
+  <button onclick="window.open('/wasm','_blank')">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 8 16 12 12 16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+    WASM
+  </button>
+</nav>
+
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 let charts = [];
@@ -706,6 +776,8 @@ function selectChart(c) {
   document.getElementById('btnPreview').disabled = false;
   document.getElementById('btnExport').disabled = false;
   document.getElementById('btnWasm').disabled = false;
+  // On mobile, automatically switch to the config panel after selecting a chart
+  if (window.innerWidth <= 768) mobSwitchTab('config');
 }
 
 function openWasmPlayer() {
@@ -775,6 +847,8 @@ async function startJob(mode) {
   document.getElementById('progressFill').style.width = '0%';
 
   currentMode = mode;
+  // On mobile, switch to the output panel to show logs + progress
+  if (window.innerWidth <= 768) mobSwitchTab('output');
 
   const res = await fetch('/jobs', {
     method: 'POST',
@@ -889,8 +963,27 @@ function downloadVideo() {
   if (currentJobId) window.location.href = `/jobs/${currentJobId}/download`;
 }
 
+// ── Mobile navigation ─────────────────────────────────────────────────────────
+let _mobTab = 'charts';
+function mobSwitchTab(tab) {
+  _mobTab = tab;
+  document.getElementById('mnCharts').classList.toggle('active', tab === 'charts');
+  document.getElementById('mnConfig').classList.toggle('active', tab === 'config');
+  document.getElementById('mnOutput').classList.toggle('active', tab === 'output');
+  document.querySelector('.sidebar').classList.toggle('mob-active', tab === 'charts');
+  document.querySelector('.center').classList.toggle('mob-active', tab === 'config');
+  document.querySelector('.output').classList.toggle('mob-active', tab === 'output');
+}
+// On mobile, default to charts panel visible; on desktop show all.
+function initMobileLayout() {
+  if (window.innerWidth <= 768) {
+    document.querySelector('.sidebar').classList.add('mob-active');
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadCharts();
+initMobileLayout();
 </script>
 </body>
 </html>

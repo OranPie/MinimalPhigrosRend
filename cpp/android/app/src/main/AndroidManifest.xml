@@ -30,11 +30,32 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Allow opening .phbc and .json chart files from a file manager -->
+            <!-- Allow opening .phbc / .json chart files via file:// URI (older file managers) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+
+            <!-- Allow opening chart files via content:// URI (Android 10+ file picker) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/json" />
+            </intent-filter>
+
+            <!-- Allow opening any file so file managers that use a wildcard MIME work -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*"
+                      android:pathPattern=".*\\.phbc" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*"
+                      android:pathPattern=".*\\.json" />
             </intent-filter>
         </activity>
     </application>
