@@ -1,4 +1,5 @@
 #pragma once
+#include "phigros/core/logger.hpp"
 #include <string>
 #include <cstdio>
 
@@ -17,10 +18,11 @@ struct AudioSystem {
     bool init() {
         ma_engine_config cfg = ma_engine_config_init();
         if (ma_engine_init(&cfg, &engine) != MA_SUCCESS) {
-            std::fprintf(stderr, "[Audio] Failed to init miniaudio engine\n");
+            PHLOG_ERROR(Audio, "Failed to init miniaudio engine");
             return false;
         }
         engine_ok = true;
+        PHLOG_DEBUG(Audio, "miniaudio engine initialised");
         return true;
     }
 
@@ -28,10 +30,11 @@ struct AudioSystem {
         if (!engine_ok) return false;
         offset_sec = offset;
         if (ma_sound_init_from_file(&engine, path.c_str(), 0, nullptr, nullptr, &bgm) != MA_SUCCESS) {
-            std::fprintf(stderr, "[Audio] Failed to load BGM: %s\n", path.c_str());
+            PHLOG_ERROR(Audio, "Failed to load BGM: " << path);
             return false;
         }
         bgm_loaded = true;
+        PHLOG_DEBUG(Audio, "BGM loaded: " << path << " offset=" << offset << "s");
         return true;
     }
 

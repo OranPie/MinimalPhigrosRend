@@ -1,10 +1,12 @@
 #pragma once
+#include "phigros/core/logger.hpp"
 #include "phigros/engine/judge_input.hpp"
 #include "phigros/engine/judge.hpp"
 #include "phigros/engine/effects.hpp"
 #include "phigros/render/renderer.hpp"  // FrameSnapshot / NoteSnapshot
 #include "phigros/core/types.hpp"
 #include <unordered_map>
+#include <unordered_set>
 #include <cmath>
 #include <limits>
 #include <functional>
@@ -19,6 +21,11 @@ struct ManualJudge {
 
     // ptr_slot_id → note index (for tracking active holds)
     std::unordered_map<int64_t, int> holding_map;
+
+    // ptr_slot_id → line_id (for tracking which drag chain each pointer follows)
+    // A pointer starts following a drag chain when it auto-catches a drag note.
+    // It leaves the chain when it releases.
+    std::unordered_map<int64_t, int> drag_chain_map;
 
     // Default hitfx tints (typically from respack config).
     math::RGB hitfx_color_perfect{235, 255, 236};
@@ -40,10 +47,14 @@ struct ManualJudge {
         float radius = catch_radius_factor * static_cast<float>(H);
         float r2 = radius * radius;
 
+        // Per-frame deduplication: prevent two inputs from judging the same note
+        std::unordered_set<int> judged_this_frame;
+
         // 1. Handle early hold releases from lifted fingers/keys
         for (int ai = 0; ai < input.count; ++ai) {
             const auto& a = input.actions[ai];
             if (!a.release) continue;
+            // Release hold tracking
             auto it = holding_map.find(a.id);
             if (it != holding_map.end()) {
                 int nidx = it->second;
@@ -57,12 +68,18 @@ struct ManualJudge {
                 }
                 holding_map.erase(it);
             }
+            // Release drag chain tracking
+            drag_chain_map.erase(a.id);
         }
 
         // 2. Handle presses — find and hit nearest in-window note
         for (int ai = 0; ai < input.count; ++ai) {
             const auto& a = input.actions[ai];
             if (!a.press) continue;
+
+            // A pointer already holding a hold note can still press new notes
+            // (hold is on a separate finger slot), but we prevent double-judging
+            // via judged_this_frame.
 
             int best_nidx = -1;
             float best_dist2 = std::numeric_limits<float>::max();
@@ -74,6 +91,8 @@ struct ManualJudge {
                 if (nidx < 0 || nidx >= static_cast<int>(notes.size())) continue;
                 const auto& note = notes[nidx];
                 if (note.fake) continue;
+                // Skip if already judged earlier this frame by another input
+                if (judged_this_frame.count(nidx)) continue;
 
                 // Timing window check
                 double dt = std::abs(t - note.t_hit);
@@ -111,48 +130,86 @@ struct ManualJudge {
                 auto grade = judge.start_hold(ns, t);
                 if (grade) {
                     holding_map[a.id] = best_nidx;
+                    // Starting a hold clears any drag chain this pointer was following
+                    drag_chain_map.erase(a.id);
+                    judged_this_frame.insert(best_nidx);
                     _emit_effect(effects, frame, best_nidx, t, note, *grade);
                     if (on_judgment) on_judgment(best_nidx, (float)t, "hold_start:" + *grade);
+                    PHLOG_DEBUG(Input, "HoldStart note=" << best_nidx
+                        << " grade=" << *grade << " t=" << t << " ptr=" << a.id);
                 }
             } else {
                 auto grade = judge.try_hit(ns, t);
                 if (grade) {
+                    judged_this_frame.insert(best_nidx);
                     _emit_effect(effects, frame, best_nidx, t, note, *grade);
                     if (on_judgment) on_judgment(best_nidx, (float)t, *grade);
+                    PHLOG_DEBUG(Input, "Hit note=" << best_nidx
+                        << " grade=" << *grade << " t=" << t << " ptr=" << a.id);
                 }
             }
         }
 
-        // 3. Auto-catch drag notes (kind=2) by any nearby down pointer or held key
+        // 3. Auto-catch drag notes (kind=2) by any nearby down pointer or held key.
+        //    Pointers actively holding a hold note are excluded — they are "busy"
+        //    and should not accidentally capture a passing drag chain.
+        //    Drag chain ownership: once pointer P catches a drag on line L, it is
+        //    recorded in drag_chain_map[P] = L. Subsequent drag notes on line L
+        //    are preferentially caught only by pointer P; other lines are still
+        //    open to any free pointer.
         for (const auto& ns : frame.notes) {
             if (ns.judged || ns.miss || ns.kind != 2) continue;
             int nidx = ns.nid;
             if (nidx < 0 || nidx >= static_cast<int>(notes.size())) continue;
             const auto& note = notes[nidx];
             if (note.fake) continue;
+            if (judged_this_frame.count(nidx)) continue;
             double dt = std::abs(t - note.t_hit);
             if (dt > Judge::BAD) continue;
 
+            // Determine if any pointer owns this note's drag chain
+            int64_t chain_owner = -1;
+            for (const auto& [pid, lid] : drag_chain_map) {
+                if (lid == note.line_id) { chain_owner = pid; break; }
+            }
+
             bool caught = false;
+            int64_t catching_ptr = -1;
+
             for (int ai = 0; ai < input.count && !caught; ++ai) {
                 const auto& a = input.actions[ai];
                 if (!a.down) continue;
 
+                // Skip pointers that are busy holding a hold note
+                if (holding_map.count(a.id)) continue;
+
+                // If another pointer owns this drag chain, skip
+                if (chain_owner >= 0 && a.id != chain_owner) continue;
+
                 if (a.has_position) {
                     float dx = a.x - static_cast<float>(ns.wx);
                     float dy = a.y - static_cast<float>(ns.wy);
-                    if (dx * dx + dy * dy <= r2) caught = true;
+                    if (dx * dx + dy * dy <= r2) {
+                        caught = true;
+                        catching_ptr = a.id;
+                    }
                 } else {
-                    // Any held key auto-catches drags
+                    // Any held key auto-catches drags (keyboard play)
                     caught = true;
+                    catching_ptr = a.id;
                 }
             }
 
             if (caught) {
                 auto grade = judge.try_hit(states[nidx], t);
                 if (grade) {
+                    judged_this_frame.insert(nidx);
+                    // Record drag chain ownership for this pointer
+                    if (catching_ptr >= 0) drag_chain_map[catching_ptr] = note.line_id;
                     _emit_effect(effects, frame, nidx, t, note, *grade);
                     if (on_judgment) on_judgment(nidx, (float)t, *grade);
+                    PHLOG_TRACE(Input, "DragCatch note=" << nidx
+                        << " line=" << note.line_id << " t=" << t << " ptr=" << catching_ptr);
                 }
             }
         }

@@ -1,4 +1,5 @@
 #include "phigros/chart/chart_loader.hpp"
+#include "phigros/core/logger.hpp"
 #include <algorithm>
 #include <fstream>
 #include <sstream>
@@ -135,7 +136,7 @@ std::vector<ChartEntry> load_zip_chart(const fs::path& zip_path) {
     memset(&zip, 0, sizeof(zip));
 
     if (!mz_zip_reader_init_file(&zip, zip_path.string().c_str(), 0)) {
-        std::cerr << "[ChartLoader] Failed to open zip: " << zip_path << "\n";
+        PHLOG_ERROR(Chart, "ChartLoader: failed to open zip: " << zip_path.string());
         return entries;
     }
 
@@ -292,7 +293,7 @@ std::vector<ChartEntry> scan_charts_directory(const std::string& dir_path) {
     std::vector<ChartEntry> all_entries;
 
     if (!fs::exists(dir_path) || !fs::is_directory(dir_path)) {
-        std::cerr << "[ChartLoader] Directory not found: " << dir_path << "\n";
+        PHLOG_ERROR(Chart, "ChartLoader: directory not found: " << dir_path);
         return all_entries;
     }
 

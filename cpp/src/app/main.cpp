@@ -106,6 +106,7 @@ int main(int argc, char* argv[]) {
     using namespace phigros::app;
 
     auto args = parse_args(argc, argv);
+    init_logger(args);  // Apply --verbose/--quiet/--log-level/--log-filter/--log-file/--log-time
 
     // ── Early exit modes ──────────────────────────────────────────────────────
     if (args.version_mode) {
@@ -157,7 +158,7 @@ int main(int argc, char* argv[]) {
         const std::string& p = args.chart_path;
         if (p.size() >= 5 && p.substr(p.size()-5) == ".phbc") {
             std::ifstream f(p, std::ios::binary);
-            if (!f) { std::cerr << "[Error] Cannot open: " << p << "\n"; return 1; }
+            if (!f) { PHLOG_FATAL(General, "Cannot open: " << p); return 1; }
             auto compiled = phigros::chart::read_phbc(f, args.password);
             f.seekg(0, std::ios::end);
             double mb = static_cast<double>(f.tellg()) / 1e6;
@@ -169,6 +170,7 @@ int main(int argc, char* argv[]) {
             f.read(reinterpret_cast<char*>(&ver), 2);
             f.read(reinterpret_cast<char*>(&fl), 2);
 
+            // Print chart info as plain output (not log-level gated — this is the purpose of --info)
             printf("[Info] %s\n", p.c_str());
             printf("  Format:       .phbc v%d", (int)ver);
             if (ver >= 2 && fl != 0) {
@@ -208,19 +210,19 @@ int main(int argc, char* argv[]) {
 
     // ── CHART SCRIPT MODE ───────────────────────────────────────────────────
     if (!args.script_path.empty()) {
-        std::cout << "[ChartScript] Loading: " << args.script_path << "\n";
+        PHLOG_INFO(ChartScript, "Loading: " << args.script_path);
         chartscript::Script script;
         try {
             script = chartscript::load_script(args.script_path);
             chartscript::apply_ordering(script);
         } catch (const std::exception& e) {
-            std::cerr << "[ChartScript] Error: " << e.what() << "\n";
+            PHLOG_FATAL(ChartScript, "Error loading script: " << e.what());
             return 1;
         }
         chartscript::print_script_summary(script);
 
         if (script.items.empty()) {
-            std::cerr << "[ChartScript] No items to play.\n";
+            PHLOG_FATAL(ChartScript, "No items to play.");
             return 1;
         }
 
@@ -277,7 +279,7 @@ int main(int argc, char* argv[]) {
         // Resume cursor
         int start_cursor = chartscript::load_resume(script.resume_file);
         if (start_cursor > 0)
-            std::cout << "[ChartScript] Resuming from item " << (start_cursor + 1) << "\n";
+            PHLOG_INFO(ChartScript, "Resuming from item " << (start_cursor + 1));
 
         int  repeats_done = 0;
         int  total_played = 0;
@@ -294,17 +296,19 @@ int main(int argc, char* argv[]) {
                 const int iW = item_cfg.window_w, iH = item_cfg.window_h;
 
                 // Load chart (once for all segments)
-                std::cout << "\n[ChartScript] [" << (cursor + 1) << "/"
-                          << script.items.size() << "] " << item.input;
-                if (!item.name.empty())  std::cout << " (" << item.name << ")";
-                if (!item.level.empty()) std::cout << " [" << item.level << "]";
-                std::cout << "\n";
+                {
+                    std::ostringstream hdr;
+                    hdr << "[" << (cursor + 1) << "/" << script.items.size() << "] " << item.input;
+                    if (!item.name.empty())  hdr << " (" << item.name << ")";
+                    if (!item.level.empty()) hdr << " [" << item.level << "]";
+                    PHLOG_INFO(ChartScript, hdr.str());
+                }
 
                 ChartData item_chart;
                 try {
                     item_chart = load_chart(item.input, item_cfg, args.password);
                 } catch (const std::exception& e) {
-                    std::cerr << "[ChartScript] Failed to load: " << e.what() << "\n";
+                    PHLOG_ERROR(ChartScript, "Failed to load: " << e.what());
                     ++cursor; continue;
                 }
                 if (!item_chart.is_compiled) {
@@ -317,7 +321,7 @@ int main(int argc, char* argv[]) {
                 }
                 auto item_mod = chartscript::resolve_item_mods(item);
                 if (!item_mod.ops.empty()) {
-                    std::cout << "[ChartScript] Applying " << item_mod.ops.size() << " mod(s)\n";
+                    PHLOG_INFO(ChartScript, "Applying " << item_mod.ops.size() << " inline mod(s)");
                     mods::apply(item_chart, item_mod);
                 }
 
@@ -359,8 +363,8 @@ int main(int argc, char* argv[]) {
                     if (quit) { keep_going = false; break; }
                 }
 
-                std::cout << "[ChartScript] Score: " << last_sr.score
-                          << "  Acc: " << (last_sr.acc_ratio * 100.0) << "%\n";
+                PHLOG_INFO(ChartScript, "Score: " << last_sr.score
+                    << "  Acc: " << (last_sr.acc_ratio * 100.0) << "%");
 
                 // Save resume position
                 chartscript::save_resume(script.resume_file, cursor + 1);
@@ -410,18 +414,22 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        std::cout << "\n[ChartScript] Done. Played " << total_played << " segment(s).\n";
+        PHLOG_INFO(ChartScript, "Done. Played " << total_played << " segment(s).");
         if (!script.resume_file.empty())
             chartscript::save_resume(script.resume_file, 0);
         return 0;
     }
 
     // Load chart
-    std::cout << "[Chart] Loading: " << args.chart_path << "\n";
+    PHLOG_INFO(Chart, "Loading: " << args.chart_path);
     auto chart = load_chart(args.chart_path, cfg, args.password);
-    std::cout << "[Chart] Lines=" << chart.lines.size()
-              << " Notes=" << chart.notes.size()
-              << " Offset=" << chart.offset << "s\n";
+    PHLOG_INFO(Chart, "Loaded: lines=" << chart.lines.size()
+        << " notes=" << chart.notes.size()
+        << " offset=" << chart.offset << "s"
+        << " duration=" << (chart.chart_end_t - chart.offset) << "s");
+    PHLOG_DEBUG(Chart, "is_compiled=" << chart.is_compiled
+        << " playable=" << chart.playable_count
+        << " chart_end_t=" << chart.chart_end_t);
 
     if (!chart.is_compiled) {
         engine::precompute_t_enter(chart.lines, chart.notes, W, H, cfg.expand_factor,
@@ -433,13 +441,14 @@ int main(int argc, char* argv[]) {
     for (const auto& mp : args.mod_paths) {
         try {
             auto mod = mods::load_mod(mp);
-            std::cout << "[Mod] Applying: " << mod.name;
-            if (!mod.description.empty()) std::cout << " — " << mod.description;
-            std::cout << "  (" << mod.ops.size() << " op"
-                      << (mod.ops.size() != 1 ? "s" : "") << ")\n";
+            std::ostringstream mline;
+            mline << "Applying mod: " << mod.name;
+            if (!mod.description.empty()) mline << " — " << mod.description;
+            mline << "  (" << mod.ops.size() << " op" << (mod.ops.size() != 1 ? "s" : "") << ")";
+            PHLOG_INFO(Mod, mline.str());
             mods::apply(chart, mod);
         } catch (const std::exception& e) {
-            std::cerr << "[Mod] Error loading '" << mp << "': " << e.what() << "\n";
+            PHLOG_FATAL(Mod, "Error loading '" << mp << "': " << e.what());
             return 1;
         }
     }
@@ -466,21 +475,21 @@ int main(int argc, char* argv[]) {
     // ── COMPILE MODE ──────────────────────────────────────────────────────────
     if (!args.compile_output.empty()) {
         using clock = std::chrono::steady_clock;
-        std::cout << "[Compile] Sampling at " << args.compile_sample_rate << " Hz …\n";
+        PHLOG_INFO(Compile, "Sampling at " << args.compile_sample_rate << " Hz …");
         auto t0 = clock::now();
         auto compiled = phigros::chart::compile_chart(chart, args.compile_sample_rate);
         auto t1 = clock::now();
         double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
         double est_mb = compiled.lines.size() * compiled.sample_count * 5 * sizeof(float) / 1e6;
-        std::cout << "[Compile] Done in " << static_cast<int>(ms) << " ms"
-                  << "  samples=" << compiled.sample_count
-                  << "  lines=" << compiled.lines.size()
-                  << "  notes=" << compiled.notes.size()
-                  << "  est. size=" << std::fixed << std::setprecision(2) << est_mb << " MB\n";
+        PHLOG_INFO(Compile, "Done in " << static_cast<int>(ms) << " ms"
+            << "  samples=" << compiled.sample_count
+            << "  lines=" << compiled.lines.size()
+            << "  notes=" << compiled.notes.size()
+            << "  est. size=" << std::fixed << std::setprecision(2) << est_mb << " MB");
 
         std::ofstream f(args.compile_output, std::ios::binary);
-        if (!f) { std::cerr << "[Error] Cannot open output: " << args.compile_output << "\n"; return 1; }
+        if (!f) { PHLOG_FATAL(Compile, "Cannot open output: " << args.compile_output); return 1; }
 
         if (args.compile_compress || args.compile_encrypt) {
             phigros::chart::PhbcWriteOptions wopts;
@@ -507,10 +516,10 @@ int main(int argc, char* argv[]) {
                 if (!features.empty()) features += ", ";
                 features += std::string("encrypted:") + phigros::chart::encryption_name(wopts.encrypt_algo);
             }
-            std::cout << "[Compile] Written v2 (" << features << "): " << args.compile_output << "\n";
+            PHLOG_INFO(Compile, "Written v2 (" << features << "): " << args.compile_output);
         } else {
             phigros::chart::write_phbc(compiled, f);
-            std::cout << "[Compile] Written: " << args.compile_output << "\n";
+            PHLOG_INFO(Compile, "Written: " << args.compile_output);
         }
         f.flush();
         return 0;
@@ -545,7 +554,7 @@ int main(int argc, char* argv[]) {
 
         if (args.benchmark) {
             int N = args.benchmark_iterations;
-            std::cout << "[Benchmark] Running " << N << " iterations...\n";
+            PHLOG_INFO(Engine, "Benchmark: running " << N << " iterations…");
             using clock = std::chrono::high_resolution_clock;
             std::vector<double> ms; ms.reserve(N);
             for (int i = 0; i < N; ++i) {
@@ -553,16 +562,17 @@ int main(int argc, char* argv[]) {
                 auto sr = run_engine();
                 ms.push_back(std::chrono::duration<double,std::milli>(clock::now()-t0).count());
                 if (sr.score != 1000000)
-                    std::cerr << "[Benchmark] WARNING iter=" << i << " score=" << sr.score << "\n";
+                    PHLOG_WARN(Engine, "Benchmark WARNING iter=" << i << " score=" << sr.score);
             }
             std::sort(ms.begin(), ms.end());
             double tot = 0; for (double m : ms) tot += m;
             double len = std::max(0.0, simulation_end - chart.offset);
-            std::cout << "\n=== Benchmark (" << N << " iters) ==="
-                      << "\n  Mean:   " << (tot/N) << " ms"
-                      << "\n  Median: " << ms[N/2] << " ms"
-                      << "\n  P95:    " << ms[std::min(N-1,(int)(N*0.95))] << " ms"
-                      << "\n  Speed:  " << (len/(tot/N/1000.0)) << "x realtime\n";
+            // Print benchmark results as plain output (not log-level gated)
+            printf("\n=== Benchmark (%d iters) ===\n", N);
+            printf("  Mean:   %.3f ms\n", tot/N);
+            printf("  Median: %.3f ms\n", ms[N/2]);
+            printf("  P95:    %.3f ms\n", ms[std::min(N-1,(int)(N*0.95))]);
+            printf("  Speed:  %.1fx realtime\n", len/(tot/N/1000.0));
             return 0;
         }
 
@@ -584,17 +594,17 @@ int main(int argc, char* argv[]) {
             engine::hold_finalize(st, inx, tc, 0.30, engine::Judge::BAD, j);
         }
         auto sr = engine::compute_score(j.acc_sum, j.max_combo, scoring_notes);
-        std::cout << "\n=== Score Only ===\nScore: " << sr.score
-                  << "\nAccuracy: " << (sr.acc_ratio*100.0) << "%"
-                  << "\nMaxCombo: " << j.max_combo << "/" << scoring_notes
-                  << "\nJudged: "   << j.judged_cnt << "/" << scoring_notes << "\n";
+        // Print score as plain output (purpose of --score-only)
+        printf("\n=== Score Only ===\nScore: %d\nAccuracy: %.4f%%\nMaxCombo: %d/%d\nJudged: %d/%d\n",
+               sr.score, sr.acc_ratio*100.0,
+               j.max_combo, scoring_notes, j.judged_cnt, scoring_notes);
         return (sr.score == 1000000) ? 0 : 1;
     }
 
     // ── RENDERING / INTERACTIVE MODE ─────────────────────────────────────────
-    std::cout << "[Render] Starting (chart_end=" << chart_end << "s, "
-              << chart.playable_count << " playable notes, scoring_notes="
-              << scoring_notes << ")\n";
+    PHLOG_INFO(Render, "Starting: chart_end=" << chart_end << "s"
+        << " playable=" << chart.playable_count
+        << " scoring_notes=" << scoring_notes);
 
     AppContext ctx;
     ctx.init(args.chart_path, chart.offset,
@@ -615,11 +625,14 @@ int main(int argc, char* argv[]) {
     const char* tag = gl.is_play_mode
         ? (gl.replay_player.enabled() ? "Replay Complete" : "Play Complete")
         : "Render Complete";
-    std::cout << "\n=== " << tag << " ==="
-              << "\nScore: "    << sr.score
-              << "\nAccuracy: " << (sr.acc_ratio * 100.0) << "%"
-              << "\nMaxCombo: " << gl.judge.max_combo << "/" << scoring_notes
-              << "\nJudged: "   << gl.judge.judged_cnt << "/" << scoring_notes << "\n";
+    // Print final score as plain output (always visible regardless of log level)
+    printf("\n=== %s ===\nScore: %d\nAccuracy: %.4f%%\nMaxCombo: %d/%d\nJudged: %d/%d\n",
+           tag, sr.score, sr.acc_ratio * 100.0,
+           gl.judge.max_combo, scoring_notes,
+           gl.judge.judged_cnt, scoring_notes);
+    PHLOG_DEBUG(Engine, "acc_sum=" << gl.judge.acc_sum
+        << " judged=" << gl.judge.judged_cnt << "/" << scoring_notes
+        << " max_combo=" << gl.judge.max_combo);
 
     gl.finish();
     ctx.destroy();

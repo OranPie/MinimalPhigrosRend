@@ -1,4 +1,5 @@
 #pragma once
+#include "phigros/core/logger.hpp"
 #include <string>
 #include <vector>
 #include <cstdlib>
@@ -60,6 +61,14 @@ struct AppArgs {
     // Window overrides (take precedence over config)
     int         window_w            = 0;
     int         window_h            = 0;
+    // ── Logging ────────────────────────────────────────────────────────────────
+    std::string log_level;    // --log-level trace|debug|info|warn|error|fatal|off
+    std::string log_filter;   // --log-filter chart,render,audio,…  (comma-separated)
+    std::string log_file;     // --log-file <path>  — write copy to file
+    bool        log_no_color  = false; // --log-no-color
+    bool        log_time      = false; // --log-time  — prepend HH:MM:SS
+    bool        log_verbose   = false; // --verbose  alias for --log-level debug
+    bool        log_quiet     = false; // --quiet    alias for --log-level warn
 };
 
 inline AppArgs parse_args(int argc, char* argv[]) {
@@ -134,6 +143,14 @@ inline AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--mod"           && i+1 < argc) args.mod_paths.push_back(argv[++i]);
         else if (a == "--script"        && i+1 < argc) args.script_path = argv[++i];
         else if (a == "--list-charts"   && i+1 < argc) { args.list_charts_dir = argv[++i]; args.headless = true; }
+        // ── Logging flags ────────────────────────────────────────────────────
+        else if (a == "--log-level"  && i+1 < argc) args.log_level  = argv[++i];
+        else if (a == "--log-filter" && i+1 < argc) args.log_filter = argv[++i];
+        else if (a == "--log-file"   && i+1 < argc) args.log_file   = argv[++i];
+        else if (a == "--log-no-color")              args.log_no_color = true;
+        else if (a == "--log-time")                  args.log_time     = true;
+        else if (a == "--verbose")                   args.log_verbose  = true;
+        else if (a == "--quiet")                     args.log_quiet    = true;
         else if (args.chart_path.empty()) args.chart_path = a;
     }
     return args;
@@ -207,6 +224,17 @@ inline void print_usage(const char* prog) {
         "  --save-replay <file.rep>  Save replay from --play session\n"
         "  --play-replay <file.rep>  Play back a saved replay\n"
         "\n"
+        "LOGGING\n"
+        "  --verbose                 Shorthand for --log-level debug\n"
+        "  --quiet                   Shorthand for --log-level warn\n"
+        "  --log-level <level>       Minimum level: trace|debug|info|warn|error|fatal|off\n"
+        "  --log-filter <channels>   Comma-separated channel whitelist, e.g. chart,render,audio\n"
+        "                            Channels: general chart render audio record engine input\n"
+        "                                      window respack compile chartscript mod profile\n"
+        "  --log-file <path>         Write log copy to file in addition to stdout/stderr\n"
+        "  --log-no-color            Disable ANSI colour codes in terminal output\n"
+        "  --log-time                Prepend HH:MM:SS timestamp to each log line\n"
+        "\n"
         "OTHER\n"
         "  --headless                No visible window\n"
         "  --screenshot-dir <dir>    Save PNG screenshots periodically\n"
@@ -221,6 +249,41 @@ inline void print_usage(const char* prog) {
         "  ESC    Quit\n",
         prog
     );
+}
+
+/// Apply AppArgs logging flags to the global Logger singleton.
+/// Call this immediately after parse_args() before any other output.
+inline void init_logger(const AppArgs& args) {
+    auto& log = phigros::core::Logger::get();
+
+    // Explicit level flag takes priority; --verbose/--quiet are shorthands
+    if (!args.log_level.empty())
+        log.set_level(args.log_level);
+    else if (args.log_verbose)
+        log.set_level(phigros::core::LogLevel::Debug);
+    else if (args.log_quiet)
+        log.set_level(phigros::core::LogLevel::Warn);
+
+    if (!args.log_filter.empty())
+        log.set_channel_filter(args.log_filter);
+
+    if (args.log_no_color)
+        log.use_color = false;
+
+    if (args.log_time)
+        log.show_time = true;
+
+    if (!args.log_file.empty()) {
+        if (!log.open_file(args.log_file))
+            fprintf(stderr, "[Logger] Warning: could not open log file: %s\n",
+                    args.log_file.c_str());
+    }
+
+    // At DEBUG or higher verbosity, emit what the logger is configured for
+    PHLOG_DEBUG(General, "Logger init: level="
+        << phigros::core::Logger::level_name(log.min_level)
+        << (args.log_filter.empty() ? "" : " filter=" + args.log_filter)
+        << (args.log_file.empty()   ? "" : " file=" + args.log_file));
 }
 
 } // namespace phigros::app
