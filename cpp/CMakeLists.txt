@@ -6,6 +6,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 include(FetchContent)
 
+# ── Version ───────────────────────────────────────────────────────────────────
+set(PHIGROS_VERSION "1.0.0-dev")
+add_compile_definitions(PHIGROS_VERSION="${PHIGROS_VERSION}")
+
 # ── Mobile platform configuration ─────────────────────────────────────────────
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/mobile.cmake" OPTIONAL)
 
@@ -27,6 +31,7 @@ option(USE_BGFX "Build with bgfx GPU renderer" ON)
 option(USE_LIBAV "Use libavcodec/libavformat for video encoding (no FFmpeg subprocess)" ON)
 option(USE_LZMA "Build with LZMA compression support for PHBC v2" OFF)
 option(USE_ENCRYPTION "Build with OpenSSL encryption support for PHBC v2" ON)
+option(USE_SANITIZERS "Enable AddressSanitizer + UBSan (Debug builds only)" OFF)
 
 # --- libav (FFmpeg dev libs) ---
 if(USE_LIBAV AND NOT EMSCRIPTEN)
@@ -171,6 +176,14 @@ if(HAS_OPENSSL)
     target_compile_definitions(phigros_core_lib PRIVATE PHIGROS_HAS_OPENSSL=1)
 endif()
 
+# --- Sanitizer support (development only, not for release) ---
+if(USE_SANITIZERS AND NOT EMSCRIPTEN)
+    set(SANITIZER_FLAGS -fsanitize=address,undefined -fno-omit-frame-pointer)
+    message(STATUS "[sanitizers] Enabled: ASan + UBSan")
+    add_compile_options(${SANITIZER_FLAGS})
+    add_link_options(${SANITIZER_FLAGS})
+endif()
+
 # --- Main executable (headless) ---
 add_executable(phigros_core src/main.cpp)
 target_link_libraries(phigros_core PRIVATE phigros_core_lib)
@@ -220,6 +233,28 @@ endif()
 # --- Chart scanner tool ---
 add_executable(chart_scanner src/chart/chart_scanner.cpp)
 target_link_libraries(chart_scanner PRIVATE phigros_core_lib)
+
+# --- Convenience target: run all test executables ---
+# Usage: cmake --build build --target run-tests
+set(TEST_TARGETS "")
+foreach(tgt test_easing test_engine test_parser test_logger test_zip_extract verify_chart)
+    if(TARGET ${tgt})
+        list(APPEND TEST_TARGETS ${tgt})
+    endif()
+endforeach()
+if(TEST_TARGETS)
+    add_custom_target(run-tests
+        COMMENT "Running all test executables"
+        DEPENDS ${TEST_TARGETS}
+    )
+    foreach(tgt ${TEST_TARGETS})
+        add_custom_command(TARGET run-tests POST_BUILD
+            COMMAND $<TARGET_FILE:${tgt}>
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+            COMMENT "Running ${tgt}..."
+        )
+    endforeach()
+endif()
 
 # --- Render executable ---
 add_executable(phigros_render src/app/main.cpp)

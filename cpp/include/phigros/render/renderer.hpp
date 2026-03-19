@@ -152,6 +152,11 @@ inline FrameSnapshot build_frame(
         const auto& ns   = states[i];
 
         if (ns.judged && note.kind != 3) return;
+        // Skip finalized holds (both successfully-completed and missed).
+        // With hold_logic.hpp fixes, missed holds are finalized at miss_window
+        // time, and successful holds are finalized at t_end.  Either way the
+        // hold has scrolled off-screen or should no longer render.
+        if (note.kind == 3 && ns.hold_finalized) return;
         if (ns.miss) return;
         if (note.line_id < 0 || note.line_id >= static_cast<int>(n_lines)) return;
 

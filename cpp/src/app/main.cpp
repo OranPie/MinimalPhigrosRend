@@ -151,6 +151,13 @@ int main(int argc, char* argv[]) {
         if (args.record_capture_w > 0) cfg.window_w = args.record_capture_w;
         if (args.record_capture_h > 0) cfg.window_h = args.record_capture_h;
     }
+    // Render preference overrides (take precedence over config file)
+    if (args.approach     >= 0.0) cfg.approach      = args.approach;
+    if (args.chart_speed  >= 0.0) cfg.chart_speed   = args.chart_speed;
+    if (args.expand_factor>= 0.0) cfg.expand_factor = args.expand_factor;
+    if (args.note_scale_x >= 0.0) cfg.note_scale_x  = args.note_scale_x;
+    if (args.note_scale_y >= 0.0) cfg.note_scale_y  = args.note_scale_y;
+    if (args.note_alpha   >= 0.0) cfg.note_alpha     = args.note_alpha;
     const int W = cfg.window_w, H = cfg.window_h;
 
     // ── Info mode (no full parse) ─────────────────────────────────────────────

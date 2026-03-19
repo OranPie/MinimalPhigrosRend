@@ -61,6 +61,14 @@ struct AppArgs {
     // Window overrides (take precedence over config)
     int         window_w            = 0;
     int         window_h            = 0;
+    // ── Render preference overrides (take precedence over config) ──────────────
+    // Use negative sentinel to detect "not set on command line".
+    double      approach            = -1.0;  // --approach <sec>
+    double      chart_speed         = -1.0;  // --chart-speed <mul>
+    double      expand_factor       = -1.0;  // --expand <factor>
+    double      note_scale_x        = -1.0;  // --note-scale-x <mul>
+    double      note_scale_y        = -1.0;  // --note-scale-y <mul>
+    double      note_alpha          = -1.0;  // --note-alpha <0-1>
     // ── Logging ────────────────────────────────────────────────────────────────
     std::string log_level;    // --log-level trace|debug|info|warn|error|fatal|off
     std::string log_filter;   // --log-filter chart,render,audio,…  (comma-separated)
@@ -90,6 +98,12 @@ inline AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--audio-offset" && i+1 < argc) args.audio_offset_ms = std::atof(argv[++i]);
         else if (a == "--width"     && i+1 < argc) args.window_w      = std::atoi(argv[++i]);
         else if (a == "--height"    && i+1 < argc) args.window_h      = std::atoi(argv[++i]);
+        else if (a == "--approach"      && i+1 < argc) args.approach      = std::atof(argv[++i]);
+        else if (a == "--chart-speed"   && i+1 < argc) args.chart_speed   = std::atof(argv[++i]);
+        else if (a == "--expand"        && i+1 < argc) args.expand_factor = std::atof(argv[++i]);
+        else if (a == "--note-scale-x"  && i+1 < argc) args.note_scale_x  = std::atof(argv[++i]);
+        else if (a == "--note-scale-y"  && i+1 < argc) args.note_scale_y  = std::atof(argv[++i]);
+        else if (a == "--note-alpha"    && i+1 < argc) args.note_alpha     = std::atof(argv[++i]);
         else if (a == "--headless")    args.headless = true;
         else if (a == "--score-only")  { args.score_only = true; args.headless = true; }
         else if (a == "--benchmark")   { args.benchmark = true; args.score_only = true; args.headless = true; }
@@ -174,6 +188,14 @@ inline void print_usage(const char* prog) {
         "  --audio-offset <ms>       Audio latency compensation\n"
         "  --width <px>              Window width  (overrides config)\n"
         "  --height <px>             Window height (overrides config)\n"
+        "\n"
+        "RENDER PREFERENCES  (override config file values without editing the config)\n"
+        "  --approach <sec>          Approach time in seconds (0.1 – 30, default 3.0)\n"
+        "  --chart-speed <mul>       Chart speed multiplier (0.1 – 20, default 1.0)\n"
+        "  --expand <factor>         Lane expand factor (>1 compresses, default 1.0)\n"
+        "  --note-scale-x <mul>      Note width scale (default 2.5)\n"
+        "  --note-scale-y <mul>      Note height scale (default 1.0)\n"
+        "  --note-alpha <0-1>        Global note opacity (default 1.0)\n"
         "\n"
         "COMPILE\n"
         "  --compile <out.phbc>      Compile chart to binary and exit\n"

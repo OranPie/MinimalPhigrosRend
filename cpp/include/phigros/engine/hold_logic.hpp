@@ -71,20 +71,23 @@ inline void hold_finalize(
 
         auto& n = *s.note;
 
-        // Not hit yet and past miss window → fail
+        // Not hit yet and past miss window → immediately finalize as MISS.
+        // Calling finalize_hold here (instead of bare break_combo) ensures
+        // the hold is marked judged+miss right away, so build_frame stops
+        // rendering it as a normal active note for the remainder of t_end.
         if (!s.hit && !s.hold_failed && t > n.t_hit + miss_window) {
             s.hold_failed = true;
-            judge.break_combo();
+            judge.finalize_hold(s);
         }
 
-        // Released early: finalize based on progress
+        // Released early: finalize based on progress.
+        // Do NOT call break_combo() here; finalize_hold handles it when hold_failed.
         if (s.released_early && !s.hold_finalized) {
             double dur = n.t_end - n.t_hit;
             double progress = dur > 1e-9 ? (s.release_t - n.t_hit) / dur : 1.0;
 
             if (progress < hold_tail_tol) {
                 s.hold_failed = true;
-                judge.break_combo();
             }
             judge.finalize_hold(s);
         }

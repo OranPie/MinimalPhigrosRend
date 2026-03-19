@@ -85,6 +85,19 @@ Usage: phigros_render <chart_path> [options]
 | `--width <px>` | 窗口宽度（覆盖配置文件设置） |
 | `--height <px>` | 窗口高度（覆盖配置文件设置） |
 
+### 渲染偏好设置
+
+以下参数可直接在命令行覆盖配置文件中对应的 `render` 字段，无需修改或创建配置文件即可快速调整。
+
+| 参数 | 说明 |
+|------|------|
+| `--approach <sec>` | 铺面时间（秒，0.1 – 30，默认 3.0） |
+| `--chart-speed <mul>` | 谱面速度倍率（0.1 – 20，默认 1.0） |
+| `--expand <factor>` | 轨道展开系数（>1 时压缩，默认 1.0） |
+| `--note-scale-x <mul>` | 音符宽度缩放（默认 2.5） |
+| `--note-scale-y <mul>` | 音符高度缩放（默认 1.0） |
+| `--note-alpha <0-1>` | 全局音符不透明度（默认 1.0） |
+
 ### 资源
 
 | 参数 | 说明 |
@@ -142,9 +155,13 @@ mod 格式参考请见 `docs/ADVANCE_MODE_GUIDE.md`。
 |------|------|
 | `--record <output.mp4>` | 录制视频（无头模式） |
 | `--record-preset <name>` | `fast` \| `balanced` \| `quality` \| `archive` |
-| `--record-codec <codec>` | `libx264` \| `libx265` \| `libvpx-vp9` |
+| `--record-codec <codec>` | `libx264` \| `libx265` \| `libvpx-vp9` \| `h264_nvenc` \| `hevc_nvenc` \| `h264_qsv` \| `h264_vaapi` |
+| `--record-hw <type>` | `nvenc` \| `qsv` \| `vaapi` \| `amf` \| `videotoolbox` — `--record-codec` 为空时自动选择硬件编码器 |
 | `--record-fps <fps>` | 录制帧率（默认：60） |
+| `--sim-fps <fps>` | 内部模拟采样率（默认：240） |
 | `--record-resolution WxH` | 例如 `1920x1080` |
+| `--record-capture-resolution WxH` | 渲染/回读分辨率（编码前） |
+| `--record-queue-depth N` | 异步编码队列深度（≤1 = 同步写入） |
 | `--record-start <sec>` | 从指定时间开始录制 |
 | `--record-end <sec>` | 在指定时间停止录制 |
 
@@ -202,6 +219,9 @@ mod 格式参考请见 `docs/ADVANCE_MODE_GUIDE.md`。
     "note_flow_speed_multiplier": 1.0,
     "note_alpha": 1.0,             // 全局音符透明度 [0, 1]
     "note_outline": false,         // 是否绘制音符边框
+
+    // 长按音符视觉
+    "hold_body_glow_alpha": 0.35,  // 长按激活时 body 叠加辉光强度 [0, 1]
 
     // 判定线透明度 → 音符透明度联动
     // "off" | "negative_only"（默认）| "always"
@@ -285,6 +305,7 @@ mod 格式参考请见 `docs/ADVANCE_MODE_GUIDE.md`。
 | `note_flow_speed_multiplier` | float | 1.0 | 音符流动速度 |
 | `note_alpha` | float | 1.0 | 全局音符不透明度 |
 | `note_outline` | bool | false | 是否绘制音符边框 |
+| `hold_body_glow_alpha` | float | 0.35 | 长按激活时 body 叠加辉光强度 [0, 1] |
 | `line_alpha_affects_notes` | string | `"negative_only"` | `"off"` / `"negative_only"` / `"always"` |
 | `no_cull` | bool | false | 禁用所有裁剪 |
 | `overrender` | float | 1.0 | 裁剪矩形扩展系数 |

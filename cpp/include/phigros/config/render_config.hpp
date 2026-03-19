@@ -53,6 +53,9 @@ struct RenderConfig {
     double overrender = 1.0;
     bool note_outline = false;
 
+    // Hold note rendering
+    double hold_body_glow_alpha = 0.35; // additive glow intensity while hold is actively pressed [0,1]
+
     // Hit effects
     bool show_hitfx = true;
     bool show_particles = true;
@@ -155,6 +158,7 @@ inline RenderConfig load_config(const std::string& path) {
         get_d("note_alpha", cfg.note_alpha);
         get_d("overrender", cfg.overrender);
         get_b("note_outline", cfg.note_outline);
+        get_d("hold_body_glow_alpha", cfg.hold_body_glow_alpha);
         get_b("show_hitfx", cfg.show_hitfx);
         get_b("show_particles", cfg.show_particles);
         get_i("particle_count", cfg.particle_count);
@@ -170,9 +174,10 @@ inline RenderConfig load_config(const std::string& path) {
         }
 
         // Clamp to sane ranges
-        cfg.approach       = std::max(0.1, std::min(30.0, cfg.approach));
-        cfg.chart_speed    = std::max(0.1, std::min(20.0, cfg.chart_speed));
-        cfg.note_alpha     = std::max(0.0, std::min(1.0,  cfg.note_alpha));
+        cfg.approach              = std::max(0.1, std::min(30.0, cfg.approach));
+        cfg.chart_speed           = std::max(0.1, std::min(20.0, cfg.chart_speed));
+        cfg.note_alpha            = std::max(0.0, std::min(1.0,  cfg.note_alpha));
+        cfg.hold_body_glow_alpha  = std::max(0.0, std::min(1.0,  cfg.hold_body_glow_alpha));
         cfg.hitfx_intensity= std::max(0.0, std::min(2.0,  cfg.hitfx_intensity));
         cfg.particle_count = std::max(0,   std::min(64,   cfg.particle_count));
 
@@ -256,6 +261,7 @@ inline nlohmann::json config_to_json(const RenderConfig& cfg) {
     r["note_flow_speed_multiplier"] = cfg.note_flow_speed_multiplier;
     r["note_alpha"]                 = cfg.note_alpha;
     r["note_outline"]               = cfg.note_outline;
+    r["hold_body_glow_alpha"]       = cfg.hold_body_glow_alpha;
     r["no_cull"]                    = cfg.no_cull;
     r["no_cull_screen"]             = cfg.no_cull_screen;
     r["overrender"]                 = cfg.overrender;
