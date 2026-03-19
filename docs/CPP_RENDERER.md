@@ -86,6 +86,19 @@ The `chart_path` can be the first positional argument, or supplied via any suppo
 | `--width <px>` | Window width (overrides config) |
 | `--height <px>` | Window height (overrides config) |
 
+### Render Preferences
+
+These flags override the equivalent `render` section keys in the config file — useful for quick experiments without editing or creating a config file.
+
+| Flag | Description |
+|------|-------------|
+| `--approach <sec>` | Approach time in seconds (0.1 – 30, default 3.0) |
+| `--chart-speed <mul>` | Chart speed multiplier (0.1 – 20, default 1.0) |
+| `--expand <factor>` | Lane expand factor (>1 compresses, default 1.0) |
+| `--note-scale-x <mul>` | Note width scale (default 2.5) |
+| `--note-scale-y <mul>` | Note height scale (default 1.0) |
+| `--note-alpha <0-1>` | Global note opacity (default 1.0) |
+
 ### Assets
 
 | Flag | Description |
@@ -144,9 +157,13 @@ To load an encrypted `.phbc` at runtime, pass `--password <passphrase>`.
 |------|-------------|
 | `--record <output.mp4>` | Record video (headless) |
 | `--record-preset <name>` | `fast` \| `balanced` \| `quality` \| `archive` |
-| `--record-codec <codec>` | `libx264` \| `libx265` \| `libvpx-vp9` |
+| `--record-codec <codec>` | `libx264` \| `libx265` \| `libvpx-vp9` \| `h264_nvenc` \| `hevc_nvenc` \| `h264_qsv` \| `h264_vaapi` |
+| `--record-hw <type>` | `nvenc` \| `qsv` \| `vaapi` \| `amf` \| `videotoolbox` — selects hw codec when `--record-codec` is empty |
 | `--record-fps <fps>` | Recording framerate (default: 60) |
+| `--sim-fps <fps>` | Internal simulation sampling rate (default: 240) |
 | `--record-resolution WxH` | e.g. `1920x1080` |
+| `--record-capture-resolution WxH` | Render/readback resolution before encoding |
+| `--record-queue-depth N` | Async encoder queue depth (≤1 = sync write) |
 | `--record-start <sec>` | Start recording at time |
 | `--record-end <sec>` | Stop recording at time |
 
@@ -204,6 +221,9 @@ The renderer accepts a JSON (or JSONC — JSON with `//` comments) config file v
     "note_flow_speed_multiplier": 1.0,
     "note_alpha": 1.0,             // global note alpha [0, 1]
     "note_outline": false,         // draw note outline border
+
+    // Hold note visuals
+    "hold_body_glow_alpha": 0.35,  // additive glow intensity while hold is pressed [0, 1]
 
     // Judge-line alpha → note alpha coupling
     // "off" | "negative_only" (default) | "always"
@@ -297,6 +317,7 @@ The renderer accepts a JSON (or JSONC — JSON with `//` comments) config file v
 | `note_flow_speed_multiplier` | float | 1.0 | Note flow speed |
 | `note_alpha` | float | 1.0 | Global note opacity |
 | `note_outline` | bool | false | Draw note outlines |
+| `hold_body_glow_alpha` | float | 0.35 | Additive glow intensity on the hold body while actively pressed [0, 1] |
 | `line_alpha_affects_notes` | string | `"negative_only"` | `"off"` / `"negative_only"` / `"always"` |
 | `no_cull` | bool | false | Disable all culling |
 | `overrender` | float | 1.0 | Cull rect extension factor |

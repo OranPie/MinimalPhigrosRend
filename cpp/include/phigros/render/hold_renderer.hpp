@@ -12,6 +12,7 @@ struct HoldRenderer {
     double base_note_w = 0.0;
     double note_scale_x = 2.5;
     double note_scale_y = 1.0;
+    double hold_body_glow_alpha = 0.35; // additive glow intensity while actively held [0,1]
 
     void init(int W, int H, double scale_x, double scale_y) {
         base_note_w = 0.06 * W;
@@ -95,7 +96,7 @@ struct HoldRenderer {
             if (ns.holding && body_screen_h > 1.0) {
                 double glow_cx = tx + ux * (tail_screen_h + body_screen_h * 0.5);
                 double glow_cy = ty + uy * (tail_screen_h + body_screen_h * 0.5);
-                uint8_t ga = static_cast<uint8_t>(a * 0.35);
+                uint8_t ga = static_cast<uint8_t>(a * hold_body_glow_alpha);
                 if (ga > 0) {
                     batch.set_blend_mode(SDL_BLENDMODE_ADD);
                     batch.draw_texture_region(
