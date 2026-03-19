@@ -43,6 +43,10 @@ struct Respack {
     // Hit effect spritesheet
     render::Texture hitfx_sheet;
 
+    // Raw hitsound OGG bytes loaded from respack (indexed by note kind 1–4).
+    // Index 0 unused; 3 (hold) is empty if the respack has no hold.ogg.
+    std::vector<uint8_t> hitsound_ogg[5];
+
     // Utility: white 4×4 texture for drawing lines/rectangles
     render::Texture white_tex;
 
@@ -224,6 +228,12 @@ inline Respack load_respack(SDL_Renderer* ren, const std::string& zip_path) {
     rp.flick_mh  = load_tex_from_zip(zip, ren, "flick_mh.png");
     rp.hold_mh   = load_tex_from_zip(zip, ren, "hold_mh.png");
     rp.hitfx_sheet = load_tex_from_zip(zip, ren, "hit_fx.png");
+
+    // Hitsound audio (OGG bytes stored for AudioSystem to decode into pools)
+    rp.hitsound_ogg[1] = zip_extract(zip, "click.ogg");
+    rp.hitsound_ogg[2] = zip_extract(zip, "drag.ogg");
+    rp.hitsound_ogg[4] = zip_extract(zip, "flick.ogg");
+    rp.hitsound_ogg[3] = zip_extract(zip, "hold.ogg"); // optional; falls back to tap
 
     mz_zip_reader_end(&zip);
 

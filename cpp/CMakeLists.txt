@@ -141,7 +141,7 @@ add_library(vendor_miniz STATIC
 target_include_directories(vendor_miniz PUBLIC "${VENDOR_DIR}/miniz")
 
 add_library(vendor_miniaudio STATIC src/vendor/audio_impl.cpp)
-target_include_directories(vendor_miniaudio PUBLIC "${VENDOR_DIR}/miniaudio")
+target_include_directories(vendor_miniaudio PUBLIC "${VENDOR_DIR}/miniaudio" "${VENDOR_DIR}/stb")
 if(NOT EMSCRIPTEN)
     target_link_libraries(vendor_miniaudio PUBLIC dl pthread m)
 endif()

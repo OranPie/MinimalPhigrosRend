@@ -30,8 +30,11 @@
 #include <filesystem>
 #include <iomanip>
 #include <deque>
+#include <fstream>
+#include <iterator>
 #include <sstream>
 #include <cmath>
+#include <unordered_map>
 
 #ifdef PHIGROS_WASM
 #include <emscripten.h>
@@ -89,6 +92,13 @@ struct GameLoop {
     render::ResultScreen result_screen;
     render::PauseOverlay pause_overlay;
     std::deque<std::string> recent_judges;
+    std::deque<double>      debug_frame_ms_hist;
+    std::unordered_map<int, const Note*> debug_note_by_id;
+    std::unordered_map<int, std::pair<double, double>> debug_prev_note_pos;
+    std::unordered_map<int, std::deque<std::pair<double, double>>> debug_note_trails;
+    std::unordered_map<int, std::pair<double, double>> debug_prev_line_pos;
+    std::unordered_map<int, double> debug_prev_line_scroll;
+    bool mirror_mod_active = false;
 
     // ── Per-frame profiling ───────────────────────────────────────────────────
     // Tracks wall-clock time for 5 render phases. Enabled by --profile flag.
@@ -180,8 +190,25 @@ struct GameLoop {
     {
         // Init note states
         states.resize(chart.notes.size());
-        for (size_t i = 0; i < chart.notes.size(); ++i)
+        for (size_t i = 0; i < chart.notes.size(); ++i) {
             states[i].note = &chart.notes[i];
+            debug_note_by_id[chart.notes[i].nid] = &chart.notes[i];
+        }
+        for (const auto& mp : args.mod_paths) {
+            if (mp.find("mirror") != std::string::npos) {
+                mirror_mod_active = true;
+                break;
+            }
+            std::ifstream ifs(mp);
+            if (!ifs) continue;
+            std::string raw((std::istreambuf_iterator<char>(ifs)),
+                            std::istreambuf_iterator<char>());
+            if (raw.find("\"type\"") != std::string::npos &&
+                raw.find("mirror") != std::string::npos) {
+                mirror_mod_active = true;
+                break;
+            }
+        }
 
         // Propagate config to EffectManager
         effects.particle_count = cfg.particle_count;
@@ -293,9 +320,11 @@ struct GameLoop {
             ctx.bg.draw(ctx.batch, cfg.bg_dim);
             render_scene_at(t, frame);
             ctx.hud_ren.draw(ctx.batch, frame.hud, fps_display);
-        draw_judge_log();
+            draw_judge_log();
+            draw_debug_overlay(frame);
             pause_overlay.draw(ctx.batch, ctx.hud_ren, W, H);
             ctx.window.end_frame();
+            remember_debug_frame(frame);
             return !ctx.window.quit_requested;
         }
 
@@ -336,6 +365,7 @@ struct GameLoop {
                         [&](int nidx, float ft, const std::string& g) {
                             if (nidx < 0 || nidx >= static_cast<int>(chart.notes.size())) return;
                             const auto& note = chart.notes[nidx];
+                            ctx.audio.play_hitsound(note.kind);
                             math::RGB col = resolve_hitfx_color(note, g);
                             for (const auto& ns : render::build_frame(
                                      ft, chart, states, judge, cfg).notes) {
@@ -352,6 +382,8 @@ struct GameLoop {
                     manual_judge.on_judgment = [&](int nidx, float ft, const std::string& g) {
                         if (!args.save_replay_path.empty())
                             replay_writer.record(ft, (uint32_t)nidx, g);
+                        if (nidx >= 0 && nidx < static_cast<int>(chart.notes.size()))
+                            ctx.audio.play_hitsound(chart.notes[nidx].kind);
                     };
                     auto judge_input = ctx.input.to_judge_input();
                     manual_judge.process_frame(judge_input, mj_frame,
@@ -366,16 +398,19 @@ struct GameLoop {
             s_hit_events.clear();
             autoplay.step(t, chart.notes, states, chart.lines, judge, W, H,
                           &s_hit_notes, &s_hit_events);
-            // Emit hit effects for each note judged this step (mirrors Python autoplay)
-            if (t >= 0.0 && cfg.show_hitfx) {
+            // Emit hit effects and hitsounds for each note judged this step
+            if (t >= 0.0) {
                 for (const auto& ev : s_hit_events) {
                     if (ev.note_idx < 0 || ev.note_idx >= static_cast<int>(chart.notes.size())) continue;
                     const auto& n = chart.notes[ev.note_idx];
-                    auto col = resolve_hitfx_color(n, ev.grade);
-                    effects.add_hitfx(ev.x, ev.y, ev.judge_t, col);
-                    if (cfg.show_particles)
-                        effects.add_particle_burst(ev.x, ev.y, ev.judge_t * 1000.0,
-                            ctx.respack.cfg.hitfx_duration * 1000.0, col);
+                    ctx.audio.play_hitsound(n.kind);
+                    if (cfg.show_hitfx) {
+                        auto col = resolve_hitfx_color(n, ev.grade);
+                        effects.add_hitfx(ev.x, ev.y, ev.judge_t, col);
+                        if (cfg.show_particles)
+                            effects.add_particle_burst(ev.x, ev.y, ev.judge_t * 1000.0,
+                                ctx.respack.cfg.hitfx_duration * 1000.0, col);
+                    }
                     push_judge_log(ev.note_idx);
                 }
             }
@@ -454,6 +489,7 @@ struct GameLoop {
         uint64_t t1_trail = prof.now();
 
         ctx.hud_ren.draw(ctx.batch, frame.hud, fps_display);
+        draw_debug_overlay(frame);
 
         // Result overlay (play/replay mode)
         if (result_shown) {
@@ -481,6 +517,7 @@ struct GameLoop {
         prof.record(3, t0_readback, t1_readback);
         prof.record(4, t0_present,  t1_present);
         prof.end_frame(args.profile);
+        remember_debug_frame(frame);
 
         return !ctx.window.quit_requested;
     }
@@ -541,6 +578,337 @@ private:
         if (note.tint_hitfx_rgb) return *note.tint_hitfx_rgb;
         if (grade == "GOOD" || grade == "BAD") return ctx.respack.cfg.color_good;
         return ctx.respack.cfg.color_perfect;
+    }
+
+    bool has_debug(DebugFlag flag) const {
+        return has_flag(args.debug_flags, flag);
+    }
+
+    void debug_text(double x, double y, const std::string& text,
+                    uint8_t r = 255, uint8_t g = 255, uint8_t b = 255,
+                    uint8_t a = 220) const {
+        if (!ctx.hud_ren.has_font) return;
+        ctx.hud_ren.draw_text(ctx.batch, ctx.hud_ren.font_small, text, x, y, r, g, b, a);
+    }
+
+    static const char* note_kind_name(int kind) {
+        switch (kind) {
+        case 1: return "TAP";
+        case 2: return "DRAG";
+        case 3: return "HOLD";
+        case 4: return "FLICK";
+        default: return "?";
+        }
+    }
+
+    void draw_debug_overlay(const render::FrameSnapshot& fr) {
+        if (args.debug_flags == DebugFlag::NONE) return;
+
+        const bool color_map = has_debug(DebugFlag::LINE_INFO_COLOR_MAPPING);
+        const double frame_ms = std::max(0.0, dt_frame * 1000.0);
+        const double base_note_w = 0.06 * W * cfg.note_scale_x;
+        const double base_note_h = 0.018 * H * cfg.note_scale_y;
+        double left_y = 88.0;
+        double right_y = 16.0;
+
+        auto note_lookup = [&](int nid) -> const Note* {
+            auto it = debug_note_by_id.find(nid);
+            return it == debug_note_by_id.end() ? nullptr : it->second;
+        };
+
+        auto draw_panel = [&](double x, double y, double w, double h) {
+            ctx.batch.draw_rect(x, y, w, h, 0, 0, 0, 140);
+        };
+
+        auto draw_box_outline = [&](double x, double y, double w, double h,
+                                    uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+            ctx.batch.draw_line(x, y, x + w, y, 1.0, r, g, b, a);
+            ctx.batch.draw_line(x, y + h, x + w, y + h, 1.0, r, g, b, a);
+            ctx.batch.draw_line(x, y, x, y + h, 1.0, r, g, b, a);
+            ctx.batch.draw_line(x + w, y, x + w, y + h, 1.0, r, g, b, a);
+        };
+
+        if (has_debug(DebugFlag::FRAME_TIME)) {
+            draw_panel(10, left_y - 4, 220, 26);
+            char buf[128];
+            std::snprintf(buf, sizeof(buf), "frame=%.2fms  fps=%.1f  t=%.3fs", frame_ms, fps_display, fr.t);
+            debug_text(16, left_y, buf, 255, 235, 160, 235);
+            left_y += 28.0;
+        }
+
+        if (has_debug(DebugFlag::TIMING_WINDOWS)) {
+            draw_panel(10, left_y - 4, 260, 26);
+            char buf[128];
+            std::snprintf(buf, sizeof(buf), "windows: P=%.0fms  G=%.0fms  B=%.0fms",
+                          engine::Judge::PERFECT * 1000.0,
+                          engine::Judge::GOOD * 1000.0,
+                          engine::Judge::BAD * 1000.0);
+            debug_text(16, left_y, buf, 190, 240, 255, 235);
+            left_y += 28.0;
+        }
+
+        if (has_debug(DebugFlag::AUDIO_INFO)) {
+            draw_panel(W - 278, right_y - 4, 268, 64);
+            int hs_loaded = 0;
+            for (int k = 1; k <= 4; ++k)
+                if (ctx.audio.hitsounds[k].loaded) ++hs_loaded;
+            char line1[160], line2[160];
+            std::snprintf(line1, sizeof(line1), "audio: bgm=%s playing=%s hs=%d/4",
+                          ctx.audio.bgm_loaded ? "yes" : "no",
+                          ctx.audio.is_playing() ? "yes" : "no",
+                          hs_loaded);
+            std::snprintf(line2, sizeof(line2), "cursor=%.3fs  started=%s  active_ptr=%d",
+                          ctx.audio.get_playback_time(),
+                          ctx.started_audio ? "yes" : "no",
+                          ctx.input.active_count);
+            debug_text(W - 272, right_y, line1, 180, 255, 200, 235);
+            debug_text(W - 272, right_y + 20, line2, 180, 220, 255, 225);
+            right_y += 68.0;
+        }
+
+        if (has_debug(DebugFlag::MIRROR_STATUS)) {
+            draw_panel(W - 220, right_y - 4, 210, 26);
+            debug_text(W - 214, right_y,
+                       std::string("mirror: ") + (mirror_mod_active ? "ON" : "OFF"),
+                       mirror_mod_active ? 255 : 200,
+                       mirror_mod_active ? 180 : 220,
+                       180, 235);
+            right_y += 28.0;
+        }
+
+        if (has_debug(DebugFlag::PERFORMANCE_PROFILER)) {
+            int prof_frames = std::max(1, prof.report_frame);
+            double panel_h = 18.0 * (FramePhaseStats::PHASES + 1) + 8.0;
+            draw_panel(W - 330, right_y - 4, 320, panel_h);
+            debug_text(W - 324, right_y, "profiler", 255, 230, 160, 235);
+            for (int p = 0; p < FramePhaseStats::PHASES; ++p) {
+                char buf[160];
+                std::snprintf(buf, sizeof(buf), "%s avg=%.2f max=%.2f",
+                              FramePhaseStats::phase_name(p),
+                              prof.sum_ms[p] / prof_frames,
+                              prof.max_ms[p]);
+                debug_text(W - 324, right_y + 18.0 * (p + 1), buf, 220, 220, 220, 220);
+            }
+            right_y += panel_h + 4.0;
+        }
+
+        if (has_debug(DebugFlag::AUDIO_WAVEFORM)) {
+            draw_panel(10, left_y - 4, 310, 26);
+            debug_text(16, left_y, "audio waveform unavailable: PCM taps not exposed", 255, 170, 170, 225);
+            left_y += 28.0;
+        }
+
+        if (has_debug(DebugFlag::AUDIO_SPECTRUM)) {
+            draw_panel(10, left_y - 4, 310, 26);
+            debug_text(16, left_y, "audio spectrum unavailable: PCM taps not exposed", 255, 170, 170, 225);
+            left_y += 28.0;
+        }
+
+        if (has_debug(DebugFlag::FRAME_TIME_GRAPH) && !debug_frame_ms_hist.empty()) {
+            const double gx = 12.0, gy = H - 96.0, gw = 180.0, gh = 72.0;
+            draw_panel(gx, gy, gw, gh);
+            double max_ms = 1.0;
+            for (double v : debug_frame_ms_hist) max_ms = std::max(max_ms, v);
+            double px = gx + 8.0;
+            double py = gy + gh - 8.0;
+            double dx = (gw - 16.0) / std::max<size_t>(1, debug_frame_ms_hist.size() - 1);
+            bool first = true;
+            double last_x = 0.0, last_y = 0.0;
+            size_t idx = 0;
+            for (double v : debug_frame_ms_hist) {
+                double x = px + dx * static_cast<double>(idx++);
+                double y = py - (gh - 16.0) * (v / max_ms);
+                if (!first)
+                    ctx.batch.draw_line(last_x, last_y, x, y, 1.0, 120, 255, 180, 220);
+                first = false;
+                last_x = x;
+                last_y = y;
+            }
+            char buf[64];
+            std::snprintf(buf, sizeof(buf), "frame graph (max %.1fms)", max_ms);
+            debug_text(gx + 8.0, gy + 4.0, buf, 200, 255, 220, 220);
+        }
+
+        if (has_debug(DebugFlag::JUDGE_LINE_INFO_WINDOW)) {
+            const double panel_h = std::min<double>(H - left_y - 12.0, 18.0 * (fr.lines.size() + 1) + 10.0);
+            draw_panel(10, left_y - 4, 340, panel_h);
+            debug_text(16, left_y, "judge lines", 255, 230, 160, 235);
+            int row = 0;
+            for (const auto& ls : fr.lines) {
+                if (left_y + 18.0 * (row + 1) > H - 20.0) break;
+                char buf[192];
+                std::snprintf(buf, sizeof(buf), "L%d xy=(%.0f,%.0f) rot=%.1f a=%.2f s=%.1f",
+                              ls.lid, ls.x, ls.y, ls.rot * 180.0 / M_PI, ls.alpha01, ls.scroll);
+                uint8_t r = color_map ? ls.color.r : 220;
+                uint8_t g = color_map ? ls.color.g : 220;
+                uint8_t b = color_map ? ls.color.b : 220;
+                debug_text(16, left_y + 18.0 * (++row), buf, r, g, b, 220);
+            }
+        }
+
+        for (const auto& ls : fr.lines) {
+            double cx = ls.x, cy = ls.y;
+            render::apply_expand_xy(cx, cy, W, H, cfg.expand_factor);
+            uint8_t lr = color_map ? ls.color.r : 255;
+            uint8_t lg = color_map ? ls.color.g : 255;
+            uint8_t lb = color_map ? ls.color.b : 255;
+
+            if (has_debug(DebugFlag::LINE_GEOMETRY)) {
+                double half_len = W * std::max(1.0, cfg.expand_factor) * 0.5 * ls.scale_x;
+                double dx = std::cos(ls.rot) * half_len;
+                double dy = std::sin(ls.rot) * half_len;
+                ctx.batch.draw_line(cx - dx, cy - dy, cx + dx, cy + dy, 1.0, 255, 120, 120, 220);
+                ctx.batch.draw_rect(cx - dx - 2.0, cy - dy - 2.0, 4.0, 4.0, 255, 120, 120, 240);
+                ctx.batch.draw_rect(cx + dx - 2.0, cy + dy - 2.0, 4.0, 4.0, 120, 255, 180, 240);
+            }
+
+            if (has_debug(DebugFlag::JUDGE_LINE_NUMBER)) {
+                debug_text(cx + 4.0, cy - 8.0, std::to_string(ls.lid), lr, lg, lb, 240);
+            }
+
+            if (has_debug(DebugFlag::JUDGE_LINE_INFO_ABOVE_LINE)) {
+                char buf[160];
+                std::snprintf(buf, sizeof(buf), "L%d a=%.2f s=%.1f r=%.1f",
+                              ls.lid, ls.alpha01, ls.scroll, ls.rot * 180.0 / M_PI);
+                debug_text(cx + 10.0, cy - 22.0, buf, lr, lg, lb, 220);
+            }
+
+            if (has_debug(DebugFlag::SPEED_VISUALIZATION)) {
+                auto it_pos = debug_prev_line_pos.find(ls.lid);
+                auto it_scroll = debug_prev_line_scroll.find(ls.lid);
+                if (it_pos != debug_prev_line_pos.end()) {
+                    double dx = cx - it_pos->second.first;
+                    double dy = cy - it_pos->second.second;
+                    ctx.batch.draw_line(cx, cy, cx + dx * 5.0, cy + dy * 5.0, 1.0, 255, 220, 120, 220);
+                    if (it_scroll != debug_prev_line_scroll.end()) {
+                        char buf[96];
+                        std::snprintf(buf, sizeof(buf), "dv=(%.1f,%.1f) ds=%.2f",
+                                      dx / std::max(1e-3, dt_frame),
+                                      dy / std::max(1e-3, dt_frame),
+                                      ls.scroll - it_scroll->second);
+                        debug_text(cx + 10.0, cy + 8.0, buf, 255, 220, 120, 220);
+                    }
+                }
+            }
+        }
+
+        for (const auto& ns : fr.notes) {
+            double x = ns.wx, y = ns.wy;
+            render::apply_expand_xy(x, y, W, H, cfg.expand_factor);
+            const Note* note = note_lookup(ns.nid);
+
+            if (has_debug(DebugFlag::NOTE_TRAIL)) {
+                auto it = debug_note_trails.find(ns.nid);
+                if (it != debug_note_trails.end()) {
+                    const auto& trail = it->second;
+                    for (size_t i = 1; i < trail.size(); ++i) {
+                        uint8_t a = static_cast<uint8_t>(60 + 160 * i / std::max<size_t>(1, trail.size() - 1));
+                        ctx.batch.draw_line(trail[i - 1].first, trail[i - 1].second,
+                                            trail[i].first, trail[i].second,
+                                            1.0, 160, 220, 255, a);
+                    }
+                }
+            }
+
+            if (has_debug(DebugFlag::VELOCITY_VECTORS)) {
+                auto it = debug_prev_note_pos.find(ns.nid);
+                if (it != debug_prev_note_pos.end()) {
+                    double dx = x - it->second.first;
+                    double dy = y - it->second.second;
+                    ctx.batch.draw_line(x, y, x + dx * 4.0, y + dy * 4.0, 1.0, 255, 200, 120, 220);
+                }
+            }
+
+            if (has_debug(DebugFlag::COMBO_ZONES) && note != nullptr) {
+                double until_hit = note->t_hit - fr.t;
+                if (until_hit >= 0.0 && until_hit <= engine::Judge::BAD) {
+                    uint8_t r = 255, g = 180, b = 120;
+                    if (until_hit <= engine::Judge::PERFECT) { r = 255; g = 255; b = 180; }
+                    else if (until_hit <= engine::Judge::GOOD) { r = 180; g = 255; b = 180; }
+                    double hw = base_note_w * ns.size_px * 0.7;
+                    double hh = base_note_h * ns.size_px * 1.2;
+                    draw_box_outline(x - hw, y - hh, hw * 2.0, hh * 2.0, r, g, b, 220);
+                }
+            }
+
+            if (has_debug(DebugFlag::NOTE_HITBOX)) {
+                double hw = base_note_w * ns.size_px * 0.5;
+                double hh = base_note_h * ns.size_px * 0.5;
+                draw_box_outline(x - hw, y - hh, hw * 2.0, hh * 2.0, 120, 220, 255, 220);
+                if (ns.is_hold) {
+                    double tx = ns.wx_tail, ty = ns.wy_tail;
+                    render::apply_expand_xy(tx, ty, W, H, cfg.expand_factor);
+                    ctx.batch.draw_line(x, y, tx, ty, 1.0, 120, 220, 255, 180);
+                }
+            }
+
+            if (has_debug(DebugFlag::NOTE_LINE_NUMBER)) {
+                debug_text(x + 8.0, y + 8.0, std::to_string(ns.nid), 255, 255, 160, 235);
+            }
+
+            if (has_debug(DebugFlag::NOTE_JUDGE_WINDOW) && note != nullptr) {
+                double dt_ms = (note->t_hit - fr.t) * 1000.0;
+                char buf[96];
+                std::snprintf(buf, sizeof(buf), "dt=%+.1fms", dt_ms);
+                uint8_t r = 255, g = 220, b = 160;
+                double adt = std::abs(dt_ms);
+                if (adt <= engine::Judge::PERFECT * 1000.0) { r = 255; g = 255; b = 180; }
+                else if (adt <= engine::Judge::GOOD * 1000.0) { r = 180; g = 255; b = 180; }
+                else if (adt <= engine::Judge::BAD * 1000.0) { r = 255; g = 210; b = 150; }
+                else { r = 255; g = 150; b = 150; }
+                debug_text(x + 10.0, y - 16.0, buf, r, g, b, 220);
+            }
+
+            if (has_debug(DebugFlag::NOTE_INFO) && note != nullptr) {
+                double hold_prog = 0.0;
+                if (note->kind == 3 && note->t_end > note->t_hit)
+                    hold_prog = std::clamp((fr.t - note->t_hit) / (note->t_end - note->t_hit), 0.0, 1.0);
+                char buf[256];
+                std::snprintf(buf, sizeof(buf),
+                              "N%d L%d %s t=%.3f x=%.0f y=%.0f a=%.2f hp=%.2f",
+                              ns.nid, note->line_id, note_kind_name(note->kind),
+                              note->t_hit, ns.wx, ns.wy, ns.alpha, hold_prog);
+                debug_text(x + 10.0, y + 10.0, buf, 220, 220, 255, 220);
+            }
+        }
+
+        if (has_debug(DebugFlag::TOUCH_VISUALIZATION)) {
+            for (const auto& slot : ctx.input.slots) {
+                if (!slot.active()) continue;
+                draw_box_outline(slot.x - 12.0, slot.y - 12.0, 24.0, 24.0,
+                                 slot.down ? 255 : 200, 220, 120, 235);
+                ctx.batch.draw_line(slot.x, slot.y,
+                                    slot.x + slot.vx * 0.04, slot.y + slot.vy * 0.04,
+                                    1.0, 255, 220, 120, 235);
+                char buf[96];
+                std::snprintf(buf, sizeof(buf), "id=%lld v=%.0f",
+                              static_cast<long long>(slot.id), slot.peak_speed);
+                debug_text(slot.x + 14.0, slot.y - 8.0, buf, 255, 220, 120, 235);
+            }
+        }
+    }
+
+    void remember_debug_frame(const render::FrameSnapshot& fr) {
+        if (args.debug_flags == DebugFlag::NONE) return;
+
+        debug_frame_ms_hist.push_back(std::max(0.0, dt_frame * 1000.0));
+        while (debug_frame_ms_hist.size() > 180) debug_frame_ms_hist.pop_front();
+
+        for (const auto& ls : fr.lines) {
+            double x = ls.x, y = ls.y;
+            render::apply_expand_xy(x, y, W, H, cfg.expand_factor);
+            debug_prev_line_pos[ls.lid] = {x, y};
+            debug_prev_line_scroll[ls.lid] = ls.scroll;
+        }
+
+        for (const auto& ns : fr.notes) {
+            double x = ns.wx, y = ns.wy;
+            render::apply_expand_xy(x, y, W, H, cfg.expand_factor);
+            debug_prev_note_pos[ns.nid] = {x, y};
+            auto& trail = debug_note_trails[ns.nid];
+            trail.emplace_back(x, y);
+            while (trail.size() > 12) trail.pop_front();
+        }
     }
 
     // Record into DrawList and execute via SdlExecutor.

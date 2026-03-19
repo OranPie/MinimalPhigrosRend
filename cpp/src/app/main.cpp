@@ -254,7 +254,8 @@ int main(int argc, char* argv[]) {
                           item_args.respack_path, item_args.bg_path,
                           item_args.font_path, item_args.audio_path,
                           item_args.headless, iW, iH, item_cfg,
-                          /*no_vsync=*/!item_args.record_output.empty());
+                          /*no_vsync=*/!item_args.record_output.empty(),
+                          /*meta_bg_path=*/item_chart.meta_bg_path);
 
             GameLoop gl(item_ctx, item_args, item_cfg, item_chart,
                         item_chart.playable_count, seg_end);
@@ -617,7 +618,8 @@ int main(int argc, char* argv[]) {
     ctx.init(args.chart_path, chart.offset,
              args.respack_path, args.bg_path, args.font_path, args.audio_path,
              args.headless, W, H, cfg,
-             /*no_vsync=*/!args.record_output.empty());
+             /*no_vsync=*/!args.record_output.empty(),
+             /*meta_bg_path=*/chart.meta_bg_path);
 
     GameLoop gl(ctx, args, cfg, chart, scoring_notes, chart_end);
 

@@ -2,14 +2,13 @@
 #include "phigros/render/texture.hpp"
 #include "phigros/render/sprite_batch.hpp"
 #include <string>
-#include <vector>
 #include <cstdint>
 #include <algorithm>
-#include <cmath>
 
 // Forward-declare stb_image
 extern "C" {
     unsigned char* stbi_load(const char*, int*, int*, int*, int);
+    unsigned char* stbi_load_from_memory(const unsigned char*, int, int*, int*, int*, int);
     void stbi_image_free(void*);
 }
 
@@ -29,57 +28,19 @@ struct BackgroundRenderer {
         uint8_t* pixels = stbi_load(path.c_str(), &iw, &ih, &ch, 4);
         if (!pixels) return;
 
-        // Cover-mode scaling: calculate crop region
-        double scale = std::max(
-            static_cast<double>(sw) / iw,
-            static_cast<double>(sh) / ih);
-        int scaled_w = static_cast<int>(iw * scale);
-        int scaled_h = static_cast<int>(ih * scale);
+        bg_tex = Texture::from_rgba(ren, pixels, iw, ih);
+        stbi_image_free(pixels);
+        (void)blur_factor;
+        has_bg = bg_tex.valid();
+    }
 
-        // Simple box blur: downscale → upscale
-        if (blur_factor > 1) {
-            int small_w = std::max(1, iw / blur_factor);
-            int small_h = std::max(1, ih / blur_factor);
-            std::vector<uint8_t> small(small_w * small_h * 4);
-
-            // Bilinear downscale
-            for (int y = 0; y < small_h; ++y) {
-                for (int x = 0; x < small_w; ++x) {
-                    double fx = static_cast<double>(x) * iw / small_w;
-                    double fy = static_cast<double>(y) * ih / small_h;
-                    int sx = std::min(static_cast<int>(fx), iw - 1);
-                    int sy = std::min(static_cast<int>(fy), ih - 1);
-                    int idx_src = (sy * iw + sx) * 4;
-                    int idx_dst = (y * small_w + x) * 4;
-                    small[idx_dst + 0] = pixels[idx_src + 0];
-                    small[idx_dst + 1] = pixels[idx_src + 1];
-                    small[idx_dst + 2] = pixels[idx_src + 2];
-                    small[idx_dst + 3] = 255;
-                }
-            }
-            stbi_image_free(pixels);
-
-            // Upscale to screen size (nearest-neighbor; SDL will smooth on render)
-            std::vector<uint8_t> upscaled(sw * sh * 4);
-            for (int y = 0; y < sh; ++y) {
-                for (int x = 0; x < sw; ++x) {
-                    int sx = x * small_w / sw;
-                    int sy = y * small_h / sh;
-                    sx = std::min(sx, small_w - 1);
-                    sy = std::min(sy, small_h - 1);
-                    int idx_src = (sy * small_w + sx) * 4;
-                    int idx_dst = (y * sw + x) * 4;
-                    upscaled[idx_dst + 0] = small[idx_src + 0];
-                    upscaled[idx_dst + 1] = small[idx_src + 1];
-                    upscaled[idx_dst + 2] = small[idx_src + 2];
-                    upscaled[idx_dst + 3] = 255;
-                }
-            }
-            bg_tex = Texture::from_rgba(ren, upscaled.data(), sw, sh);
-        } else {
-            bg_tex = Texture::from_rgba(ren, pixels, iw, ih);
-            stbi_image_free(pixels);
-        }
+    void load_from_memory(SDL_Renderer* ren, const uint8_t* data, int len, int sw, int sh) {
+        screen_w = sw; screen_h = sh;
+        int iw, ih, ch;
+        uint8_t* pixels = stbi_load_from_memory(data, len, &iw, &ih, &ch, 4);
+        if (!pixels) return;
+        bg_tex = Texture::from_rgba(ren, pixels, iw, ih);
+        stbi_image_free(pixels);
         has_bg = bg_tex.valid();
     }
 

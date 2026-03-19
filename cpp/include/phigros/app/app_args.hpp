@@ -1,5 +1,6 @@
 #pragma once
 #include "phigros/core/logger.hpp"
+#include "phigros/app/debug_flags.hpp"
 #include <string>
 #include <vector>
 #include <cstdlib>
@@ -69,6 +70,7 @@ struct AppArgs {
     double      note_scale_x        = -1.0;  // --note-scale-x <mul>
     double      note_scale_y        = -1.0;  // --note-scale-y <mul>
     double      note_alpha          = -1.0;  // --note-alpha <0-1>
+    DebugFlag   debug_flags         = DebugFlag::NONE; // --debug-flags A|B|C
     // ── Logging ────────────────────────────────────────────────────────────────
     std::string log_level;    // --log-level trace|debug|info|warn|error|fatal|off
     std::string log_filter;   // --log-filter chart,render,audio,…  (comma-separated)
@@ -104,6 +106,17 @@ inline AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--note-scale-x"  && i+1 < argc) args.note_scale_x  = std::atof(argv[++i]);
         else if (a == "--note-scale-y"  && i+1 < argc) args.note_scale_y  = std::atof(argv[++i]);
         else if (a == "--note-alpha"    && i+1 < argc) args.note_alpha     = std::atof(argv[++i]);
+        else if (a.rfind("--debug-flags=", 0) == 0 || a.rfind("--debug_flags=", 0) == 0) {
+            std::string err;
+            auto eq = a.find('=');
+            if (!parse_debug_flags(a.substr(eq + 1), args.debug_flags, &err))
+                std::fprintf(stderr, "[Args] Warning: %s\n", err.c_str());
+        }
+        else if ((a == "--debug-flags" || a == "--debug_flags") && i+1 < argc) {
+            std::string err;
+            if (!parse_debug_flags(argv[++i], args.debug_flags, &err))
+                std::fprintf(stderr, "[Args] Warning: %s\n", err.c_str());
+        }
         else if (a == "--headless")    args.headless = true;
         else if (a == "--score-only")  { args.score_only = true; args.headless = true; }
         else if (a == "--benchmark")   { args.benchmark = true; args.score_only = true; args.headless = true; }
@@ -196,6 +209,8 @@ inline void print_usage(const char* prog) {
         "  --note-scale-x <mul>      Note width scale (default 2.5)\n"
         "  --note-scale-y <mul>      Note height scale (default 1.0)\n"
         "  --note-alpha <0-1>        Global note opacity (default 1.0)\n"
+        "  --debug-flags <flags>     Pipe/comma-separated debug overlays, e.g.\n"
+        "                            FRAME_TIME|AUDIO_INFO|JUDGE_LINE_NUMBER\n"
         "\n"
         "COMPILE\n"
         "  --compile <out.phbc>      Compile chart to binary and exit\n"

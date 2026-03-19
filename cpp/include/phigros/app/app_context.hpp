@@ -84,7 +84,8 @@ struct AppContext {
               bool               headless,
               int W, int H,
               const config::RenderConfig& cfg,
-              bool               no_vsync = false)
+              bool               no_vsync = false,
+              const std::string& meta_bg_path = {})
     {
         namespace fs = std::filesystem;
 
@@ -117,10 +118,35 @@ struct AppContext {
             << "," << (int)respack.cfg.color_perfect.b
             << ") hitfx_duration=" << respack.cfg.hitfx_duration << "s");
 
-        // Background
+        // Background — priority: CLI/script override > config > RPE meta > auto-discover
         std::string bgp = bg_override.empty() ? cfg.bg_path : bg_override;
+
+        // RPE meta_bg_path: relative to chart root
+        if (bgp.empty() && !meta_bg_path.empty()) {
+            if (chart_is_zip)
+                bgp = chart_zip_file + ":" + meta_bg_path;
+            else if (!chart_dir.empty())
+                bgp = (fs::path(chart_dir) / meta_bg_path).string();
+        }
+
+        // Auto-discover illustration from chart directory (png/jpg/jpeg/webp)
+        if (bgp.empty() && !chart_dir.empty()) {
+            auto found = chart::find_illustration_file(fs::path(chart_dir));
+            if (found) bgp = *found;
+        }
+
         if (!bgp.empty()) {
-            bg.load(window.ren, bgp, W, H, cfg.bg_blur);
+            // Zip-internal illustration path (e.g. "archive.zip:bg.png")
+            if (chart::is_zip_path(bgp)) {
+                auto [zf, zname] = chart::split_zip_path(bgp);
+                auto data = chart::extract_zip_file(zf, zname);
+                if (!data.empty()) {
+                    bg.load_from_memory(window.ren,
+                        data.data(), static_cast<int>(data.size()), W, H);
+                }
+            } else {
+                bg.load(window.ren, bgp, W, H, cfg.bg_blur);
+            }
             PHLOG_INFO(Render, "Background " << (bg.has_bg ? "loaded" : "failed") << ": " << bgp);
         }
 
@@ -193,18 +219,36 @@ struct AppContext {
                     PHLOG_WARN(Audio, "Failed to load BGM: " << audio_path);
             }
         } else {
+            // Init engine for hitsound even if no BGM is present
+            if (!audio.engine_ok) audio.init();
             PHLOG_DEBUG(Audio, "No audio path found — will run silent");
+        }
+
+        // Hitsounds from respack (kinds 1=tap, 2=drag, 3=hold, 4=flick)
+        if (audio.engine_ok && respack.loaded) {
+            int hs_loaded = 0;
+            for (int k = 1; k <= 4; ++k) {
+                if (!respack.hitsound_ogg[k].empty())
+                    if (audio.load_hitsound(k, respack.hitsound_ogg[k]))
+                        ++hs_loaded;
+            }
+            if (hs_loaded > 0)
+                PHLOG_INFO(Audio, "Hitsounds loaded: " << hs_loaded << "/4 kinds");
         }
     }
 
     // Reload audio from scratch (used on R-restart in play mode).
     void reload_audio(double chart_offset) {
-        if (!audio_path.empty()) {
-            audio.destroy();
-            audio.init();
-            has_audio     = audio.load_bgm(audio_path, chart_offset);
-            started_audio = false;
+        audio.destroy();
+        if (!audio.init()) return;
+        has_audio = false;
+        if (!audio_path.empty())
+            has_audio = audio.load_bgm(audio_path, chart_offset);
+        for (int k = 1; k <= 4; ++k) {
+            if (!respack.hitsound_ogg[k].empty())
+                audio.load_hitsound(k, respack.hitsound_ogg[k]);
         }
+        started_audio = false;
     }
 
     void destroy() {
