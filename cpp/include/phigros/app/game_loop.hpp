@@ -34,6 +34,7 @@
 #include <iterator>
 #include <sstream>
 #include <cmath>
+#include <cinttypes>
 #include <unordered_map>
 
 #ifdef PHIGROS_WASM
@@ -608,8 +609,14 @@ private:
         const double frame_ms = std::max(0.0, dt_frame * 1000.0);
         const double base_note_w = 0.06 * W * cfg.note_scale_x;
         const double base_note_h = 0.018 * H * cfg.note_scale_y;
-        double left_y = 88.0;
-        double right_y = 16.0;
+
+        // Panel-to-text inset (consistent across all panels)
+        constexpr double kPanelPad = 6.0;
+        // Row height for stacked debug text (matches font_small size)
+        const double kRow = std::max(18.0, ctx.hud_ren.text_line_height(ctx.hud_ren.font_small));
+        // Vertical position trackers — start below the HUD stats panel
+        double left_y  = std::max(88.0, H * 0.08);
+        double right_y = std::max(16.0, H * 0.015);
 
         auto note_lookup = [&](int nid) -> const Note* {
             auto it = debug_note_by_id.find(nid);
@@ -628,27 +635,37 @@ private:
             ctx.batch.draw_line(x + w, y, x + w, y + h, 1.0, r, g, b, a);
         };
 
+        // Clamp a right-side panel so its left edge stays on-screen
+        auto right_panel_x = [&](double panel_w) -> double {
+            return std::max(0.0, static_cast<double>(W) - panel_w - 10.0);
+        };
+
         if (has_debug(DebugFlag::FRAME_TIME)) {
-            draw_panel(10, left_y - 4, 220, 26);
             char buf[128];
-            std::snprintf(buf, sizeof(buf), "frame=%.2fms  fps=%.1f  t=%.3fs", frame_ms, fps_display, fr.t);
-            debug_text(16, left_y, buf, 255, 235, 160, 235);
-            left_y += 28.0;
+            std::snprintf(buf, sizeof(buf),
+                          "frame=%.2fms  fps=%.1f  t=%.3fs  res=%dx%d",
+                          frame_ms, fps_display, fr.t, W, H);
+            double tw = ctx.hud_ren.text_width(ctx.hud_ren.font_small, buf);
+            double pw = tw + kPanelPad * 2.0 + 4.0;
+            draw_panel(10, left_y - 4, pw, kRow + 8.0);
+            debug_text(10 + kPanelPad, left_y, buf, 255, 235, 160, 235);
+            left_y += kRow + 10.0;
         }
 
         if (has_debug(DebugFlag::TIMING_WINDOWS)) {
-            draw_panel(10, left_y - 4, 260, 26);
             char buf[128];
-            std::snprintf(buf, sizeof(buf), "windows: P=%.0fms  G=%.0fms  B=%.0fms",
+            std::snprintf(buf, sizeof(buf), "windows: P=%.1fms  G=%.1fms  B=%.1fms",
                           engine::Judge::PERFECT * 1000.0,
                           engine::Judge::GOOD * 1000.0,
                           engine::Judge::BAD * 1000.0);
-            debug_text(16, left_y, buf, 190, 240, 255, 235);
-            left_y += 28.0;
+            double tw = ctx.hud_ren.text_width(ctx.hud_ren.font_small, buf);
+            double pw = tw + kPanelPad * 2.0 + 4.0;
+            draw_panel(10, left_y - 4, pw, kRow + 8.0);
+            debug_text(10 + kPanelPad, left_y, buf, 190, 240, 255, 235);
+            left_y += kRow + 10.0;
         }
 
         if (has_debug(DebugFlag::AUDIO_INFO)) {
-            draw_panel(W - 278, right_y - 4, 268, 64);
             int hs_loaded = 0;
             for (int k = 1; k <= 4; ++k)
                 if (ctx.audio.hitsounds[k].loaded) ++hs_loaded;
@@ -661,51 +678,81 @@ private:
                           ctx.audio.get_playback_time(),
                           ctx.started_audio ? "yes" : "no",
                           ctx.input.active_count);
-            debug_text(W - 272, right_y, line1, 180, 255, 200, 235);
-            debug_text(W - 272, right_y + 20, line2, 180, 220, 255, 225);
-            right_y += 68.0;
+            double tw1 = ctx.hud_ren.text_width(ctx.hud_ren.font_small, line1);
+            double tw2 = ctx.hud_ren.text_width(ctx.hud_ren.font_small, line2);
+            double tw = std::max(tw1, tw2);
+            double pw = tw + kPanelPad * 2.0 + 4.0;
+            double px = right_panel_x(pw);
+            double panel_h = kRow * 2.0 + 8.0;
+            draw_panel(px, right_y - 4, pw, panel_h);
+            debug_text(px + kPanelPad, right_y, line1, 180, 255, 200, 235);
+            debug_text(px + kPanelPad, right_y + kRow, line2, 180, 220, 255, 225);
+            right_y += panel_h + 4.0;
         }
 
         if (has_debug(DebugFlag::MIRROR_STATUS)) {
-            draw_panel(W - 220, right_y - 4, 210, 26);
-            debug_text(W - 214, right_y,
-                       std::string("mirror: ") + (mirror_mod_active ? "ON" : "OFF"),
+            std::string label = std::string("mirror: ") + (mirror_mod_active ? "ON" : "OFF");
+            double tw = ctx.hud_ren.text_width(ctx.hud_ren.font_small, label);
+            double pw = tw + kPanelPad * 2.0 + 4.0;
+            double px = right_panel_x(pw);
+            draw_panel(px, right_y - 4, pw, kRow + 8.0);
+            debug_text(px + kPanelPad, right_y, label,
                        mirror_mod_active ? 255 : 200,
                        mirror_mod_active ? 180 : 220,
                        180, 235);
-            right_y += 28.0;
+            right_y += kRow + 10.0;
         }
 
         if (has_debug(DebugFlag::PERFORMANCE_PROFILER)) {
             int prof_frames = std::max(1, prof.report_frame);
-            double panel_h = 18.0 * (FramePhaseStats::PHASES + 1) + 8.0;
-            draw_panel(W - 330, right_y - 4, 320, panel_h);
-            debug_text(W - 324, right_y, "profiler", 255, 230, 160, 235);
+            double panel_h = kRow * (FramePhaseStats::PHASES + 1) + 8.0;
+            // Measure widest profiler line for adaptive width
+            double max_tw = ctx.hud_ren.text_width(ctx.hud_ren.font_small, "profiler");
             for (int p = 0; p < FramePhaseStats::PHASES; ++p) {
                 char buf[160];
-                std::snprintf(buf, sizeof(buf), "%s avg=%.2f max=%.2f",
+                std::snprintf(buf, sizeof(buf), "%s avg=%.2fms max=%.2fms",
                               FramePhaseStats::phase_name(p),
                               prof.sum_ms[p] / prof_frames,
                               prof.max_ms[p]);
-                debug_text(W - 324, right_y + 18.0 * (p + 1), buf, 220, 220, 220, 220);
+                max_tw = std::max(max_tw, ctx.hud_ren.text_width(ctx.hud_ren.font_small, buf));
+            }
+            double pw = max_tw + kPanelPad * 2.0 + 4.0;
+            double px = right_panel_x(pw);
+            draw_panel(px, right_y - 4, pw, panel_h);
+            debug_text(px + kPanelPad, right_y, "profiler", 255, 230, 160, 235);
+            for (int p = 0; p < FramePhaseStats::PHASES; ++p) {
+                char buf[160];
+                std::snprintf(buf, sizeof(buf), "%s avg=%.2fms max=%.2fms",
+                              FramePhaseStats::phase_name(p),
+                              prof.sum_ms[p] / prof_frames,
+                              prof.max_ms[p]);
+                debug_text(px + kPanelPad, right_y + kRow * (p + 1), buf, 220, 220, 220, 220);
             }
             right_y += panel_h + 4.0;
         }
 
         if (has_debug(DebugFlag::AUDIO_WAVEFORM)) {
-            draw_panel(10, left_y - 4, 310, 26);
-            debug_text(16, left_y, "audio waveform unavailable: PCM taps not exposed", 255, 170, 170, 225);
-            left_y += 28.0;
+            const char* msg = "audio waveform unavailable: PCM taps not exposed";
+            double tw = ctx.hud_ren.text_width(ctx.hud_ren.font_small, msg);
+            double pw = tw + kPanelPad * 2.0 + 4.0;
+            draw_panel(10, left_y - 4, pw, kRow + 8.0);
+            debug_text(10 + kPanelPad, left_y, msg, 255, 170, 170, 225);
+            left_y += kRow + 10.0;
         }
 
         if (has_debug(DebugFlag::AUDIO_SPECTRUM)) {
-            draw_panel(10, left_y - 4, 310, 26);
-            debug_text(16, left_y, "audio spectrum unavailable: PCM taps not exposed", 255, 170, 170, 225);
-            left_y += 28.0;
+            const char* msg = "audio spectrum unavailable: PCM taps not exposed";
+            double tw = ctx.hud_ren.text_width(ctx.hud_ren.font_small, msg);
+            double pw = tw + kPanelPad * 2.0 + 4.0;
+            draw_panel(10, left_y - 4, pw, kRow + 8.0);
+            debug_text(10 + kPanelPad, left_y, msg, 255, 170, 170, 225);
+            left_y += kRow + 10.0;
         }
 
         if (has_debug(DebugFlag::FRAME_TIME_GRAPH) && !debug_frame_ms_hist.empty()) {
-            const double gx = 12.0, gy = H - 96.0, gw = 180.0, gh = 72.0;
+            const double gw = 180.0, gh = 72.0;
+            const double gx = 12.0;
+            const double gy = std::max(left_y + 4.0, static_cast<double>(H) - gh - 24.0);
             draw_panel(gx, gy, gw, gh);
             double max_ms = 1.0;
             for (double v : debug_frame_ms_hist) max_ms = std::max(max_ms, v);
@@ -730,19 +777,34 @@ private:
         }
 
         if (has_debug(DebugFlag::JUDGE_LINE_INFO_WINDOW)) {
-            const double panel_h = std::min<double>(H - left_y - 12.0, 18.0 * (fr.lines.size() + 1) + 10.0);
-            draw_panel(10, left_y - 4, 340, panel_h);
-            debug_text(16, left_y, "judge lines", 255, 230, 160, 235);
+            const double panel_h = std::min<double>(
+                std::max(0.0, H - left_y - 12.0),
+                kRow * (fr.lines.size() + 1) + 10.0);
+            // Measure widest line entry for adaptive panel width
+            double max_tw = ctx.hud_ren.text_width(ctx.hud_ren.font_small, "judge lines");
+            for (const auto& ls : fr.lines) {
+                char buf[192];
+                std::snprintf(buf, sizeof(buf),
+                              "L%d xy=(%.0f,%.0f) rot=%.1f° a=%.2f s=%.2f sx=%.1f",
+                              ls.lid, ls.x, ls.y, ls.rot * 180.0 / M_PI,
+                              ls.alpha01, ls.scroll, ls.scale_x);
+                max_tw = std::max(max_tw, ctx.hud_ren.text_width(ctx.hud_ren.font_small, buf));
+            }
+            double pw = max_tw + kPanelPad * 2.0 + 4.0;
+            draw_panel(10, left_y - 4, pw, panel_h);
+            debug_text(10 + kPanelPad, left_y, "judge lines", 255, 230, 160, 235);
             int row = 0;
             for (const auto& ls : fr.lines) {
-                if (left_y + 18.0 * (row + 1) > H - 20.0) break;
+                if (left_y + kRow * (row + 1) > H - 20.0) break;
                 char buf[192];
-                std::snprintf(buf, sizeof(buf), "L%d xy=(%.0f,%.0f) rot=%.1f a=%.2f s=%.1f",
-                              ls.lid, ls.x, ls.y, ls.rot * 180.0 / M_PI, ls.alpha01, ls.scroll);
+                std::snprintf(buf, sizeof(buf),
+                              "L%d xy=(%.0f,%.0f) rot=%.1f° a=%.2f s=%.2f sx=%.1f",
+                              ls.lid, ls.x, ls.y, ls.rot * 180.0 / M_PI,
+                              ls.alpha01, ls.scroll, ls.scale_x);
                 uint8_t r = color_map ? ls.color.r : 220;
                 uint8_t g = color_map ? ls.color.g : 220;
                 uint8_t b = color_map ? ls.color.b : 220;
-                debug_text(16, left_y + 18.0 * (++row), buf, r, g, b, 220);
+                debug_text(10 + kPanelPad, left_y + kRow * (++row), buf, r, g, b, 220);
             }
         }
 
@@ -767,9 +829,10 @@ private:
             }
 
             if (has_debug(DebugFlag::JUDGE_LINE_INFO_ABOVE_LINE)) {
-                char buf[160];
-                std::snprintf(buf, sizeof(buf), "L%d a=%.2f s=%.1f r=%.1f",
-                              ls.lid, ls.alpha01, ls.scroll, ls.rot * 180.0 / M_PI);
+                char buf[192];
+                std::snprintf(buf, sizeof(buf), "L%d a=%.2f s=%.2f r=%.1f° sx=%.1f sy=%.1f",
+                              ls.lid, ls.alpha01, ls.scroll, ls.rot * 180.0 / M_PI,
+                              ls.scale_x, ls.scale_y);
                 debug_text(cx + 10.0, cy - 22.0, buf, lr, lg, lb, 220);
             }
 
@@ -849,7 +912,8 @@ private:
             if (has_debug(DebugFlag::NOTE_JUDGE_WINDOW) && note != nullptr) {
                 double dt_ms = (note->t_hit - fr.t) * 1000.0;
                 char buf[96];
-                std::snprintf(buf, sizeof(buf), "dt=%+.1fms", dt_ms);
+                std::snprintf(buf, sizeof(buf), "dt=%+.1fms k=%s", dt_ms,
+                              note_kind_name(note->kind));
                 uint8_t r = 255, g = 220, b = 160;
                 double adt = std::abs(dt_ms);
                 if (adt <= engine::Judge::PERFECT * 1000.0) { r = 255; g = 255; b = 180; }
@@ -865,9 +929,10 @@ private:
                     hold_prog = std::clamp((fr.t - note->t_hit) / (note->t_end - note->t_hit), 0.0, 1.0);
                 char buf[256];
                 std::snprintf(buf, sizeof(buf),
-                              "N%d L%d %s t=%.3f x=%.0f y=%.0f a=%.2f hp=%.2f",
+                              "N%d L%d %s t=%.3fs xy=(%.0f,%.0f) a=%.2f sz=%.1f hp=%.0f%%",
                               ns.nid, note->line_id, note_kind_name(note->kind),
-                              note->t_hit, ns.wx, ns.wy, ns.alpha, hold_prog);
+                              note->t_hit, ns.wx, ns.wy, ns.alpha, ns.size_px,
+                              hold_prog * 100.0);
                 debug_text(x + 10.0, y + 10.0, buf, 220, 220, 255, 220);
             }
         }
@@ -881,8 +946,8 @@ private:
                                     slot.x + slot.vx * 0.04, slot.y + slot.vy * 0.04,
                                     1.0, 255, 220, 120, 235);
                 char buf[96];
-                std::snprintf(buf, sizeof(buf), "id=%lld v=%.0f",
-                              static_cast<long long>(slot.id), slot.peak_speed);
+                std::snprintf(buf, sizeof(buf), "id=%" PRId64 " v=%.0f",
+                              slot.id, slot.peak_speed);
                 debug_text(slot.x + 14.0, slot.y - 8.0, buf, 255, 220, 120, 235);
             }
         }

@@ -82,10 +82,16 @@ struct HudRenderer {
                    uint8_t a = 255) const {
         if (!font.valid) return;
 
-        float xpos = static_cast<float>(x);
+        const float origin_x = static_cast<float>(x);
+        float xpos = origin_x;
         float ypos = static_cast<float>(y);
 
         for (char ch : text) {
+            if (ch == '\n') {
+                xpos = origin_x;
+                ypos += font.font_size;
+                continue;
+            }
             if (ch < 32 || ch >= 128) continue;
             stbtt_bakedchar bc = font.cdata[ch - 32];
 
@@ -117,11 +123,18 @@ struct HudRenderer {
     double text_width(const FontAtlas& font, const std::string& text) const {
         if (!font.valid) return 0;
         float w = 0;
+        float max_w = 0;
         for (char ch : text) {
+            if (ch == '\n') { max_w = std::max(max_w, w); w = 0; continue; }
             if (ch < 32 || ch >= 128) continue;
             w += font.cdata[ch - 32].xadvance;
         }
-        return w;
+        return std::max(max_w, w);
+    }
+
+    /// Return the line height of the font (same spacing used by draw_text for \n).
+    double text_line_height(const FontAtlas& font) const {
+        return font.valid ? static_cast<double>(font.font_size) : 0.0;
     }
 
     // Draw text centered at (cx, cy), rotated by rot_rad, scaled by sx/sy.
