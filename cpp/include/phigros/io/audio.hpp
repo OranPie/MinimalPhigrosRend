@@ -205,13 +205,15 @@ struct AudioSystem {
         return analysis_loaded;
     }
 
-    std::vector<float> capture_recent_pcm(size_t sample_count) const {
+    std::vector<float> capture_recent_pcm_at_playback_time(double playback_time_sec,
+                                                           size_t sample_count) const {
         std::vector<float> mono(sample_count, 0.0f);
         if (!analysis_loaded || sample_count == 0) return mono;
 
         std::lock_guard<std::mutex> lk(analysis_mu);
-        const double t = std::max(0.0, get_playback_time());
-        const ma_uint64 center_frame = static_cast<ma_uint64>(t * static_cast<double>(analysis_sample_rate));
+        const double source_t = std::max(0.0, playback_time_sec + offset_sec);
+        const ma_uint64 center_frame = static_cast<ma_uint64>(
+            source_t * static_cast<double>(analysis_sample_rate));
         const ma_uint64 frame_count = static_cast<ma_uint64>(sample_count);
         const ma_uint64 start_frame = (center_frame > frame_count) ? (center_frame - frame_count) : 0;
         if (ma_decoder_seek_to_pcm_frame(const_cast<ma_decoder*>(&analysis_decoder), start_frame) != MA_SUCCESS)
@@ -230,6 +232,10 @@ struct AudioSystem {
             mono[i] = acc / static_cast<float>(analysis_channels);
         }
         return mono;
+    }
+
+    std::vector<float> capture_recent_pcm(size_t sample_count) const {
+        return capture_recent_pcm_at_playback_time(get_playback_time(), sample_count);
     }
 
     void destroy() {

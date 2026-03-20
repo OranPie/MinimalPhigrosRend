@@ -280,6 +280,8 @@ struct GameLoop {
             rc.start_time = args.record_start;
             rc.end_time   = args.record_end;
             rc.audio_path = args.audio_path;
+            rc.chart_offset = chart.offset;
+            rc.audio_offset_sec = audio_offset_sec;
             if (rc.audio_path.empty())
                 rc.audio_path = find_chart_audio(
                     std::filesystem::path(args.chart_path).parent_path().string());
@@ -660,6 +662,59 @@ private:
             return it == debug_note_by_id.end() ? nullptr : it->second;
         };
 
+        const double audio_t = mute_live_audio
+            ? (fr.t - audio_offset_sec)
+            : ctx.audio.get_playback_time();
+        const double audio_drift_ms = ((audio_t + audio_offset_sec) - fr.t) * 1000.0;
+
+        int visible_by_kind[5] = {};
+        int pending_notes = 0;
+        int judged_notes = 0;
+        int missed_notes = 0;
+        int active_hold_notes = 0;
+        int holding_notes = 0;
+        for (const auto& st : states) {
+            if (st.miss) ++missed_notes;
+            else if (st.judged || st.hold_finalized) ++judged_notes;
+            else ++pending_notes;
+            if (st.note && st.note->kind == 3 && !st.hold_finalized) {
+                ++active_hold_notes;
+                if (st.holding) ++holding_notes;
+            }
+        }
+
+        struct LineActivityRow {
+            int lid = 0;
+            int visible = 0;
+            int imminent = 0;
+            int holds = 0;
+            double alpha01 = 0.0;
+            double scroll = 0.0;
+        };
+        std::vector<LineActivityRow> line_activity;
+        line_activity.reserve(fr.lines.size());
+        std::unordered_map<int, size_t> line_activity_index;
+        for (size_t i = 0; i < fr.lines.size(); ++i) {
+            const auto& ls = fr.lines[i];
+            line_activity.push_back({ls.lid, 0, 0, 0, ls.alpha01, ls.scroll});
+            line_activity_index[ls.lid] = i;
+        }
+
+        int visible_multi = 0;
+        for (const auto& ns : fr.notes) {
+            if (ns.kind >= 1 && ns.kind <= 4) ++visible_by_kind[ns.kind];
+            if (ns.mh) ++visible_multi;
+            const Note* note = note_lookup(ns.nid);
+            if (!note) continue;
+            auto it = line_activity_index.find(note->line_id);
+            if (it == line_activity_index.end()) continue;
+            auto& row = line_activity[it->second];
+            ++row.visible;
+            if (ns.is_hold) ++row.holds;
+            const double until_hit = note->t_hit - fr.t;
+            if (until_hit >= 0.0 && until_hit <= 1.0) ++row.imminent;
+        }
+
         auto draw_panel = [&](double x, double y, double w, double h) {
             ctx.batch.draw_rect(x, y, w, h, 0, 0, 0, kPanelAlpha);
         };
@@ -702,6 +757,49 @@ private:
             left_y += kRow + 10.0;
         }
 
+        if (has_debug(DebugFlag::TIMING_CLOCKS)) {
+            char l1[160], l2[160], l3[160];
+            std::snprintf(l1, sizeof(l1), "sim=%.3fs  audio=%.3fs  drift=%+.1fms",
+                          fr.t, audio_t, audio_drift_ms);
+            std::snprintf(l2, sizeof(l2), "render_dt=%.2fms  sim_dt=%.2fms  sim/render=%d",
+                          render_dt * 1000.0, sim_dt * 1000.0, sim_steps_per_render);
+            std::snprintf(l3, sizeof(l3), "mode=%s  paused=%s  result=%s",
+                          is_recording ? "record" : (is_play_mode ? "play" : "autoplay"),
+                          paused ? "yes" : "no",
+                          result_shown ? "yes" : "no");
+            double tw = std::max({ctx.hud_ren.text_width(ctx.hud_ren.font_small, l1),
+                                  ctx.hud_ren.text_width(ctx.hud_ren.font_small, l2),
+                                  ctx.hud_ren.text_width(ctx.hud_ren.font_small, l3)});
+            double pw = tw + kPanelPad * 2.0 + 4.0;
+            double panel_h = kRow * 3.0 + 8.0;
+            draw_panel(10, left_y - 4, pw, panel_h);
+            debug_text(10 + kPanelPad, left_y, l1, 255, 230, 180, 235);
+            debug_text(10 + kPanelPad, left_y + kRow, l2, 180, 220, 255, 225);
+            debug_text(10 + kPanelPad, left_y + kRow * 2.0, l3, 200, 255, 200, 225);
+            left_y += panel_h + 6.0;
+        }
+
+        if (has_debug(DebugFlag::VISIBILITY_SUMMARY)) {
+            char l1[160], l2[160], l3[160];
+            std::snprintf(l1, sizeof(l1), "visible T=%d D=%d H=%d F=%d  multi=%d",
+                          visible_by_kind[1], visible_by_kind[2],
+                          visible_by_kind[3], visible_by_kind[4], visible_multi);
+            std::snprintf(l2, sizeof(l2), "state pending=%d  judged=%d  miss=%d",
+                          pending_notes, judged_notes, missed_notes);
+            std::snprintf(l3, sizeof(l3), "holds active=%d  holding=%d  frame_notes=%zu",
+                          active_hold_notes, holding_notes, fr.notes.size());
+            double tw = std::max({ctx.hud_ren.text_width(ctx.hud_ren.font_small, l1),
+                                  ctx.hud_ren.text_width(ctx.hud_ren.font_small, l2),
+                                  ctx.hud_ren.text_width(ctx.hud_ren.font_small, l3)});
+            double pw = tw + kPanelPad * 2.0 + 4.0;
+            double panel_h = kRow * 3.0 + 8.0;
+            draw_panel(10, left_y - 4, pw, panel_h);
+            debug_text(10 + kPanelPad, left_y, l1, 220, 240, 255, 235);
+            debug_text(10 + kPanelPad, left_y + kRow, l2, 200, 255, 200, 225);
+            debug_text(10 + kPanelPad, left_y + kRow * 2.0, l3, 255, 220, 180, 225);
+            left_y += panel_h + 6.0;
+        }
+
         if (has_debug(DebugFlag::AUDIO_INFO)) {
             int hs_loaded = 0;
             for (int k = 1; k <= 4; ++k)
@@ -712,7 +810,7 @@ private:
                           ctx.audio.is_playing() ? "yes" : "no",
                           hs_loaded);
             std::snprintf(line2, sizeof(line2), "cursor=%.3fs  started=%s  active_ptr=%d",
-                          ctx.audio.get_playback_time(),
+                          audio_t,
                           ctx.started_audio ? "yes" : "no",
                           ctx.input.active_count);
             double tw1 = ctx.hud_ren.text_width(ctx.hud_ren.font_small, line1);
@@ -724,6 +822,40 @@ private:
             draw_panel(px, right_y - 4, pw, panel_h);
             debug_text(px + kPanelPad, right_y, line1, 180, 255, 200, 235);
             debug_text(px + kPanelPad, right_y + kRow, line2, 180, 220, 255, 225);
+            right_y += panel_h + 4.0;
+        }
+
+        if (has_debug(DebugFlag::RECORDING_STATUS)) {
+            char l1[160], l2[160], l3[160];
+            if (is_recording && recorder.is_active()) {
+                auto s = recorder.stats_snapshot();
+                std::snprintf(l1, sizeof(l1), "record %.0ffps wall=%.1f q=%zu/%zu",
+                              recorder.target_fps(), s.fps_wall(),
+                              recorder.queue_size_snapshot(), recorder.queue_capacity());
+                std::snprintf(l2, sizeof(l2), "capture=%dx%d output=%dx%d",
+                              recorder.capture_width(), recorder.capture_height(),
+                              recorder.output_width(), recorder.output_height());
+                std::snprintf(l3, sizeof(l3), "frames=%d avg=%.2fms max=%.2fms",
+                              s.frames_written, s.avg_write_ms(), s.max_write_ms);
+            } else {
+                std::snprintf(l1, sizeof(l1), "record inactive");
+                std::snprintf(l2, sizeof(l2), "target=%.0ffps queue=%d",
+                              args.record_fps, args.record_queue_depth);
+                std::snprintf(l3, sizeof(l3), "capture=%dx%d output=%dx%d",
+                              W, H,
+                              args.record_w > 0 ? args.record_w : W,
+                              args.record_h > 0 ? args.record_h : H);
+            }
+            double tw = std::max({ctx.hud_ren.text_width(ctx.hud_ren.font_small, l1),
+                                  ctx.hud_ren.text_width(ctx.hud_ren.font_small, l2),
+                                  ctx.hud_ren.text_width(ctx.hud_ren.font_small, l3)});
+            double pw = tw + kPanelPad * 2.0 + 4.0;
+            double px = right_panel_x(pw);
+            double panel_h = kRow * 3.0 + 8.0;
+            draw_panel(px, right_y - 4, pw, panel_h);
+            debug_text(px + kPanelPad, right_y, l1, 255, 230, 180, 235);
+            debug_text(px + kPanelPad, right_y + kRow, l2, 180, 220, 255, 225);
+            debug_text(px + kPanelPad, right_y + kRow * 2.0, l3, 200, 255, 200, 225);
             right_y += panel_h + 4.0;
         }
 
@@ -768,6 +900,37 @@ private:
             right_y += panel_h + 4.0;
         }
 
+        if (has_debug(DebugFlag::LINE_ACTIVITY_PANEL) && !line_activity.empty()) {
+            std::sort(line_activity.begin(), line_activity.end(),
+                      [](const LineActivityRow& a, const LineActivityRow& b) {
+                          if (a.visible != b.visible) return a.visible > b.visible;
+                          if (a.imminent != b.imminent) return a.imminent > b.imminent;
+                          return a.lid < b.lid;
+                      });
+            int rows = std::min<int>(5, static_cast<int>(line_activity.size()));
+            double max_tw = ctx.hud_ren.text_width(ctx.hud_ren.font_small, "line activity");
+            char buf[160];
+            for (int i = 0; i < rows; ++i) {
+                const auto& row = line_activity[i];
+                std::snprintf(buf, sizeof(buf), "L%d vis=%d hit<1s=%d hold=%d a=%.2f s=%.2f",
+                              row.lid, row.visible, row.imminent, row.holds, row.alpha01, row.scroll);
+                max_tw = std::max(max_tw, ctx.hud_ren.text_width(ctx.hud_ren.font_small, buf));
+            }
+            double pw = max_tw + kPanelPad * 2.0 + 4.0;
+            double px = right_panel_x(pw);
+            double panel_h = kRow * (rows + 1) + 8.0;
+            draw_panel(px, right_y - 4, pw, panel_h);
+            debug_text(px + kPanelPad, right_y, "line activity", 255, 230, 160, 235);
+            for (int i = 0; i < rows; ++i) {
+                const auto& row = line_activity[i];
+                std::snprintf(buf, sizeof(buf), "L%d vis=%d hit<1s=%d hold=%d a=%.2f s=%.2f",
+                              row.lid, row.visible, row.imminent, row.holds, row.alpha01, row.scroll);
+                debug_text(px + kPanelPad, right_y + kRow * (i + 1), buf,
+                           220, static_cast<uint8_t>(220 + std::min(35, row.visible * 6)), 255, 220);
+            }
+            right_y += panel_h + 4.0;
+        }
+
         if (has_debug(DebugFlag::AUDIO_WAVEFORM)) {
             const double gw = 220.0 * cfg.font_size;
             const double gh = 80.0 * cfg.font_size;
@@ -776,7 +939,7 @@ private:
             draw_panel(gx, gy, gw, gh);
             debug_text(gx + kPanelPad, gy + 4.0, "audio waveform", 180, 235, 255, 225);
             if (ctx.audio.has_pcm_tap()) {
-                auto pcm = ctx.audio.capture_recent_pcm(160);
+                auto pcm = ctx.audio.capture_recent_pcm_at_playback_time(audio_t, 160);
                 double mid_y = gy + gh * 0.58;
                 double amp = gh * 0.28;
                 double px = gx + 8.0;
@@ -807,7 +970,7 @@ private:
             draw_panel(gx, gy, gw, gh);
             debug_text(gx + kPanelPad, gy + 4.0, "audio spectrum", 180, 235, 255, 225);
             if (ctx.audio.has_pcm_tap()) {
-                auto pcm = ctx.audio.capture_recent_pcm(256);
+                auto pcm = ctx.audio.capture_recent_pcm_at_playback_time(audio_t, 256);
                 constexpr int BINS = 24;
                 double mags[BINS] = {};
                 for (int k = 0; k < BINS; ++k) {
@@ -1549,7 +1712,7 @@ private:
             return;
         }
         ctx.window.read_pixels_rgba(readback_rgba.data());
-        if (!recorder.capture_rgba(readback_rgba.data(), W, H)) {
+        if (!recorder.capture_rgba(readback_rgba.data(), W, H, t)) {
             PHLOG_ERROR(Record, "Capture failed, stopping recorder");
             recorder.finish();
             is_recording = false;

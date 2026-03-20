@@ -350,6 +350,9 @@ public:
     }
     int width() const { return w_; }
     int height() const { return h_; }
+    int output_width() const { return out_w_ > 0 ? out_w_ : w_; }
+    int output_height() const { return out_h_ > 0 ? out_h_ : h_; }
+    double fps() const { return fps_; }
     const std::string& command_line() const { return cmd_last_; }
 
     // Mux video with audio as a post-processing step
@@ -467,6 +470,8 @@ struct RecordConfig {
     double start_time = -1.0;             // chart time to start recording
     double end_time = 0.0;                // 0 = full chart
     std::string audio_path;               // BGM for muxing
+    double chart_offset = 0.0;
+    double audio_offset_sec = 0.0;
     bool no_hitsound = false;
     std::vector<uint8_t> hitsound_ogg[5];
 };
@@ -498,6 +503,9 @@ public:
             stop_worker_ = false;
             worker_failed_ = false;
         }
+        first_capture_chart_time_ = 0.0;
+        first_capture_chart_time_valid_ = false;
+        hitsound_events_.clear();
 
         capture_w_ = (rc.capture_width > 0) ? rc.capture_width : window_w;
         capture_h_ = (rc.capture_height > 0) ? rc.capture_height : window_h;
@@ -584,7 +592,7 @@ public:
     }
 
     // Capture RGBA framebuffer. Async mode copies into queue; worker writes to FFmpeg.
-    bool capture_rgba(const uint8_t* rgba, int w, int h) {
+    bool capture_rgba(const uint8_t* rgba, int w, int h, double chart_time) {
         if (!started_) {
             PHLOG_TRACE(Record, "capture_rgba ignored: session not started");
             return false;
@@ -593,6 +601,10 @@ public:
             PHLOG_ERROR(Record, "Capture size mismatch: got " << w << "x" << h
                 << ", expected " << capture_w_ << "x" << capture_h_);
             return false;
+        }
+        if (!first_capture_chart_time_valid_) {
+            first_capture_chart_time_ = chart_time;
+            first_capture_chart_time_valid_ = true;
         }
         size_t len = static_cast<size_t>(w) * h * 4;
         if (!async_enabled_) {
@@ -663,14 +675,12 @@ public:
         if (!cfg_.audio_path.empty() && !video_tmp_.empty()) {
             PHLOG_INFO(Record, "Muxing audio…");
             std::string mux_audio_path = cfg_.audio_path;
-            std::string mixed_audio_tmp;
-            if (!cfg_.no_hitsound && !hitsound_events_.empty()) {
-                mixed_audio_tmp = cfg_.output + ".audio_tmp.wav";
-                if (build_mixed_audio_track(mixed_audio_tmp)) {
-                    mux_audio_path = mixed_audio_tmp;
-                } else {
-                    PHLOG_WARN(Record, "Failed to build mixed hitsound track; muxing raw BGM only");
-                }
+            std::string mixed_audio_tmp = cfg_.output + ".audio_tmp.wav";
+            if (build_processed_audio_track(mixed_audio_tmp)) {
+                mux_audio_path = mixed_audio_tmp;
+            } else {
+                PHLOG_WARN(Record, "Failed to build processed audio track; muxing raw BGM only");
+                mixed_audio_tmp.clear();
             }
             bool ok = VideoEncoder::mux_audio(video_tmp_, mux_audio_path, cfg_.output);
             // Clean up temp video
@@ -690,6 +700,16 @@ public:
 
     bool is_active() const { return started_; }
     RecordStats stats_snapshot() const { return encoder_.stats_snapshot(); }
+    size_t queue_size_snapshot() const {
+        std::lock_guard<std::mutex> lock(queue_mu_);
+        return queue_.size();
+    }
+    size_t queue_capacity() const { return queue_capacity_; }
+    int capture_width() const { return capture_w_; }
+    int capture_height() const { return capture_h_; }
+    int output_width() const { return encoder_.output_width(); }
+    int output_height() const { return encoder_.output_height(); }
+    double target_fps() const { return encoder_.fps(); }
     void record_hitsound(int kind, double time_sec) {
         if (cfg_.no_hitsound || kind < 1 || kind > 4) return;
         hitsound_events_.push_back({kind, time_sec});
@@ -720,7 +740,7 @@ public:
     }
 
 private:
-    bool build_mixed_audio_track(const std::string& output_wav) {
+    bool build_processed_audio_track(const std::string& output_wav) {
         const std::string bgm_tmp = output_wav + ".bgm.wav";
         if (!AudioMixer::extract_audio_wav(cfg_.audio_path, bgm_tmp)) return false;
         std::vector<int16_t> mixed_pcm;
@@ -729,6 +749,25 @@ private:
             return false;
         }
         std::filesystem::remove(bgm_tmp);
+
+        constexpr int kSampleRate = 44100;
+        constexpr int kChannels = 2;
+        const double base_chart_time = first_capture_chart_time_valid_
+            ? first_capture_chart_time_
+            : (cfg_.start_time > -0.5 ? cfg_.start_time : 0.0);
+        const double source_start_time =
+            base_chart_time + cfg_.chart_offset - cfg_.audio_offset_sec;
+        const int64_t source_start_samples = static_cast<int64_t>(
+            std::llround(source_start_time * static_cast<double>(kSampleRate))) * kChannels;
+
+        if (source_start_samples > 0) {
+            const size_t trim = static_cast<size_t>(
+                std::min<int64_t>(source_start_samples, static_cast<int64_t>(mixed_pcm.size())));
+            mixed_pcm.erase(mixed_pcm.begin(), mixed_pcm.begin() + static_cast<std::ptrdiff_t>(trim));
+        } else if (source_start_samples < 0) {
+            const size_t pad = static_cast<size_t>(-source_start_samples);
+            mixed_pcm.insert(mixed_pcm.begin(), pad, 0);
+        }
 
         std::vector<int16_t> hitsound_pcm[5];
         for (int k = 1; k <= 4; ++k) {
@@ -740,7 +779,8 @@ private:
             int kind = ev.kind;
             if (kind == 3 && hitsound_pcm[3].empty()) kind = 1;
             if (kind < 1 || kind > 4 || hitsound_pcm[kind].empty()) continue;
-            AudioMixer::mix_hitsound(mixed_pcm, hitsound_pcm[kind], ev.time_sec, 0.65f);
+            AudioMixer::mix_hitsound(mixed_pcm, hitsound_pcm[kind],
+                                     ev.time_sec - base_chart_time, 0.65f);
         }
         return AudioMixer::write_wav_s16(output_wav, mixed_pcm);
     }
@@ -777,11 +817,6 @@ private:
         }
     }
 
-    size_t queue_size_snapshot() const {
-        std::lock_guard<std::mutex> lock(queue_mu_);
-        return queue_.size();
-    }
-
     VideoEncoder encoder_;
     RecordConfig cfg_;
     std::string video_tmp_;
@@ -800,6 +835,8 @@ private:
     bool async_enabled_ = false;
     bool stop_worker_ = false;
     bool worker_failed_ = false;
+    double first_capture_chart_time_ = 0.0;
+    bool first_capture_chart_time_valid_ = false;
 };
 
 } // namespace phigros::io
