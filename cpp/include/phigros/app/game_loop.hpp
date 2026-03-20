@@ -101,6 +101,15 @@ struct GameLoop {
     std::unordered_map<int, double> debug_prev_line_scroll;
     bool mirror_mod_active = false;
 
+    // ── Debug state for new overlays ─────────────────────────────────────────
+    // MISS_INDICATOR: track recently missed note IDs with a fade timer
+    std::unordered_map<int, double> debug_miss_flash;  // nid -> time_remaining (seconds)
+    // JUDGMENT_HISTORY: recent judgment results for feed display
+    struct JudgeEntry { std::string text; double age; };
+    std::deque<JudgeEntry> debug_judge_history;
+    // SCORE_BREAKDOWN: per-grade counters (updated from NoteState)
+    int debug_cnt_perfect = 0, debug_cnt_good = 0, debug_cnt_bad = 0, debug_cnt_miss = 0;
+
     // ── Per-frame profiling ───────────────────────────────────────────────────
     // Tracks wall-clock time for 5 render phases. Enabled by --profile flag.
     // Prints rolling stats every ~60 rendered frames.
@@ -951,6 +960,283 @@ private:
                 debug_text(slot.x + 14.0, slot.y - 8.0, buf, 255, 220, 120, 235);
             }
         }
+
+        // ── SCORE_BREAKDOWN: detailed P/G/B/M counts, accuracy, score ────────
+        if (has_debug(DebugFlag::SCORE_BREAKDOWN)) {
+            // Recount from NoteState for accuracy
+            int cp = 0, cg = 0, cb = 0, cm = 0;
+            for (const auto& ns : states) {
+                if (!ns.judged) continue;
+                if (ns.judge_grade == "PERFECT") ++cp;
+                else if (ns.judge_grade == "GOOD") ++cg;
+                else if (ns.judge_grade == "BAD") ++cb;
+                else if (ns.miss) ++cm;
+            }
+            debug_cnt_perfect = cp; debug_cnt_good = cg;
+            debug_cnt_bad = cb; debug_cnt_miss = cm;
+
+            double acc = (judge.judged_cnt > 0)
+                ? (judge.acc_sum / judge.judged_cnt) * 100.0 : 100.0;
+            char l1[128], l2[128], l3[128];
+            std::snprintf(l1, sizeof(l1), "P=%d G=%d B=%d M=%d",
+                          cp, cg, cb, cm);
+            std::snprintf(l2, sizeof(l2), "combo=%d/%d  judged=%d/%d",
+                          judge.combo, judge.max_combo,
+                          judge.judged_cnt, playable_notes);
+            std::snprintf(l3, sizeof(l3), "acc=%.2f%%  score=%d",
+                          acc, fr.hud.score);
+            double tw1 = ctx.hud_ren.text_width(ctx.hud_ren.font_small, l1);
+            double tw2 = ctx.hud_ren.text_width(ctx.hud_ren.font_small, l2);
+            double tw3 = ctx.hud_ren.text_width(ctx.hud_ren.font_small, l3);
+            double tw = std::max({tw1, tw2, tw3});
+            double pw = tw + kPanelPad * 2.0 + 4.0;
+            double px = right_panel_x(pw);
+            double panel_h = kRow * 3.0 + 8.0;
+            draw_panel(px, right_y - 4, pw, panel_h);
+            debug_text(px + kPanelPad, right_y,            l1, 255, 230, 180, 235);
+            debug_text(px + kPanelPad, right_y + kRow,     l2, 200, 230, 255, 225);
+            debug_text(px + kPanelPad, right_y + kRow * 2, l3, 200, 255, 200, 225);
+            right_y += panel_h + 4.0;
+        }
+
+        // ── CHART_METADATA: chart info panel ─────────────────────────────────
+        if (has_debug(DebugFlag::CHART_METADATA)) {
+            int n_tap = 0, n_drag = 0, n_hold = 0, n_flick = 0, n_fake = 0;
+            for (const auto& n : chart.notes) {
+                if (n.fake) { ++n_fake; continue; }
+                switch (n.kind) {
+                case 1: ++n_tap;   break;
+                case 2: ++n_drag;  break;
+                case 3: ++n_hold;  break;
+                case 4: ++n_flick; break;
+                default: break;
+                }
+            }
+            char m1[160], m2[160], m3[128];
+            std::snprintf(m1, sizeof(m1), "lines=%zu  notes=%d  fake=%d",
+                          chart.lines.size(), playable_notes, n_fake);
+            std::snprintf(m2, sizeof(m2), "T=%d D=%d H=%d F=%d",
+                          n_tap, n_drag, n_hold, n_flick);
+            std::snprintf(m3, sizeof(m3), "offset=%.3fs  duration=%.2fs",
+                          chart.offset, chart_end);
+            double tw1 = ctx.hud_ren.text_width(ctx.hud_ren.font_small, m1);
+            double tw2 = ctx.hud_ren.text_width(ctx.hud_ren.font_small, m2);
+            double tw3 = ctx.hud_ren.text_width(ctx.hud_ren.font_small, m3);
+            double tw = std::max({tw1, tw2, tw3});
+            double pw = tw + kPanelPad * 2.0 + 4.0;
+            double px = right_panel_x(pw);
+            double panel_h = kRow * 3.0 + 8.0;
+            draw_panel(px, right_y - 4, pw, panel_h);
+            debug_text(px + kPanelPad, right_y,            m1, 220, 220, 255, 235);
+            debug_text(px + kPanelPad, right_y + kRow,     m2, 220, 240, 200, 225);
+            debug_text(px + kPanelPad, right_y + kRow * 2, m3, 200, 220, 240, 225);
+            right_y += panel_h + 4.0;
+        }
+
+        // ── JUDGMENT_HISTORY: recent judgment feed ───────────────────────────
+        if (has_debug(DebugFlag::JUDGMENT_HISTORY) && !debug_judge_history.empty()) {
+            int max_entries = std::min<int>(8, static_cast<int>(debug_judge_history.size()));
+            double panel_h = kRow * max_entries + 8.0;
+            double pw = 180.0;
+            double px = right_panel_x(pw);
+            draw_panel(px, right_y - 4, pw, panel_h);
+            for (int i = 0; i < max_entries; ++i) {
+                const auto& e = debug_judge_history[i];
+                double fade = std::max(0.0, 1.0 - e.age / 3.0);
+                auto a = static_cast<uint8_t>(230 * fade);
+                uint8_t r = 220, g = 220, b = 220;
+                if (e.text.find("PERFECT") != std::string::npos) { r = 255; g = 255; b = 180; }
+                else if (e.text.find("GOOD") != std::string::npos) { r = 180; g = 255; b = 200; }
+                else if (e.text.find("BAD") != std::string::npos) { r = 255; g = 200; b = 150; }
+                else if (e.text.find("MISS") != std::string::npos) { r = 255; g = 140; b = 140; }
+                debug_text(px + kPanelPad, right_y + kRow * i, e.text, r, g, b, a);
+            }
+            right_y += panel_h + 4.0;
+        }
+
+        // ── HOLD_STATE: highlight active holds ───────────────────────────────
+        if (has_debug(DebugFlag::HOLD_STATE)) {
+            for (const auto& ns_snap : fr.notes) {
+                if (!ns_snap.is_hold) continue;
+                double x = ns_snap.wx, y = ns_snap.wy;
+                render::apply_expand_xy(x, y, W, H, cfg.expand_factor);
+                const Note* note = note_lookup(ns_snap.nid);
+                if (!note) continue;
+
+                // Find NoteState for this note
+                const NoteState* ns_state = nullptr;
+                for (const auto& s : states) {
+                    if (s.note && s.note->nid == ns_snap.nid) { ns_state = &s; break; }
+                }
+                if (!ns_state) continue;
+
+                double hold_dur = note->t_end - note->t_hit;
+                if (hold_dur <= 0.0) continue;
+                double prog = std::clamp((fr.t - note->t_hit) / hold_dur, 0.0, 1.0);
+
+                // Draw progress bar above note
+                double bar_w = 40.0, bar_h = 4.0;
+                double bar_x = x - bar_w * 0.5;
+                double bar_y = y - 20.0;
+                ctx.batch.draw_rect(bar_x, bar_y, bar_w, bar_h, 60, 60, 60, 180);
+                if (ns_state->holding) {
+                    ctx.batch.draw_rect(bar_x, bar_y, bar_w * prog, bar_h, 120, 255, 180, 220);
+                } else if (ns_state->released_early) {
+                    ctx.batch.draw_rect(bar_x, bar_y, bar_w * prog, bar_h, 255, 120, 120, 220);
+                    debug_text(x + 24.0, bar_y - 2.0, "EARLY", 255, 120, 120, 220);
+                } else if (ns_state->hold_finalized) {
+                    ctx.batch.draw_rect(bar_x, bar_y, bar_w, bar_h, 180, 255, 180, 220);
+                }
+            }
+        }
+
+        // ── MISS_INDICATOR: flash on recently missed notes ───────────────────
+        if (has_debug(DebugFlag::MISS_INDICATOR)) {
+            for (auto& [nid, remain] : debug_miss_flash) {
+                if (remain <= 0.0) continue;
+                auto it = debug_note_by_id.find(nid);
+                if (it == debug_note_by_id.end()) continue;
+                // Try to find the note in the current frame snapshot
+                for (const auto& ns : fr.notes) {
+                    if (ns.nid != nid) continue;
+                    double x = ns.wx, y = ns.wy;
+                    render::apply_expand_xy(x, y, W, H, cfg.expand_factor);
+                    auto a = static_cast<uint8_t>(200 * std::min(1.0, remain / 0.3));
+                    double sz = 20.0 + 10.0 * (1.0 - remain / 0.5);
+                    draw_box_outline(x - sz, y - sz, sz * 2.0, sz * 2.0,
+                                     255, 80, 80, a);
+                    debug_text(x + sz + 4.0, y - 6.0, "MISS", 255, 80, 80, a);
+                    break;
+                }
+            }
+        }
+
+        // ── LINE_ALPHA_BAR: alpha value bar beside each judge line ───────────
+        if (has_debug(DebugFlag::LINE_ALPHA_BAR)) {
+            for (const auto& ls : fr.lines) {
+                double cx = ls.x, cy = ls.y;
+                render::apply_expand_xy(cx, cy, W, H, cfg.expand_factor);
+                double bar_w = 30.0, bar_h = 4.0;
+                double bx = cx - bar_w * 0.5;
+                double by = cy + 12.0;
+                // Background
+                ctx.batch.draw_rect(bx, by, bar_w, bar_h, 60, 60, 60, 160);
+                // Fill proportional to alpha
+                double fill = bar_w * std::clamp(ls.alpha01, 0.0, 1.0);
+                uint8_t r = static_cast<uint8_t>(120 + 135 * ls.alpha01);
+                ctx.batch.draw_rect(bx, by, fill, bar_h, r, 200, 160, 200);
+            }
+        }
+
+        // ── NOTE_DENSITY_GRAPH: NPS over upcoming time window ────────────────
+        if (has_debug(DebugFlag::NOTE_DENSITY_GRAPH)) {
+            const double gw = 180.0, gh = 56.0;
+            const double gx = 12.0;
+            const double gy = std::max(left_y + 4.0, static_cast<double>(H) - gh - 24.0);
+            draw_panel(gx, gy, gw, gh);
+
+            constexpr int BINS = 20;
+            constexpr double WINDOW = 4.0; // seconds ahead
+            int counts[BINS] = {};
+            double bin_dur = WINDOW / BINS;
+            for (const auto& n : chart.notes) {
+                if (n.fake) continue;
+                double dt = n.t_hit - fr.t;
+                if (dt < 0.0 || dt >= WINDOW) continue;
+                int b = std::min(BINS - 1, static_cast<int>(dt / bin_dur));
+                ++counts[b];
+            }
+            int max_c = 1;
+            for (int i = 0; i < BINS; ++i) max_c = std::max(max_c, counts[i]);
+
+            double bar_w = (gw - 16.0) / BINS;
+            for (int i = 0; i < BINS; ++i) {
+                double bh = (gh - 24.0) * counts[i] / static_cast<double>(max_c);
+                double bx = gx + 8.0 + bar_w * i;
+                double by = gy + gh - 8.0 - bh;
+                uint8_t g = static_cast<uint8_t>(180 + 75 * counts[i] / static_cast<double>(max_c));
+                ctx.batch.draw_rect(bx, by, bar_w - 1.0, bh, 100, g, 200, 200);
+            }
+            char buf[64];
+            std::snprintf(buf, sizeof(buf), "density (%.0fs window)", WINDOW);
+            debug_text(gx + 8.0, gy + 2.0, buf, 200, 220, 255, 220);
+            left_y = gy + gh + 4.0;
+        }
+
+        // ── SCROLL_SPEED_OVERLAY: scroll speed text beside each line ─────────
+        if (has_debug(DebugFlag::SCROLL_SPEED_OVERLAY)) {
+            for (const auto& ls : fr.lines) {
+                double cx = ls.x, cy = ls.y;
+                render::apply_expand_xy(cx, cy, W, H, cfg.expand_factor);
+                char buf[48];
+                std::snprintf(buf, sizeof(buf), "s=%.2f", ls.scroll);
+                debug_text(cx - 40.0, cy + 4.0, buf, 180, 220, 255, 200);
+            }
+        }
+
+        // ── EXPAND_BORDER: show viewport boundary when expand is active ──────
+        if (has_debug(DebugFlag::EXPAND_BORDER) && cfg.expand_factor > 1.000001) {
+            double ef = cfg.expand_factor;
+            double cx = W * 0.5, cy = H * 0.5;
+            double hw = cx / ef, hh = cy / ef;
+            double bx = cx - hw, by = cy - hh;
+            double bw = hw * 2.0, bh = hh * 2.0;
+            // Draw expand viewport rectangle
+            ctx.batch.draw_line(bx, by, bx + bw, by,      1.0, 255, 180, 60, 180);
+            ctx.batch.draw_line(bx, by + bh, bx + bw, by + bh, 1.0, 255, 180, 60, 180);
+            ctx.batch.draw_line(bx, by, bx, by + bh,      1.0, 255, 180, 60, 180);
+            ctx.batch.draw_line(bx + bw, by, bx + bw, by + bh, 1.0, 255, 180, 60, 180);
+            char buf[64];
+            std::snprintf(buf, sizeof(buf), "expand=%.2f", ef);
+            debug_text(bx + 4.0, by - 16.0, buf, 255, 180, 60, 200);
+        }
+
+        // ── CENTER_CROSSHAIR: screen center marker ───────────────────────────
+        if (has_debug(DebugFlag::CENTER_CROSSHAIR)) {
+            double cx = W * 0.5, cy = H * 0.5;
+            double sz = 20.0;
+            ctx.batch.draw_line(cx - sz, cy, cx + sz, cy, 1.0, 200, 200, 200, 140);
+            ctx.batch.draw_line(cx, cy - sz, cx, cy + sz, 1.0, 200, 200, 200, 140);
+            // Small center dot
+            ctx.batch.draw_rect(cx - 2.0, cy - 2.0, 4.0, 4.0, 255, 255, 255, 160);
+        }
+
+        // ── SIMULTANEOUS_INDICATOR: highlight multi-hit notes ────────────────
+        if (has_debug(DebugFlag::SIMULTANEOUS_INDICATOR)) {
+            for (const auto& ns : fr.notes) {
+                if (!ns.mh) continue;
+                double x = ns.wx, y = ns.wy;
+                render::apply_expand_xy(x, y, W, H, cfg.expand_factor);
+                double sz = base_note_w * ns.size_px * 0.6;
+                // Draw diamond shape
+                ctx.batch.draw_line(x, y - sz, x + sz, y, 1.0, 255, 200, 255, 200);
+                ctx.batch.draw_line(x + sz, y, x, y + sz, 1.0, 255, 200, 255, 200);
+                ctx.batch.draw_line(x, y + sz, x - sz, y, 1.0, 255, 200, 255, 200);
+                ctx.batch.draw_line(x - sz, y, x, y - sz, 1.0, 255, 200, 255, 200);
+            }
+        }
+
+        // ── NOTE_APPROACH_GUIDE: lines from notes to their judge line ────────
+        if (has_debug(DebugFlag::NOTE_APPROACH_GUIDE)) {
+            for (const auto& ns : fr.notes) {
+                if (ns.judged) continue;
+                double nx = ns.wx, ny = ns.wy;
+                render::apply_expand_xy(nx, ny, W, H, cfg.expand_factor);
+                const Note* note = note_lookup(ns.nid);
+                if (!note) continue;
+                // Find the parent line in the snapshot
+                for (const auto& ls : fr.lines) {
+                    if (ls.lid != note->line_id) continue;
+                    double lx = ls.x, ly = ls.y;
+                    render::apply_expand_xy(lx, ly, W, H, cfg.expand_factor);
+                    double dist = std::sqrt((nx - lx) * (nx - lx) + (ny - ly) * (ny - ly));
+                    if (dist < 4.0) break; // too close, skip
+                    auto a = static_cast<uint8_t>(std::min(180.0, 40.0 + 140.0 * (1.0 - dist / static_cast<double>(H))));
+                    ctx.batch.draw_line(nx, ny, lx, ly, 1.0, 160, 200, 255, a);
+                    break;
+                }
+            }
+        }
     }
 
     void remember_debug_frame(const render::FrameSnapshot& fr) {
@@ -973,6 +1259,51 @@ private:
             auto& trail = debug_note_trails[ns.nid];
             trail.emplace_back(x, y);
             while (trail.size() > 12) trail.pop_front();
+        }
+
+        // Update MISS_INDICATOR flash timers
+        if (has_debug(DebugFlag::MISS_INDICATOR)) {
+            for (const auto& s : states) {
+                if (s.miss && s.note &&
+                    debug_miss_flash.find(s.note->nid) == debug_miss_flash.end()) {
+                    debug_miss_flash[s.note->nid] = 0.5; // 0.5s flash
+                }
+            }
+            for (auto it = debug_miss_flash.begin(); it != debug_miss_flash.end(); ) {
+                it->second -= dt_frame;
+                if (it->second <= 0.0)
+                    it = debug_miss_flash.erase(it);
+                else
+                    ++it;
+            }
+        }
+
+        // Update JUDGMENT_HISTORY feed
+        if (has_debug(DebugFlag::JUDGMENT_HISTORY)) {
+            for (const auto& s : states) {
+                if (!s.judged || s.judge_grade.empty()) continue;
+                // Check if this note is already recorded
+                bool found = false;
+                for (const auto& e : debug_judge_history) {
+                    if (e.text.size() > 1 && e.text[0] == 'N' &&
+                        e.text.find(std::to_string(s.note->nid)) != std::string::npos &&
+                        e.text.find(s.judge_grade) != std::string::npos) {
+                        found = true; break;
+                    }
+                }
+                if (!found) {
+                    char buf[80];
+                    std::snprintf(buf, sizeof(buf), "N%d %s dt=%+.1fms",
+                                  s.note->nid, s.judge_grade.c_str(), s.judge_delta_ms);
+                    debug_judge_history.push_front({buf, 0.0});
+                    while (debug_judge_history.size() > 20) debug_judge_history.pop_back();
+                }
+            }
+            // Age all entries
+            for (auto& e : debug_judge_history) e.age += dt_frame;
+            // Remove entries older than 4 seconds
+            while (!debug_judge_history.empty() && debug_judge_history.back().age > 4.0)
+                debug_judge_history.pop_back();
         }
     }
 

@@ -34,6 +34,18 @@ enum class DebugFlag : uint64_t {
     TIMING_WINDOWS           = 1ull << 19,
     AUDIO_WAVEFORM           = 1ull << 20,
     AUDIO_SPECTRUM           = 1ull << 21,
+    SCORE_BREAKDOWN          = 1ull << 22,
+    CHART_METADATA           = 1ull << 23,
+    HOLD_STATE               = 1ull << 24,
+    MISS_INDICATOR           = 1ull << 25,
+    LINE_ALPHA_BAR           = 1ull << 26,
+    NOTE_DENSITY_GRAPH       = 1ull << 27,
+    SCROLL_SPEED_OVERLAY     = 1ull << 28,
+    EXPAND_BORDER            = 1ull << 29,
+    JUDGMENT_HISTORY         = 1ull << 30,
+    CENTER_CROSSHAIR         = 1ull << 31,
+    SIMULTANEOUS_INDICATOR   = 1ull << 32,
+    NOTE_APPROACH_GUIDE      = 1ull << 33,
 };
 
 inline DebugFlag operator|(DebugFlag a, DebugFlag b) {
@@ -87,6 +99,18 @@ inline const std::vector<std::pair<const char*, DebugFlag>>& debug_flag_table() 
         {"TIMING_WINDOWS", DebugFlag::TIMING_WINDOWS},
         {"AUDIO_WAVEFORM", DebugFlag::AUDIO_WAVEFORM},
         {"AUDIO_SPECTRUM", DebugFlag::AUDIO_SPECTRUM},
+        {"SCORE_BREAKDOWN", DebugFlag::SCORE_BREAKDOWN},
+        {"CHART_METADATA", DebugFlag::CHART_METADATA},
+        {"HOLD_STATE", DebugFlag::HOLD_STATE},
+        {"MISS_INDICATOR", DebugFlag::MISS_INDICATOR},
+        {"LINE_ALPHA_BAR", DebugFlag::LINE_ALPHA_BAR},
+        {"NOTE_DENSITY_GRAPH", DebugFlag::NOTE_DENSITY_GRAPH},
+        {"SCROLL_SPEED_OVERLAY", DebugFlag::SCROLL_SPEED_OVERLAY},
+        {"EXPAND_BORDER", DebugFlag::EXPAND_BORDER},
+        {"JUDGMENT_HISTORY", DebugFlag::JUDGMENT_HISTORY},
+        {"CENTER_CROSSHAIR", DebugFlag::CENTER_CROSSHAIR},
+        {"SIMULTANEOUS_INDICATOR", DebugFlag::SIMULTANEOUS_INDICATOR},
+        {"NOTE_APPROACH_GUIDE", DebugFlag::NOTE_APPROACH_GUIDE},
     };
     return kFlags;
 }
