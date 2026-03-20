@@ -785,7 +785,7 @@ private:
             for (const auto& ls : fr.lines) {
                 char buf[192];
                 std::snprintf(buf, sizeof(buf),
-                              "L%d xy=(%.0f,%.0f) rot=%.1f° a=%.2f s=%.2f sx=%.1f",
+                              "L%d xy=(%.0f,%.0f) rot=%.1fdeg a=%.2f s=%.2f sx=%.1f",
                               ls.lid, ls.x, ls.y, ls.rot * 180.0 / M_PI,
                               ls.alpha01, ls.scroll, ls.scale_x);
                 max_tw = std::max(max_tw, ctx.hud_ren.text_width(ctx.hud_ren.font_small, buf));
@@ -798,7 +798,7 @@ private:
                 if (left_y + kRow * (row + 1) > H - 20.0) break;
                 char buf[192];
                 std::snprintf(buf, sizeof(buf),
-                              "L%d xy=(%.0f,%.0f) rot=%.1f° a=%.2f s=%.2f sx=%.1f",
+                              "L%d xy=(%.0f,%.0f) rot=%.1fdeg a=%.2f s=%.2f sx=%.1f",
                               ls.lid, ls.x, ls.y, ls.rot * 180.0 / M_PI,
                               ls.alpha01, ls.scroll, ls.scale_x);
                 uint8_t r = color_map ? ls.color.r : 220;
@@ -830,7 +830,7 @@ private:
 
             if (has_debug(DebugFlag::JUDGE_LINE_INFO_ABOVE_LINE)) {
                 char buf[192];
-                std::snprintf(buf, sizeof(buf), "L%d a=%.2f s=%.2f r=%.1f° sx=%.1f sy=%.1f",
+                std::snprintf(buf, sizeof(buf), "L%d a=%.2f s=%.2f r=%.1fdeg sx=%.1f sy=%.1f",
                               ls.lid, ls.alpha01, ls.scroll, ls.rot * 180.0 / M_PI,
                               ls.scale_x, ls.scale_y);
                 debug_text(cx + 10.0, cy - 22.0, buf, lr, lg, lb, 220);
