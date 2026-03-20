@@ -57,6 +57,7 @@ struct InputManager {
 
     // Call once per frame BEFORE processing events. Clears per-frame edge flags.
     void begin_frame() {
+        PHLOG_TRACE(Input, "Input begin_frame active_pointers=" << active_count);
         for (auto& s : slots) {
             s.press_edge = s.release_edge = s.flick = false;
             s._px = s.x; s._py = s.y;
@@ -82,6 +83,11 @@ struct InputManager {
             // Track peak speed during the gesture for flick detection
             float spd = std::sqrt(s.vx * s.vx + s.vy * s.vy);
             if (spd > s.peak_speed) s.peak_speed = spd;
+            PHLOG_TRACE(Input, "PointerState id=" << s.id
+                << " pos=(" << s.x << "," << s.y << ")"
+                << " vel=(" << s.vx << "," << s.vy << ")"
+                << " peak=" << s.peak_speed
+                << " down=" << s.down);
         }
     }
 
@@ -159,6 +165,8 @@ struct InputManager {
                     keys[i].scancode = sc;
                     keys[i].down = true;
                     keys[i].press_edge = true;
+                    PHLOG_TRACE(Input, "KeyDown scancode=" << static_cast<int>(sc)
+                        << " slot=" << i);
                     break;
                 }
             }
@@ -168,6 +176,8 @@ struct InputManager {
                 if (gameplay_scancodes[i] == sc && keys[i].down) {
                     keys[i].down = false;
                     keys[i].release_edge = true;
+                    PHLOG_TRACE(Input, "KeyUp scancode=" << static_cast<int>(sc)
+                        << " slot=" << i);
                     break;
                 }
             }
@@ -180,6 +190,7 @@ struct InputManager {
     void flush_released() {
         for (auto& s : slots) {
             if (s.active() && s.release_edge && !s.down) {
+                PHLOG_TRACE(Input, "PointerRelease flush id=" << s.id);
                 s.id = -1;
                 --active_count;
                 if (active_count < 0) active_count = 0;
@@ -200,6 +211,7 @@ struct InputManager {
             frame.add({-(int64_t)(i + 1), false, 0, 0,
                        keys[i].press_edge, keys[i].release_edge, keys[i].down, false});
         }
+        PHLOG_TRACE(Input, "JudgeInputFrame actions=" << frame.count);
         return frame;
     }
 
@@ -217,9 +229,13 @@ private:
                 s = PointerSlot{};
                 s.id = id;
                 ++active_count;
+                PHLOG_TRACE(Input, "Pointer alloc id=" << id
+                    << " active_count=" << active_count);
                 return &s;
             }
         }
+        PHLOG_WARN(Input, "Pointer allocation failed for id=" << id
+            << " max_slots=" << MAX);
         return nullptr; // no free slots
     }
 };

@@ -79,9 +79,13 @@ std::optional<std::string> find_illustration_file(const fs::path& dir) {
 std::vector<ChartEntry> load_folder_chart(const fs::path& folder_path) {
     std::vector<ChartEntry> entries;
 
-    if (!fs::is_directory(folder_path)) return entries;
+    if (!fs::is_directory(folder_path)) {
+        PHLOG_TRACE(Chart, "ChartLoader: not a folder chart directory: " << folder_path.string());
+        return entries;
+    }
 
     std::string folder_name = folder_path.filename().string();
+    PHLOG_DEBUG(Chart, "ChartLoader: scanning folder chart: " << folder_path.string());
 
     // Find all chart files
     std::vector<fs::path> chart_files;
@@ -112,8 +116,14 @@ std::vector<ChartEntry> load_folder_chart(const fs::path& folder_path) {
         if (illustration) entry.assets.illustration_path = *illustration;
 
         entries.push_back(entry);
+        PHLOG_TRACE(Chart, "ChartLoader: folder entry chart=" << entry.chart_path
+            << " diff=" << entry.difficulty
+            << " music=" << (entry.assets.music_path.empty() ? "<none>" : entry.assets.music_path)
+            << " bg=" << (entry.assets.illustration_path.empty() ? "<none>" : entry.assets.illustration_path));
     }
 
+    PHLOG_DEBUG(Chart, "ChartLoader: folder chart yielded " << entries.size()
+        << " entry(s): " << folder_path.string());
     return entries;
 }
 
@@ -141,6 +151,8 @@ std::vector<ChartEntry> load_zip_chart(const fs::path& zip_path) {
     }
 
     int file_count = mz_zip_reader_get_num_files(&zip);
+    PHLOG_DEBUG(Chart, "ChartLoader: opened zip: " << zip_path.string()
+        << " files=" << file_count);
 
     // Collect all filenames
     std::vector<std::string> all_files;
@@ -184,6 +196,7 @@ std::vector<ChartEntry> load_zip_chart(const fs::path& zip_path) {
     std::string info_raw = extract_str("info.json");
     if (info_raw.empty()) {
         // Some zips use info.yml — skip for now, fall back to scan
+        PHLOG_TRACE(Chart, "ChartLoader: zip has no info.json, scanning entries: " << zip_path.string());
     }
 
     if (!info_raw.empty()) {
@@ -226,6 +239,8 @@ std::vector<ChartEntry> load_zip_chart(const fs::path& zip_path) {
             }
         } catch (...) {
             // info.json parse failed — fall through to scan
+            PHLOG_WARN(Chart, "ChartLoader: failed to parse info.json, falling back to scan: "
+                << zip_path.string());
         }
     }
 
@@ -251,6 +266,8 @@ std::vector<ChartEntry> load_zip_chart(const fs::path& zip_path) {
     }
 
     mz_zip_reader_end(&zip);
+    PHLOG_DEBUG(Chart, "ChartLoader: zip chart yielded " << entries.size()
+        << " entry(s): " << zip_path.string());
     return entries;
 }
 
@@ -284,6 +301,12 @@ ChartEntry load_json_chart(const fs::path& json_path) {
     if (music) entry.assets.music_path = *music;
     if (illustration) entry.assets.illustration_path = *illustration;
 
+    PHLOG_TRACE(Chart, "ChartLoader: standalone chart path=" << entry.chart_path
+        << " name=" << entry.name
+        << " diff=" << (entry.difficulty.empty() ? "<none>" : entry.difficulty)
+        << " music=" << (entry.assets.music_path.empty() ? "<none>" : entry.assets.music_path)
+        << " bg=" << (entry.assets.illustration_path.empty() ? "<none>" : entry.assets.illustration_path));
+
     return entry;
 }
 
@@ -296,6 +319,8 @@ std::vector<ChartEntry> scan_charts_directory(const std::string& dir_path) {
         PHLOG_ERROR(Chart, "ChartLoader: directory not found: " << dir_path);
         return all_entries;
     }
+
+    PHLOG_INFO(Chart, "ChartLoader: scanning chart directory: " << dir_path);
 
     for (const auto& entry : fs::directory_iterator(dir_path)) {
         if (entry.is_directory()) {
@@ -337,6 +362,9 @@ std::vector<ChartEntry> scan_charts_directory(const std::string& dir_path) {
                   return order_a < order_b;
               });
 
+    PHLOG_INFO(Chart, "ChartLoader: discovered " << all_entries.size()
+        << " chart entr" << (all_entries.size() == 1 ? "y" : "ies")
+        << " under " << dir_path);
     return all_entries;
 }
 
@@ -359,27 +387,35 @@ std::vector<uint8_t> extract_zip_file(const std::string& zip_path, const std::st
     memset(&zip, 0, sizeof(zip));
 
     if (!mz_zip_reader_init_file(&zip, zip_path.c_str(), 0)) {
+        PHLOG_TRACE(Chart, "ChartLoader: extract failed to open zip: " << zip_path);
         return result;
     }
 
     int file_index = mz_zip_reader_locate_file(&zip, file_in_zip.c_str(), nullptr, 0);
     if (file_index < 0) {
         mz_zip_reader_end(&zip);
+        PHLOG_TRACE(Chart, "ChartLoader: zip member not found: " << zip_path << ":" << file_in_zip);
         return result;
     }
 
     mz_zip_archive_file_stat file_stat;
     if (!mz_zip_reader_file_stat(&zip, file_index, &file_stat)) {
         mz_zip_reader_end(&zip);
+        PHLOG_TRACE(Chart, "ChartLoader: file stat failed: " << zip_path << ":" << file_in_zip);
         return result;
     }
 
     result.resize(file_stat.m_uncomp_size);
     if (!mz_zip_reader_extract_to_mem(&zip, file_index, result.data(), result.size(), 0)) {
         result.clear();
+        PHLOG_TRACE(Chart, "ChartLoader: extract_to_mem failed: " << zip_path << ":" << file_in_zip);
     }
 
     mz_zip_reader_end(&zip);
+    if (!result.empty()) {
+        PHLOG_TRACE(Chart, "ChartLoader: extracted " << result.size()
+            << " bytes from " << zip_path << ":" << file_in_zip);
+    }
     return result;
 }
 

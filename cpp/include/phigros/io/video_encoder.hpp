@@ -169,6 +169,7 @@ public:
 
     static bool codec_available(const std::string& codec) {
         if (codec.empty()) return false;
+        PHLOG_TRACE(Record, "Probing codec availability: " << codec);
         std::string cmd = "ffmpeg -hide_banner -loglevel error -encoders 2>/dev/null";
         FILE* p = popen(cmd.c_str(), "r");
         if (!p) return false;
@@ -181,13 +182,16 @@ public:
         const std::string needle0 = " " + codec;
         const std::string needle1 = "\t" + codec;
         const std::string needle2 = codec + " ";
-        return out.find(needle0) != std::string::npos ||
+        const bool ok = out.find(needle0) != std::string::npos ||
                out.find(needle1) != std::string::npos ||
                out.find(needle2) != std::string::npos;
+        PHLOG_TRACE(Record, "Codec availability " << codec << "=" << ok);
+        return ok;
     }
 
     static bool codec_usable(const std::string& codec) {
         if (codec.empty()) return false;
+        PHLOG_TRACE(Record, "Probing codec usability: " << codec);
         // Some hardware encoders (notably NVENC) reject tiny probe frames (e.g. 16x16).
         // Use a conservative probe size that works across SW/HW encoders.
         constexpr int probe_w = 128;
@@ -197,7 +201,10 @@ public:
                           "-frames:v 1 -c:v " + codec +
                           " -f null - >/dev/null 2>&1";
         int ret = std::system(cmd.c_str());
-        return ret == 0;
+        const bool ok = ret == 0;
+        PHLOG_TRACE(Record, "Codec usability " << codec << "=" << ok
+            << " ret=" << ret);
+        return ok;
     }
 
     bool open(const std::string& output_path, int input_w, int input_h,
@@ -215,6 +222,7 @@ public:
         frame_size_ = static_cast<size_t>(w_) * h_ * bpp;
 
         cmd_last_ = build_ffmpeg_cmd(output_path, false);
+        PHLOG_DEBUG(Record, "VideoEncoder command: " << cmd_last_);
         pipe_ = popen(cmd_last_.c_str(), "w");
         if (!pipe_) {
             PHLOG_ERROR(Record, "VideoEncoder: failed to start FFmpeg");
@@ -266,6 +274,7 @@ public:
         if (!pipe_) return 0;
         int ret = pclose(pipe_);
         pipe_ = nullptr;
+        PHLOG_DEBUG(Record, "VideoEncoder pipe closed ret=" << ret);
         return ret;
     }
 
@@ -282,12 +291,16 @@ public:
     static bool mux_audio(const std::string& video_path,
                           const std::string& audio_path,
                           const std::string& output_path) {
+        PHLOG_INFO(Record, "Mux audio: video=" << video_path
+            << " audio=" << audio_path
+            << " output=" << output_path);
         std::string cmd = "ffmpeg -hide_banner -loglevel error -y "
                           "-i \"" + video_path + "\" "
                           "-i \"" + audio_path + "\" "
                           "-c:v copy -c:a aac -b:a 192k "
                           "-shortest \"" + output_path + "\" 2>&1";
         int ret = std::system(cmd.c_str());
+        PHLOG_DEBUG(Record, "Mux audio ret=" << ret);
         return ret == 0;
     }
 
@@ -395,11 +408,17 @@ struct RecordConfig {
 class RecordingSession {
 public:
     ~RecordingSession() {
-        if (started_) finish();
+        if (started_) {
+            PHLOG_WARN(Record, "RecordingSession destroyed while active, forcing finish");
+            finish();
+        }
     }
 
     bool start(const RecordConfig& rc, int window_w, int window_h) {
-        if (started_) return false;
+        if (started_) {
+            PHLOG_WARN(Record, "RecordingSession start ignored: already started");
+            return false;
+        }
         cfg_ = rc;
         {
             std::lock_guard<std::mutex> lock(queue_mu_);
@@ -464,14 +483,17 @@ public:
         }
 
         // Pipe RGBA directly — FFmpeg handles scaling if output != capture.
-        if (!encoder_.open(target, capture_w_, capture_h_, out_w, out_h, rc.fps, preset, "rgba"))
+        if (!encoder_.open(target, capture_w_, capture_h_, out_w, out_h, rc.fps, preset, "rgba")) {
+            PHLOG_ERROR(Record, "Failed to open encoder target=" << target);
             return false;
+        }
 
         queue_capacity_ = static_cast<size_t>(std::max(1, rc.queue_depth));
         async_enabled_ = queue_capacity_ > 1;
         if (async_enabled_) {
             try {
                 worker_ = std::thread([this]() { worker_main(); });
+                PHLOG_DEBUG(Record, "Encoder worker started");
             } catch (const std::exception& e) {
                 PHLOG_ERROR(Record, "Failed to start encoder worker: " << e.what());
                 encoder_.close();
@@ -492,14 +514,20 @@ public:
 
     // Capture RGBA framebuffer. Async mode copies into queue; worker writes to FFmpeg.
     bool capture_rgba(const uint8_t* rgba, int w, int h) {
-        if (!started_) return false;
+        if (!started_) {
+            PHLOG_TRACE(Record, "capture_rgba ignored: session not started");
+            return false;
+        }
         if (w != capture_w_ || h != capture_h_) {
             PHLOG_ERROR(Record, "Capture size mismatch: got " << w << "x" << h
                 << ", expected " << capture_w_ << "x" << capture_h_);
             return false;
         }
         size_t len = static_cast<size_t>(w) * h * 4;
-        if (!async_enabled_) return encoder_.write_frame_ptr(rgba, len);
+        if (!async_enabled_) {
+            PHLOG_TRACE(Record, "capture_rgba sync write len=" << len);
+            return encoder_.write_frame_ptr(rgba, len);
+        }
 
         std::vector<uint8_t> frame(len);
         std::memcpy(frame.data(), rgba, len);
@@ -517,7 +545,10 @@ public:
 
     // Finalize: close encoder, mux audio if needed
     bool finish() {
-        if (!started_) return false;
+        if (!started_) {
+            PHLOG_TRACE(Record, "finish ignored: session not started");
+            return false;
+        }
         started_ = false;
 
         if (async_enabled_) {
@@ -528,6 +559,7 @@ public:
             queue_cv_not_empty_.notify_all();
             queue_cv_not_full_.notify_all();
             if (worker_.joinable()) worker_.join();
+            PHLOG_DEBUG(Record, "Encoder worker joined");
             async_enabled_ = false;
         }
 
@@ -620,6 +652,8 @@ private:
             queue_cv_not_full_.notify_one();
 
             if (!encoder_.write_frame_ptr(frame.data(), frame.size())) {
+                PHLOG_ERROR(Record, "Encoder worker write failed for queued frame of "
+                    << frame.size() << " bytes");
                 std::lock_guard<std::mutex> lock(queue_mu_);
                 worker_failed_ = true;
                 stop_worker_ = true;
@@ -628,6 +662,7 @@ private:
                 queue_cv_not_empty_.notify_all();
                 return;
             }
+            PHLOG_TRACE(Record, "Encoder worker wrote frame, queue_remaining=" << queue_size_snapshot());
         }
     }
 

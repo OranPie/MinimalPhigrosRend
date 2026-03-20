@@ -238,6 +238,16 @@ struct GameLoop {
                                                : (1.0 / args.record_fps);
         sim_steps_per_render = std::max(1, static_cast<int>(
             std::round(render_dt / sim_dt)));
+        PHLOG_INFO(Engine, "GameLoop init: mode="
+            << (is_play_mode ? (replay_player.enabled() ? "replay" : "play") : "autoplay")
+            << " notes=" << chart.notes.size()
+            << " playable=" << playable_notes
+            << " chart_end=" << chart_end
+            << " progress_end=" << progress_end);
+        PHLOG_DEBUG(Engine, "GameLoop timing: sim_dt=" << sim_dt
+            << " render_dt=" << render_dt
+            << " sim_steps_per_render=" << sim_steps_per_render
+            << " audio_offset_sec=" << audio_offset_sec);
 
         last_time = Window::get_time_sec();
 
@@ -348,21 +358,26 @@ struct GameLoop {
         }
 
         if (ctx.has_audio && !ctx.started_audio && t >= 0.0) {
+            PHLOG_DEBUG(Audio, "Audio start threshold reached at t=" << t);
             ctx.audio.play();
             ctx.started_audio = true;
         }
 
         // === 4. EXIT CONDITIONS ===
         if (args.duration > 0 && t >= args.duration) {
+            PHLOG_INFO(Engine, "Stopping at duration limit: t=" << t
+                << " limit=" << args.duration);
             if (is_recording) recorder.log_progress(progress_end, progress_end);
             return false;
         }
         if (t > chart_end) {
+            PHLOG_INFO(Engine, "Stopping at chart end: t=" << t << " chart_end=" << chart_end);
             if (is_play_mode && !result_shown) mark_result();
             if (!is_play_mode) return false;
         }
         if (result_shown && Window::get_time_sec() - result_t > 5.0) return false;
         if (ctx.has_audio && ctx.started_audio && ctx.audio.is_at_end() && t > 1.0) {
+            PHLOG_INFO(Engine, "Stopping because audio reached end at t=" << t);
             if (is_play_mode && !result_shown) mark_result();
             if (!is_play_mode) return false;
         }
@@ -568,7 +583,10 @@ private:
     void mark_result() {
         result_shown = true;
         result_t     = Window::get_time_sec();
-        PHLOG_DEBUG(Engine, "Chart complete — showing result screen");
+        auto sr = engine::compute_score(judge.acc_sum, judge.max_combo, playable_notes);
+        PHLOG_INFO(Engine, "Chart complete: score=" << sr.score
+            << " acc=" << sr.acc_ratio
+            << " combo=" << judge.max_combo << "/" << playable_notes);
     }
 
     // Binary search: first note index near t that might still need judgment.
@@ -1174,18 +1192,12 @@ private:
             }
         }
 
-        // ── EXPAND_BORDER: show viewport boundary when expand is active ──────
+        // ── EXPAND_BORDER: optionally annotate the always-on original viewport ─
         if (has_debug(DebugFlag::EXPAND_BORDER) && cfg.expand_factor > 1.000001) {
             double ef = cfg.expand_factor;
             double cx = W * 0.5, cy = H * 0.5;
             double hw = cx / ef, hh = cy / ef;
             double bx = cx - hw, by = cy - hh;
-            double bw = hw * 2.0, bh = hh * 2.0;
-            // Draw expand viewport rectangle
-            ctx.batch.draw_line(bx, by, bx + bw, by,      1.0, 255, 180, 60, 180);
-            ctx.batch.draw_line(bx, by + bh, bx + bw, by + bh, 1.0, 255, 180, 60, 180);
-            ctx.batch.draw_line(bx, by, bx, by + bh,      1.0, 255, 180, 60, 180);
-            ctx.batch.draw_line(bx + bw, by, bx + bw, by + bh, 1.0, 255, 180, 60, 180);
             char buf[64];
             std::snprintf(buf, sizeof(buf), "expand=%.2f", ef);
             debug_text(bx + 4.0, by - 16.0, buf, 255, 180, 60, 200);
@@ -1324,6 +1336,17 @@ private:
                                static_cast<float>(cfg.hitfx_intensity),
                                W, H, cfg.expand_factor);
         }
+        if (cfg.expand_factor > 1.000001) {
+            double ef = cfg.expand_factor;
+            double cx = W * 0.5, cy = H * 0.5;
+            double hw = cx / ef, hh = cy / ef;
+            double bx = cx - hw, by = cy - hh;
+            double bw = hw * 2.0, bh = hh * 2.0;
+            ctx.batch.draw_line(bx, by, bx + bw, by, 1.0, 255, 180, 60, 180);
+            ctx.batch.draw_line(bx, by + bh, bx + bw, by + bh, 1.0, 255, 180, 60, 180);
+            ctx.batch.draw_line(bx, by, bx, by + bh, 1.0, 255, 180, 60, 180);
+            ctx.batch.draw_line(bx + bw, by, bx + bw, by + bh, 1.0, 255, 180, 60, 180);
+        }
         draw_simulateplay_overlay(t_r);
         s_last_dl_sz = ctx.draw_list.cmds.size();
         ctx.batch.dl = nullptr;
@@ -1417,7 +1440,9 @@ private:
     }
 
     void do_restart() {
-        PHLOG_INFO(Engine, "Restarting chart");
+        PHLOG_INFO(Engine, "Restarting chart at t=" << t
+            << " judged=" << judge.judged_cnt
+            << " combo=" << judge.max_combo);
         t = -1.0;
         paused = false;
         result_shown = false;
@@ -1449,8 +1474,14 @@ private:
     }
 
     void do_capture() {
-        if (args.record_start > -0.5 && t < args.record_start) return;
+        if (args.record_start > -0.5 && t < args.record_start) {
+            PHLOG_TRACE(Record, "Capture waiting for start: t=" << t
+                << " start=" << args.record_start);
+            return;
+        }
         if (args.record_end > 0.0 && t > args.record_end) {
+            PHLOG_INFO(Record, "Capture reached end: t=" << t
+                << " end=" << args.record_end);
             recorder.finish();
             is_recording = false;
             return;

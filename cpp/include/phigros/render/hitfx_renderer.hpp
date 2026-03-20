@@ -16,9 +16,9 @@ struct HitFXRenderer {
                                     const Texture& white_tex,
                                     double cx, double cy, double r,
                                     uint8_t rr, uint8_t gg, uint8_t bb, uint8_t a,
-                                    int n = 14) {
+                                    int n = 14,
+                                    double line_w = 2.0) {
         if (r < 1.0 || a == 0) return;
-        static constexpr double LINE_W = 2.0;
         double step = 2.0 * M_PI / n;
         for (int i = 0; i < n; ++i) {
             double a0 = i * step, a1 = (i + 1) * step;
@@ -28,7 +28,7 @@ struct HitFXRenderer {
             double dx = x1 - x0, dy = y1 - y0;
             double seg_len = std::sqrt(dx * dx + dy * dy);
             double angle = std::atan2(dy, dx);
-            batch.draw_rotated_rect(white_tex, mx, my, seg_len, LINE_W,
+            batch.draw_rotated_rect(white_tex, mx, my, seg_len, line_w,
                                     angle, rr, gg, bb, a);
         }
     }
@@ -52,7 +52,7 @@ struct HitFXRenderer {
 
         int cell_w = (has_sheet && cols > 0) ? (sheet.w / cols) : 0;
         int cell_h = (has_sheet && rows > 0) ? (sheet.h / rows) : 0;
-        double draw_size = (cell_w > 0) ? (cell_w * scale) : 0.0;
+        double draw_size = (cell_w > 0) ? apply_expand_size(cell_w * scale, expand) : 0.0;
 
         if (show_hitfx) {
             // ── Spritesheet hit effects ──────────────────────────────────────
@@ -95,13 +95,15 @@ struct HitFXRenderer {
                     if (age < 0 || age > engine::FlashFX::DURATION) continue;
                     double p = age / engine::FlashFX::DURATION;
                     double r = f.radius_start + (f.radius_end - f.radius_start) * p;
+                    r = apply_expand_size(r, expand);
                     uint8_t a = static_cast<uint8_t>(
                         std::clamp(255.0 * (1.0 - p) * double(intensity), 0.0, 255.0));
                     double fx_x = f.x, fx_y = f.y;
                     apply_expand_xy(fx_x, fx_y, W, H, expand);
                     draw_circle_outline(batch, respack.white_tex,
                                         fx_x, fx_y, r,
-                                        f.color.r, f.color.g, f.color.b, a);
+                                        f.color.r, f.color.g, f.color.b, a,
+                                        14, apply_expand_size(2.0, expand));
                 }
             }
         }
@@ -122,9 +124,10 @@ struct HitFXRenderer {
                     if (a_p == 0) continue;
                     double pt_x = pt.x, pt_y = pt.y;
                     apply_expand_xy(pt_x, pt_y, W, H, expand);
+                    double pt_size = apply_expand_size(pt.size, expand);
                     batch.draw_rect(
-                        pt_x - pt.size * 0.5, pt_y - pt.size * 0.5,
-                        pt.size, pt.size,
+                        pt_x - pt_size * 0.5, pt_y - pt_size * 0.5,
+                        pt_size, pt_size,
                         burst.rgba.r, burst.rgba.g, burst.rgba.b, a_p);
                 }
             }

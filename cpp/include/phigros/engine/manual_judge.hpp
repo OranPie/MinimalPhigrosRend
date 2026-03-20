@@ -122,7 +122,12 @@ struct ManualJudge {
                 }
             }
 
-            if (best_nidx < 0) continue;
+            if (best_nidx < 0) {
+                PHLOG_TRACE(Input, "Press had no candidate ptr=" << a.id
+                    << " t=" << t
+                    << (a.has_position ? " positional=1" : " positional=0"));
+                continue;
+            }
             const auto& note = notes[best_nidx];
             auto& ns = states[best_nidx];
 
@@ -211,6 +216,9 @@ struct ManualJudge {
                     PHLOG_TRACE(Input, "DragCatch note=" << nidx
                         << " line=" << note.line_id << " t=" << t << " ptr=" << catching_ptr);
                 }
+            } else {
+                PHLOG_TRACE(Input, "DragMiss note=" << nidx
+                    << " line=" << note.line_id << " t=" << t);
             }
         }
     }
@@ -231,9 +239,13 @@ private:
                 math::RGB color = _resolve_hitfx_color(note, grade);
                 effects.add_hitfx(ns.wx, ns.wy, t, color);
                 effects.add_particle_burst(ns.wx, ns.wy, t * 1000.0, 500.0, color);
+                PHLOG_TRACE(Input, "EmitEffect note=" << nidx
+                    << " grade=" << grade
+                    << " pos=(" << ns.wx << "," << ns.wy << ")");
                 return;
             }
         }
+        PHLOG_TRACE(Input, "EmitEffect skipped: note snapshot missing for note=" << nidx);
     }
 };
 

@@ -76,6 +76,11 @@ inline void apply_expand_xy(double& x, double& y, int W, int H, double expand) {
     y = cy + (y - cy) * s;
 }
 
+inline double apply_expand_size(double size, double expand) {
+    if (expand <= 1.000001) return size;
+    return size / expand;
+}
+
 inline FrameSnapshot build_frame(
     double t,
     const ChartData& chart,
@@ -220,8 +225,10 @@ inline FrameSnapshot build_frame(
             double hx = head.x, hy = head.y;
             apply_expand_xy(hx, hy, W, H, ex);
 
-            const double half_w = std::max(1.0, base_w * note.size_px * ctrl_size * 0.5 * over);
-            const double half_h = std::max(1.0, base_h * note.size_px * ctrl_size * 0.5 * over);
+            const double half_w = std::max(1.0, apply_expand_size(
+                base_w * note.size_px * ctrl_size * 0.5 * over, ex));
+            const double half_h = std::max(1.0, apply_expand_size(
+                base_h * note.size_px * ctrl_size * 0.5 * over, ex));
 
             bool vis = point_visible(hx, hy, half_w, half_h);
             if (!vis && note.kind == 3) {

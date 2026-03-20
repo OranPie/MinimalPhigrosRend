@@ -36,14 +36,21 @@ inline std::string find_chart_audio(const std::string& chart_dir) {
     for (const char* name : {"music.ogg","music.mp3","music.wav",
                               "bgm.ogg","bgm.mp3","bgm.wav"}) {
         auto p = fs::path(chart_dir) / name;
-        if (fs::exists(p)) return p.string();
+        if (fs::exists(p)) {
+            PHLOG_TRACE(Audio, "Chart audio found by canonical name: " << p.string());
+            return p.string();
+        }
     }
     std::error_code ec;
     for (auto& entry : fs::directory_iterator(chart_dir, ec)) {
         auto ext = entry.path().extension().string();
-        if (ext == ".ogg" || ext == ".mp3" || ext == ".wav" || ext == ".flac")
+        if (ext == ".ogg" || ext == ".mp3" || ext == ".wav" || ext == ".flac") {
+            PHLOG_TRACE(Audio, "Chart audio found by extension scan: " << entry.path().string());
             return entry.path().string();
+        }
     }
+    if (ec) PHLOG_TRACE(Audio, "Chart audio scan error in " << chart_dir << ": " << ec.message());
+    PHLOG_TRACE(Audio, "No chart audio discovered in " << chart_dir);
     return "";
 }
 
@@ -108,6 +115,9 @@ struct AppContext {
         } else {
             chart_dir = fs::path(chart_path).parent_path().string();
         }
+        PHLOG_DEBUG(Chart, "AppContext chart base: path=" << chart_path
+            << " dir=" << (chart_dir.empty() ? "<none>" : chart_dir)
+            << " zip=" << (chart_is_zip ? chart_zip_file : "<none>"));
 
         // Respack
         std::string rp = respack_override.empty() ? cfg.respack_path : respack_override;
@@ -127,12 +137,14 @@ struct AppContext {
                 bgp = chart_zip_file + ":" + meta_bg_path;
             else if (!chart_dir.empty())
                 bgp = (fs::path(chart_dir) / meta_bg_path).string();
+            PHLOG_TRACE(Render, "Background from chart metadata: " << bgp);
         }
 
         // Auto-discover illustration from chart directory (png/jpg/jpeg/webp)
         if (bgp.empty() && !chart_dir.empty()) {
             auto found = chart::find_illustration_file(fs::path(chart_dir));
             if (found) bgp = *found;
+            if (found) PHLOG_TRACE(Render, "Background auto-discovered: " << bgp);
         }
 
         if (!bgp.empty()) {
@@ -167,8 +179,10 @@ struct AppContext {
         // Wire up zip-aware texture lookup for RPE line textures
         line_ren.texture_lookup = [this](const std::string& path) -> const render::Texture* {
             auto it = line_tex_cache.find(path);
-            if (it != line_tex_cache.end())
+            if (it != line_tex_cache.end()) {
+                PHLOG_TRACE(Render, "LineTexture cache hit: " << path);
                 return it->second.valid() ? &it->second : nullptr;
+            }
             render::Texture tex;
             if (chart_is_zip) {
                 auto data = chart::extract_zip_file(chart_zip_file, path);
@@ -181,6 +195,8 @@ struct AppContext {
             }
             if (!tex.valid())
                 PHLOG_WARN(Render, "LineTexture failed to load: " << path);
+            else
+                PHLOG_TRACE(Render, "LineTexture loaded: " << path);
             line_tex_cache[path] = std::move(tex);
             return line_tex_cache[path].valid() ? &line_tex_cache[path] : nullptr;
         };
@@ -210,6 +226,9 @@ struct AppContext {
         audio_path = audio_override;
         if (audio_path.empty())
             audio_path = find_chart_audio(fs::path(chart_path).parent_path().string());
+        PHLOG_DEBUG(Audio, "Audio resolution: override="
+            << (audio_override.empty() ? "<none>" : audio_override)
+            << " resolved=" << (audio_path.empty() ? "<none>" : audio_path));
         if (!audio_path.empty()) {
             if (audio.init()) {
                 has_audio = audio.load_bgm(audio_path, chart_offset);
@@ -239,6 +258,7 @@ struct AppContext {
 
     // Reload audio from scratch (used on R-restart in play mode).
     void reload_audio(double chart_offset) {
+        PHLOG_INFO(Audio, "Reloading audio at offset=" << chart_offset << "s");
         audio.destroy();
         if (!audio.init()) return;
         has_audio = false;
@@ -252,6 +272,9 @@ struct AppContext {
     }
 
     void destroy() {
+        PHLOG_DEBUG(General, "AppContext destroy: line_textures=" << line_tex_cache.size()
+            << " has_audio=" << has_audio
+            << " started_audio=" << started_audio);
         for (auto& [k, tex] : line_tex_cache) tex.destroy();
         line_tex_cache.clear();
         trail.destroy();

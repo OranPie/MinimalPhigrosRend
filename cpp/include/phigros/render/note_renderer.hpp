@@ -47,6 +47,8 @@ struct NoteRenderer {
             if (tex.w > 0 && tex.h > 0) {
                 hs = ws * (static_cast<double>(tex.h) / static_cast<double>(tex.w)) * note_scale_y;
             }
+            ws = apply_expand_size(ws, expand);
+            hs = apply_expand_size(hs, expand);
 
             // Apply expand: compress world coords toward screen centre (matches Python)
             double draw_x = ns.wx, draw_y = ns.wy;

@@ -38,46 +38,69 @@ namespace fs = std::filesystem;
 
 static std::string detect_format(const std::string& path) {
     std::ifstream f(path);
-    if (!f) return "";
+    if (!f) {
+        PHLOG_TRACE(Chart, "detect_format: failed to open " << path);
+        return "";
+    }
     std::string first;
     std::getline(f, first);
     if (!first.empty() && (first[0] == 'b' || first[0] == 'c' || first[0] == 'n' ||
-        first[0] == '#' || (first[0] >= '0' && first[0] <= '9')))
+        first[0] == '#' || (first[0] >= '0' && first[0] <= '9'))) {
+        PHLOG_DEBUG(Chart, "detect_format: " << path << " -> pec");
         return "pec";
+    }
     f.seekg(0);
     try {
         json j = json::parse(f);
-        if (j.contains("META")) return "rpe";
+        if (j.contains("META")) {
+            PHLOG_DEBUG(Chart, "detect_format: " << path << " -> rpe");
+            return "rpe";
+        }
+        PHLOG_DEBUG(Chart, "detect_format: " << path << " -> official");
         return "official";
     } catch (...) {}
+    PHLOG_DEBUG(Chart, "detect_format: " << path << " -> pec (fallback)");
     return "pec";
 }
 
 static phigros::ChartData load_chart(const std::string& path,
                                       const phigros::config::RenderConfig& cfg,
                                       const std::string& password = "") {
+    PHLOG_DEBUG(Chart, "load_chart: path=" << path
+        << " window=" << cfg.window_w << "x" << cfg.window_h
+        << " easing_shift=" << cfg.rpe_easing_shift);
     // Binary compiled chart
     if (path.size() >= 5 && path.substr(path.size() - 5) == ".phbc") {
+        PHLOG_INFO(Chart, "Loading compiled chart: " << path);
         std::ifstream f(path, std::ios::binary);
         if (!f) throw std::runtime_error("Cannot open .phbc file: " + path);
         auto compiled = phigros::chart::read_phbc(f, password);
+        PHLOG_DEBUG(Chart, "Compiled chart loaded: lines=" << compiled.lines.size()
+            << " notes=" << compiled.notes.size()
+            << " sample_rate=" << compiled.sample_rate
+            << " samples=" << compiled.sample_count);
         return compiled.to_chart_data();
     }
 
     // Zip chart reference (format: "path.zip:file.json")
     if (phigros::chart::is_zip_path(path)) {
         auto [zip_path, file_in_zip] = phigros::chart::split_zip_path(path);
+        PHLOG_INFO(Chart, "Loading chart from zip: " << zip_path << ":" << file_in_zip);
         auto data = phigros::chart::extract_zip_file(zip_path, file_in_zip);
         if (data.empty()) throw std::runtime_error("Failed to extract from zip: " + path);
         std::string json_str(data.begin(), data.end());
         json j = json::parse(json_str);
-        if (j.contains("META"))
+        if (j.contains("META")) {
+            PHLOG_DEBUG(Chart, "Zip chart detected as RPE");
             return phigros::chart::parse_rpe(j, cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
+        }
+        PHLOG_DEBUG(Chart, "Zip chart detected as official");
         return phigros::chart::parse_official(j, cfg.window_w, cfg.window_h);
     }
 
     // Folder: pick first chart entry found
     if (fs::is_directory(path)) {
+        PHLOG_INFO(Chart, "Loading chart folder: " << path);
         auto entries = phigros::chart::load_folder_chart(path);
         if (entries.empty()) throw std::runtime_error("No charts found in folder: " + path);
         // Default to IN, fallback to first
@@ -85,6 +108,8 @@ static phigros::ChartData load_chart(const std::string& path,
         for (const auto& e : entries) {
             if (e.difficulty == "IN") { chosen = &e; break; }
         }
+        PHLOG_INFO(Chart, "Folder chart selection: " << chosen->chart_path
+            << " diff=" << (chosen->difficulty.empty() ? "<none>" : chosen->difficulty));
         return load_chart(chosen->chart_path, cfg, password);
     }
 
@@ -92,10 +117,14 @@ static phigros::ChartData load_chart(const std::string& path,
     if (fmt == "rpe" || fmt == "official") {
         std::ifstream f(path);
         json j = json::parse(f);
-        if (fmt == "rpe")
+        if (fmt == "rpe") {
+            PHLOG_INFO(Chart, "Parsing RPE chart: " << path);
             return phigros::chart::parse_rpe(j, cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
+        }
+        PHLOG_INFO(Chart, "Parsing official chart: " << path);
         return phigros::chart::parse_official(j, cfg.window_w, cfg.window_h);
     }
+    PHLOG_INFO(Chart, "Parsing PEC chart: " << path);
     return phigros::chart::parse_pec(path, cfg.window_w, cfg.window_h);
 }
 
@@ -107,6 +136,14 @@ int main(int argc, char* argv[]) {
 
     auto args = parse_args(argc, argv);
     init_logger(args);  // Apply --verbose/--quiet/--log-level/--log-filter/--log-file/--log-time
+    PHLOG_DEBUG(General, "CLI parsed: argc=" << argc
+        << " chart=" << (args.chart_path.empty() ? "<none>" : args.chart_path)
+        << " script=" << (args.script_path.empty() ? "<none>" : args.script_path)
+        << " config=" << (args.config_path.empty() ? "<default>" : args.config_path)
+        << " headless=" << args.headless
+        << " play=" << args.play_mode
+        << " score_only=" << args.score_only
+        << " record=" << (!args.record_output.empty()));
 
     // ── Early exit modes ──────────────────────────────────────────────────────
     if (args.version_mode) {
@@ -142,7 +179,10 @@ int main(int argc, char* argv[]) {
 
     // ── Load config; apply CLI overrides ──────────────────────────────────────
     config::RenderConfig cfg;
-    if (!args.config_path.empty()) cfg = config::load_config(args.config_path);
+    if (!args.config_path.empty()) {
+        PHLOG_INFO(General, "Loading config: " << args.config_path);
+        cfg = config::load_config(args.config_path);
+    }
     if (!args.backend.empty()) cfg.backend = args.backend;
     if (args.audio_offset_ms != 0.0) cfg.audio_offset_ms = args.audio_offset_ms;
     if (args.window_w > 0) cfg.window_w = args.window_w;
@@ -159,6 +199,14 @@ int main(int argc, char* argv[]) {
     if (args.note_scale_y >= 0.0) cfg.note_scale_y  = args.note_scale_y;
     if (args.note_alpha   >= 0.0) cfg.note_alpha     = args.note_alpha;
     const int W = cfg.window_w, H = cfg.window_h;
+    PHLOG_DEBUG(General, "Effective config: backend=" << cfg.backend
+        << " window=" << W << "x" << H
+        << " audio_offset_ms=" << cfg.audio_offset_ms
+        << " approach=" << cfg.approach
+        << " chart_speed=" << cfg.chart_speed
+        << " expand=" << cfg.expand_factor
+        << " note_scale=(" << cfg.note_scale_x << "," << cfg.note_scale_y << ")"
+        << " note_alpha=" << cfg.note_alpha);
 
     // ── Info mode (no full parse) ─────────────────────────────────────────────
     if (args.info_mode) {
@@ -479,6 +527,10 @@ int main(int argc, char* argv[]) {
         return cnt;
     };
     int scoring_notes = count_scoring_notes(simulation_end);
+    PHLOG_DEBUG(Engine, "Timing bounds: chart_end=" << chart_end
+        << " simulation_end=" << simulation_end
+        << " scoring_notes=" << scoring_notes
+        << " truncate=" << args.truncate_at_duration);
 
     // ── COMPILE MODE ──────────────────────────────────────────────────────────
     if (!args.compile_output.empty()) {
@@ -585,6 +637,9 @@ int main(int argc, char* argv[]) {
         }
 
         std::vector<NoteState> st(chart.notes.size());
+        PHLOG_INFO(Engine, "Score-only run: sim_dt=" << SIM_DT
+            << " start=" << chart.offset << " end=" << simulation_end
+            << " notes=" << chart.notes.size());
         for (size_t i = 0; i < st.size(); ++i) st[i].note = &chart.notes[i];
         engine::Judge j; engine::SimulatePlayer ap(engine::SimMode::Conservative);
         auto fnext = [&](double tc) {
@@ -628,6 +683,8 @@ int main(int argc, char* argv[]) {
 #else
     while (gl.run_frame()) {}
 #endif
+
+    PHLOG_INFO(Engine, "Main loop finished: quit_requested=" << ctx.window.quit_requested);
 
     // Final results
     auto sr = gl.final_score();

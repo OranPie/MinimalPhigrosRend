@@ -27,7 +27,7 @@ struct LineRenderer {
     void draw(const SpriteBatch& batch, const Texture& white_tex,
               const std::vector<LineSnapshot>& lines,
               int W, int H, double expand, bool cover_pass = false) const {
-        double half_len = W * expand * 0.5;
+        double half_len = W * 0.5;
 
         for (auto& ls : lines) {
             if (ls.is_cover != cover_pass) continue;
@@ -50,8 +50,8 @@ struct LineRenderer {
             if (ls.texture_path && !ls.texture_path->empty() && texture_lookup) {
                 const Texture* tex = texture_lookup(*ls.texture_path);
                 if (tex && tex->valid()) {
-                    double tw = tex->w * ls.scale_x;
-                    double th = tex->h * ls.scale_y;
+                    double tw = apply_expand_size(tex->w * ls.scale_x, expand);
+                    double th = apply_expand_size(tex->h * ls.scale_y, expand);
                     batch.draw_texture(*tex, cx, cy, tw, th, ls.rot, r, g, b, a);
                     continue;
                 }
@@ -59,12 +59,14 @@ struct LineRenderer {
 
             // Default: white line rect
             batch.draw_rotated_rect(white_tex,
-                cx, cy, half_len * 2.0 * ls.scale_x, line_w * ls.scale_y,
+                cx, cy,
+                apply_expand_size(half_len * 2.0 * ls.scale_x, expand),
+                apply_expand_size(line_w * ls.scale_y, expand),
                 ls.rot, r, g, b, a);
 
             // Center dot
             if (dot_r > 1.0) {
-                double dot_size = dot_r * 2.0;
+                double dot_size = apply_expand_size(dot_r * 2.0, expand);
                 batch.draw_rotated_rect(white_tex,
                     cx, cy, dot_size, dot_size,
                     0.0, r, g, b, static_cast<uint8_t>(std::min(220.0 * ls.alpha01, 255.0)));

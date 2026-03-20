@@ -77,6 +77,7 @@ struct AppArgs {
     std::string log_file;     // --log-file <path>  — write copy to file
     bool        log_no_color  = false; // --log-no-color
     bool        log_time      = false; // --log-time  — prepend HH:MM:SS
+    bool        log_trace     = false; // --trace    alias for --log-level trace
     bool        log_verbose   = false; // --verbose  alias for --log-level debug
     bool        log_quiet     = false; // --quiet    alias for --log-level warn
 };
@@ -176,6 +177,7 @@ inline AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--log-file"   && i+1 < argc) args.log_file   = argv[++i];
         else if (a == "--log-no-color")              args.log_no_color = true;
         else if (a == "--log-time")                  args.log_time     = true;
+        else if (a == "--trace")                     args.log_trace    = true;
         else if (a == "--verbose")                   args.log_verbose  = true;
         else if (a == "--quiet")                     args.log_quiet    = true;
         else if (args.chart_path.empty()) args.chart_path = a;
@@ -262,6 +264,7 @@ inline void print_usage(const char* prog) {
         "  --play-replay <file.rep>  Play back a saved replay\n"
         "\n"
         "LOGGING\n"
+        "  --trace                   Shorthand for --log-level trace (maximum detail)\n"
         "  --verbose                 Shorthand for --log-level debug\n"
         "  --quiet                   Shorthand for --log-level warn\n"
         "  --log-level <level>       Minimum level: trace|debug|info|warn|error|fatal|off\n"
@@ -296,6 +299,8 @@ inline void init_logger(const AppArgs& args) {
     // Explicit level flag takes priority; --verbose/--quiet are shorthands
     if (!args.log_level.empty())
         log.set_level(args.log_level);
+    else if (args.log_trace)
+        log.set_level(phigros::core::LogLevel::Trace);
     else if (args.log_verbose)
         log.set_level(phigros::core::LogLevel::Debug);
     else if (args.log_quiet)
@@ -316,7 +321,10 @@ inline void init_logger(const AppArgs& args) {
                     args.log_file.c_str());
     }
 
-    // At DEBUG or higher verbosity, emit what the logger is configured for
+    // Emit logger configuration once the selected sinks are in place.
+    PHLOG_TRACE(General, "Logger sink setup: color=" << log.use_color
+        << " time=" << log.show_time
+        << " channel=" << log.show_channel);
     PHLOG_DEBUG(General, "Logger init: level="
         << phigros::core::Logger::level_name(log.min_level)
         << (args.log_filter.empty() ? "" : " filter=" + args.log_filter)

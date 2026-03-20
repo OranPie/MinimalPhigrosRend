@@ -33,6 +33,7 @@ struct HoldRenderer {
             if (!tex.valid()) continue;
 
             double ws = base_note_w * note_scale_x * ns.size_px;
+            ws = apply_expand_size(ws, expand);
 
             // Head and tail positions from snapshot — apply expand transform
             double hx = ns.wx, hy = ns.wy;

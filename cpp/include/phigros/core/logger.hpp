@@ -91,13 +91,14 @@ public:
     void set_level(LogLevel lv) noexcept { min_level = lv; }
 
     void set_level(const std::string& s) noexcept {
-        if      (s == "trace") min_level = LogLevel::Trace;
-        else if (s == "debug") min_level = LogLevel::Debug;
-        else if (s == "info")  min_level = LogLevel::Info;
-        else if (s == "warn")  min_level = LogLevel::Warn;
-        else if (s == "error") min_level = LogLevel::Error;
-        else if (s == "fatal") min_level = LogLevel::Fatal;
-        else if (s == "off")   min_level = LogLevel::Off;
+        const std::string level = _lower_ascii(s);
+        if      (level == "trace") min_level = LogLevel::Trace;
+        else if (level == "debug") min_level = LogLevel::Debug;
+        else if (level == "info")  min_level = LogLevel::Info;
+        else if (level == "warn")  min_level = LogLevel::Warn;
+        else if (level == "error") min_level = LogLevel::Error;
+        else if (level == "fatal") min_level = LogLevel::Fatal;
+        else if (level == "off")   min_level = LogLevel::Off;
         // unrecognised → keep current level
     }
 
@@ -187,13 +188,14 @@ public:
     static const char* channel_name(LogChannel ch) noexcept { return _channel_name(ch); }
 
     static LogLevel level_from_string(const std::string& s) noexcept {
-        if (s == "trace") return LogLevel::Trace;
-        if (s == "debug") return LogLevel::Debug;
-        if (s == "info")  return LogLevel::Info;
-        if (s == "warn")  return LogLevel::Warn;
-        if (s == "error") return LogLevel::Error;
-        if (s == "fatal") return LogLevel::Fatal;
-        if (s == "off")   return LogLevel::Off;
+        const std::string level = _lower_ascii(s);
+        if (level == "trace") return LogLevel::Trace;
+        if (level == "debug") return LogLevel::Debug;
+        if (level == "info")  return LogLevel::Info;
+        if (level == "warn")  return LogLevel::Warn;
+        if (level == "error") return LogLevel::Error;
+        if (level == "fatal") return LogLevel::Fatal;
+        if (level == "off")   return LogLevel::Off;
         return LogLevel::Info;
     }
 
@@ -244,10 +246,15 @@ private:
         }
     }
 
-    static int _channel_idx(const std::string& s) noexcept {
-        // Case-insensitive compare — use tolower for correct ASCII handling
+    static std::string _lower_ascii(const std::string& s) noexcept {
         std::string lo = s;
         for (auto& c : lo) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return lo;
+    }
+
+    static int _channel_idx(const std::string& s) noexcept {
+        // Case-insensitive compare — use tolower for correct ASCII handling
+        std::string lo = _lower_ascii(s);
         if (lo == "general")     return static_cast<int>(LogChannel::General);
         if (lo == "chart")       return static_cast<int>(LogChannel::Chart);
         if (lo == "render")      return static_cast<int>(LogChannel::Render);

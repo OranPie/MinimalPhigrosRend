@@ -256,6 +256,11 @@ ChartData load_rpe(const json& data, int W, int H, int rpe_easing_shift) {
     ChartData result;
 
     auto meta = data.value("META", json::object());
+    PHLOG_INFO(Chart, "RPE load: name=" << meta.value("name", std::string("<unnamed>"))
+        << " composer=" << meta.value("composer", std::string("<unknown>"))
+        << " charter=" << meta.value("charter", std::string("<unknown>"))
+        << " size=" << W << "x" << H
+        << " easing_shift=" << rpe_easing_shift);
     double offset_ms = meta.value("offset", 0.0);
     result.offset = offset_ms / 1000.0;
     // RPE META: song and background paths (relative to chart root)
@@ -270,9 +275,12 @@ ChartData load_rpe(const json& data, int W, int H, int rpe_easing_shift) {
     for (auto& e : bpm_list)
         bpm_items.emplace_back(beat_to_value(e["startTime"]), e.value("bpm", 120.0));
     BpmMap bpm_map = BpmMap::build(std::move(bpm_items));
+    PHLOG_DEBUG(Chart, "RPE BPM entries=" << bpm_list.size()
+        << " offset=" << result.offset);
 
     const auto& jls = data["judgeLineList"];
     int line_count = static_cast<int>(jls.size());
+    PHLOG_INFO(Chart, "RPE judge lines=" << line_count);
 
     double sx = static_cast<double>(W) / 1350.0;
     double sy = static_cast<double>(H) / 900.0;
@@ -424,6 +432,11 @@ ChartData load_rpe(const json& data, int W, int H, int rpe_easing_shift) {
         rot_with_fathers.push_back(rwf);
 
         result.lines.push_back(std::move(line));
+        PHLOG_TRACE(Chart, "RPE line loaded id=" << i
+            << " name=" << result.lines.back().name
+            << " father=" << father
+            << " z=" << result.lines.back().z_order
+            << " cover=" << result.lines.back().is_cover);
 
         // Notes
         int nid_base = i * 100000;
@@ -560,6 +573,10 @@ ChartData load_rpe(const json& data, int W, int H, int rpe_easing_shift) {
               [](const Note& a, const Note& b) { return a.t_hit < b.t_hit; });
 
     result.finalize();
+    PHLOG_INFO(Chart, "RPE loaded: lines=" << result.lines.size()
+        << " notes=" << result.notes.size()
+        << " playable=" << result.playable_count
+        << " duration=" << (result.chart_end_t - result.offset));
     return result;
 }
 

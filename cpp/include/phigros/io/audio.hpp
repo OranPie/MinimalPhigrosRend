@@ -24,19 +24,24 @@ struct HitsoundPool {
     bool load(ma_engine* engine, const std::vector<uint8_t>& data) {
         if (data.empty()) return false;
         ogg_data = data;
+        PHLOG_TRACE(Audio, "HitsoundPool: loading " << ogg_data.size() << " bytes");
         ma_decoder_config dc = ma_decoder_config_init_default();
         for (int i = 0; i < POOL_SIZE; ++i) {
             if (ma_decoder_init_memory(ogg_data.data(), ogg_data.size(), &dc,
-                                       &decoders[i]) != MA_SUCCESS)
+                                       &decoders[i]) != MA_SUCCESS) {
+                PHLOG_TRACE(Audio, "HitsoundPool: decoder init failed at slot " << i);
                 return false;
+            }
             if (ma_sound_init_from_data_source(engine, &decoders[i],
                     MA_SOUND_FLAG_NO_SPATIALIZATION, nullptr,
                     &sounds[i]) != MA_SUCCESS) {
                 ma_decoder_uninit(&decoders[i]);
+                PHLOG_TRACE(Audio, "HitsoundPool: sound init failed at slot " << i);
                 return false;
             }
         }
         loaded = true;
+        PHLOG_TRACE(Audio, "HitsoundPool: ready with " << POOL_SIZE << " voices");
         return true;
     }
 
@@ -46,6 +51,7 @@ struct HitsoundPool {
         ma_sound_seek_to_pcm_frame(&sounds[cursor], 0);
         ma_decoder_seek_to_pcm_frame(&decoders[cursor], 0);
         ma_sound_start(&sounds[cursor]);
+        PHLOG_TRACE(Audio, "HitsoundPool: play slot=" << cursor);
         cursor = (cursor + 1) % POOL_SIZE;
     }
 
@@ -56,6 +62,7 @@ struct HitsoundPool {
 
     void destroy() {
         if (!loaded) return;
+        PHLOG_TRACE(Audio, "HitsoundPool: destroy");
         for (int i = 0; i < POOL_SIZE; ++i) {
             ma_sound_uninit(&sounds[i]);
             ma_decoder_uninit(&decoders[i]);
@@ -83,25 +90,32 @@ struct AudioSystem {
             return false;
         }
         engine_ok = true;
-        PHLOG_DEBUG(Audio, "miniaudio engine initialised");
+        PHLOG_INFO(Audio, "miniaudio engine initialised");
         return true;
     }
 
     bool load_bgm(const std::string& path, double offset = 0.0) {
-        if (!engine_ok) return false;
+        if (!engine_ok) {
+            PHLOG_WARN(Audio, "load_bgm called before audio engine init");
+            return false;
+        }
         offset_sec = offset;
         if (ma_sound_init_from_file(&engine, path.c_str(), 0, nullptr, nullptr, &bgm) != MA_SUCCESS) {
             PHLOG_ERROR(Audio, "Failed to load BGM: " << path);
             return false;
         }
         bgm_loaded = true;
-        PHLOG_DEBUG(Audio, "BGM loaded: " << path << " offset=" << offset << "s");
+        PHLOG_INFO(Audio, "BGM loaded: " << path << " offset=" << offset << "s");
         return true;
     }
 
     // Load a hitsound OGG for note kind k (1–4). Call after init().
     bool load_hitsound(int k, const std::vector<uint8_t>& data) {
-        if (!engine_ok || k < 1 || k > 4) return false;
+        if (!engine_ok || k < 1 || k > 4) {
+            PHLOG_TRACE(Audio, "load_hitsound rejected kind=" << k
+                << " engine_ok=" << engine_ok);
+            return false;
+        }
         if (!hitsounds[k].load(&engine, data)) {
             PHLOG_WARN(Audio, "Failed to load hitsound for kind=" << k);
             return false;
@@ -116,21 +130,34 @@ struct AudioSystem {
     void play_hitsound(int k) {
         if (k < 1 || k > 4) return;
         if (hitsounds[k].loaded)       { hitsounds[k].play(); return; }
-        if (k == 3 && hitsounds[1].loaded) { hitsounds[1].play(); return; } // hold→tap fallback
+        if (k == 3 && hitsounds[1].loaded) {
+            PHLOG_TRACE(Audio, "Hitsound fallback: hold->tap");
+            hitsounds[1].play();
+            return;
+        } // hold→tap fallback
+        PHLOG_TRACE(Audio, "Hitsound unavailable for kind=" << k);
     }
 
     void play() {
-        if (bgm_loaded) ma_sound_start(&bgm);
+        if (bgm_loaded) {
+            PHLOG_DEBUG(Audio, "Starting BGM playback");
+            ma_sound_start(&bgm);
+        }
     }
 
     void stop() {
-        if (bgm_loaded) ma_sound_stop(&bgm);
+        if (bgm_loaded) {
+            PHLOG_DEBUG(Audio, "Stopping BGM playback");
+            ma_sound_stop(&bgm);
+        }
     }
 
     void seek(double t_sec) {
         if (!bgm_loaded) return;
         ma_uint32 sample_rate = ma_engine_get_sample_rate(&engine);
         ma_uint64 frame = static_cast<ma_uint64>((t_sec + offset_sec) * sample_rate);
+        PHLOG_TRACE(Audio, "Seeking BGM to t=" << t_sec << "s frame=" << frame
+            << " sample_rate=" << sample_rate);
         ma_sound_seek_to_pcm_frame(&bgm, frame);
     }
 
@@ -138,7 +165,9 @@ struct AudioSystem {
         if (!bgm_loaded) return 0.0;
         float cursor = 0.0f;
         ma_sound_get_cursor_in_seconds(const_cast<ma_sound*>(&bgm), &cursor);
-        return static_cast<double>(cursor) - offset_sec;
+        double t = static_cast<double>(cursor) - offset_sec;
+        PHLOG_TRACE(Audio, "Playback time query=" << t);
+        return t;
     }
 
     bool is_playing() const {
@@ -152,6 +181,8 @@ struct AudioSystem {
     }
 
     void destroy() {
+        PHLOG_DEBUG(Audio, "AudioSystem destroy: bgm_loaded=" << bgm_loaded
+            << " engine_ok=" << engine_ok);
         if (bgm_loaded) { ma_sound_uninit(&bgm); bgm_loaded = false; }
         for (int k = 1; k <= 4; ++k) hitsounds[k].destroy();
         if (engine_ok) { ma_engine_uninit(&engine); engine_ok = false; }
