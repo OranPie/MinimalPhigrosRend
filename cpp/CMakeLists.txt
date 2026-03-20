@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 include(FetchContent)
 
+option(BUILD_PYTHON_BINDINGS "Build Python bindings" OFF)
+option(BUILD_RENDER_APP "Build native render executable" ON)
+
 # ── Version ───────────────────────────────────────────────────────────────────
 set(PHIGROS_VERSION "1.0.0-dev")
 add_compile_definitions(PHIGROS_VERSION="${PHIGROS_VERSION}")
@@ -34,7 +37,7 @@ option(USE_ENCRYPTION "Build with OpenSSL encryption support for PHBC v2" ON)
 option(USE_SANITIZERS "Enable AddressSanitizer + UBSan (Debug builds only)" OFF)
 
 # --- libav (FFmpeg dev libs) ---
-if(USE_LIBAV AND NOT EMSCRIPTEN)
+if(BUILD_RENDER_APP AND USE_LIBAV AND NOT EMSCRIPTEN)
     find_package(PkgConfig QUIET)
     if(PkgConfig_FOUND)
         pkg_check_modules(LIBAV QUIET libavcodec libavformat libavutil libswscale libswresample)
@@ -81,34 +84,36 @@ else()
     set(HAS_OPENSSL FALSE)
 endif()
 
-if(USE_SDL3 AND NOT EMSCRIPTEN)
-    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
-    set(SDL_STATIC ON CACHE BOOL "" FORCE)
-    set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
-    set(SDL_TESTS OFF CACHE BOOL "" FORCE)
-    FetchContent_Declare(
-        SDL3
-        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-        GIT_TAG        release-3.2.8
-        GIT_SHALLOW    TRUE
-        GIT_PROGRESS   TRUE
-    )
-    FetchContent_MakeAvailable(SDL3)
-    set(SDL_TARGET SDL3::SDL3-static)
-    set(SDL_VERSION 3)
-elseif(EMSCRIPTEN)
-    # Emscripten has built-in SDL2 port
-    set(SDL_VERSION 2)
-    set(EMSCRIPTEN_SDL_FLAGS "-s USE_SDL=2")
-else()
-    # Fallback to system SDL2
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(SDL2 REQUIRED sdl2)
-    set(SDL_VERSION 2)
+if(BUILD_RENDER_APP)
+    if(USE_SDL3 AND NOT EMSCRIPTEN)
+        set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+        set(SDL_STATIC ON CACHE BOOL "" FORCE)
+        set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+        set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+        FetchContent_Declare(
+            SDL3
+            GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+            GIT_TAG        release-3.2.8
+            GIT_SHALLOW    TRUE
+            GIT_PROGRESS   TRUE
+        )
+        FetchContent_MakeAvailable(SDL3)
+        set(SDL_TARGET SDL3::SDL3-static)
+        set(SDL_VERSION 3)
+    elseif(EMSCRIPTEN)
+        # Emscripten has built-in SDL2 port
+        set(SDL_VERSION 2)
+        set(EMSCRIPTEN_SDL_FLAGS "-s USE_SDL=2")
+    else()
+        # Fallback to system SDL2
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(SDL2 REQUIRED sdl2)
+        set(SDL_VERSION 2)
+    endif()
 endif()
 
 # --- bgfx via FetchContent ---
-if(USE_BGFX AND NOT EMSCRIPTEN)
+if(BUILD_RENDER_APP AND USE_BGFX AND NOT EMSCRIPTEN)
     set(BGFX_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
     set(BGFX_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(BGFX_INSTALL OFF CACHE BOOL "" FORCE)
@@ -234,6 +239,12 @@ endif()
 add_executable(chart_scanner src/chart/chart_scanner.cpp)
 target_link_libraries(chart_scanner PRIVATE phigros_core_lib)
 
+add_library(phigros_python_api_lib STATIC
+    src/api/python_api.cpp
+)
+target_include_directories(phigros_python_api_lib PUBLIC include)
+target_link_libraries(phigros_python_api_lib PUBLIC phigros_core_lib)
+
 # --- Convenience target: run all test executables ---
 # Usage: cmake --build build --target run-tests
 set(TEST_TARGETS "")
@@ -256,83 +267,110 @@ if(TEST_TARGETS)
     endforeach()
 endif()
 
-# --- Render executable ---
-add_executable(phigros_render src/app/main.cpp)
-target_include_directories(phigros_render PRIVATE
-    "${VENDOR_DIR}/stb"
-    "${VENDOR_DIR}/miniz"
-    "${VENDOR_DIR}/miniaudio"
-)
+if(BUILD_RENDER_APP)
+    # --- Render executable ---
+    add_executable(phigros_render src/app/main.cpp)
+    target_include_directories(phigros_render PRIVATE
+        "${VENDOR_DIR}/stb"
+        "${VENDOR_DIR}/miniz"
+        "${VENDOR_DIR}/miniaudio"
+    )
 
-# Platform detection macro (used by platform.hpp / sdl_compat.hpp)
-if(ANDROID)
-    target_compile_definitions(phigros_render PRIVATE PHIGROS_MOBILE=1 PHIGROS_ANDROID=1 PHIGROS_TOUCH_INPUT=1)
-elseif(IOS)
-    target_compile_definitions(phigros_render PRIVATE PHIGROS_MOBILE=1 PHIGROS_IOS=1 PHIGROS_TOUCH_INPUT=1)
-endif()
+    # Platform detection macro (used by platform.hpp / sdl_compat.hpp)
+    if(ANDROID)
+        target_compile_definitions(phigros_render PRIVATE PHIGROS_MOBILE=1 PHIGROS_ANDROID=1 PHIGROS_TOUCH_INPUT=1)
+    elseif(IOS)
+        target_compile_definitions(phigros_render PRIVATE PHIGROS_MOBILE=1 PHIGROS_IOS=1 PHIGROS_TOUCH_INPUT=1)
+    endif()
 
-if(SDL_VERSION EQUAL 3)
-    target_link_libraries(phigros_render PRIVATE
-        phigros_core_lib vendor_stb vendor_miniz vendor_miniaudio
-        ${SDL_TARGET}
-    )
-    target_compile_definitions(phigros_render PRIVATE PHIGROS_SDL3=1)
-elseif(EMSCRIPTEN)
-    target_link_libraries(phigros_render PRIVATE
-        phigros_core_lib vendor_stb vendor_miniz vendor_miniaudio
-    )
-    # SDL2 port is built into Emscripten SDK
-    target_compile_options(phigros_render PRIVATE "SHELL:-s USE_SDL=2")
-    target_compile_definitions(phigros_render PRIVATE PHIGROS_SDL2=1 PHIGROS_WASM=1 PHIGROS_TOUCH_INPUT=1)
-    set_target_properties(phigros_render PROPERTIES SUFFIX ".js")
-    target_link_options(phigros_render PRIVATE
-        "SHELL:-s USE_SDL=2"
-        "SHELL:-s USE_WEBGL2=1"
-        "SHELL:-s ALLOW_MEMORY_GROWTH=1"
-        "SHELL:-s MAXIMUM_MEMORY=512mb"
-        "SHELL:-s EXPORTED_RUNTIME_METHODS=[\"FS\",\"callMain\",\"cwrap\",\"UTF8ToString\"]"
-        "SHELL:-s EXPORTED_FUNCTIONS=[\"_main\",\"_malloc\",\"_free\"]"
-        "SHELL:-s INVOKE_RUN=0"
-        "SHELL:-s FORCE_FILESYSTEM=1"
-        "SHELL:-s ENVIRONMENT=web"
-        "SHELL:-s ASSERTIONS=0"
-        "SHELL:-O3"
-        "SHELL:--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html"
-    )
-    # Only preload respack.zip if it exists at configure time
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../respack.zip")
-        target_link_options(phigros_render PRIVATE
-            "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/../respack.zip@/respack.zip"
+    if(SDL_VERSION EQUAL 3)
+        target_link_libraries(phigros_render PRIVATE
+            phigros_core_lib vendor_stb vendor_miniz vendor_miniaudio
+            ${SDL_TARGET}
         )
+        target_compile_definitions(phigros_render PRIVATE PHIGROS_SDL3=1)
+    elseif(EMSCRIPTEN)
+        target_link_libraries(phigros_render PRIVATE
+            phigros_core_lib vendor_stb vendor_miniz vendor_miniaudio
+        )
+        # SDL2 port is built into Emscripten SDK
+        target_compile_options(phigros_render PRIVATE "SHELL:-s USE_SDL=2")
+        target_compile_definitions(phigros_render PRIVATE PHIGROS_SDL2=1 PHIGROS_WASM=1 PHIGROS_TOUCH_INPUT=1)
+        set_target_properties(phigros_render PROPERTIES SUFFIX ".js")
+        target_link_options(phigros_render PRIVATE
+            "SHELL:-s USE_SDL=2"
+            "SHELL:-s USE_WEBGL2=1"
+            "SHELL:-s ALLOW_MEMORY_GROWTH=1"
+            "SHELL:-s MAXIMUM_MEMORY=512mb"
+            "SHELL:-s EXPORTED_RUNTIME_METHODS=[\"FS\",\"callMain\",\"cwrap\",\"UTF8ToString\"]"
+            "SHELL:-s EXPORTED_FUNCTIONS=[\"_main\",\"_malloc\",\"_free\"]"
+            "SHELL:-s INVOKE_RUN=0"
+            "SHELL:-s FORCE_FILESYSTEM=1"
+            "SHELL:-s ENVIRONMENT=web"
+            "SHELL:-s ASSERTIONS=0"
+            "SHELL:-O3"
+            "SHELL:--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html"
+        )
+        # Only preload respack.zip if it exists at configure time
+        if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../respack.zip")
+            target_link_options(phigros_render PRIVATE
+                "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/../respack.zip@/respack.zip"
+            )
+        endif()
+    else()
+        target_include_directories(phigros_render PRIVATE ${SDL2_INCLUDE_DIRS})
+        if(SDL2_LIBRARY_DIRS)
+            target_link_directories(phigros_render PRIVATE ${SDL2_LIBRARY_DIRS})
+        endif()
+        target_link_libraries(phigros_render PRIVATE
+            phigros_core_lib vendor_stb vendor_miniz vendor_miniaudio
+            ${SDL2_LIBRARIES}
+        )
+        target_compile_options(phigros_render PRIVATE ${SDL2_CFLAGS_OTHER})
+        target_compile_definitions(phigros_render PRIVATE PHIGROS_SDL2=1)
     endif()
-else()
-    target_include_directories(phigros_render PRIVATE ${SDL2_INCLUDE_DIRS})
-    if(SDL2_LIBRARY_DIRS)
-        target_link_directories(phigros_render PRIVATE ${SDL2_LIBRARY_DIRS})
+
+    if(HAS_BGFX)
+        target_link_libraries(phigros_render PRIVATE bgfx bx bimg)
+        target_compile_definitions(phigros_render PRIVATE PHIGROS_HAS_BGFX=1)
     endif()
-    target_link_libraries(phigros_render PRIVATE
-        phigros_core_lib vendor_stb vendor_miniz vendor_miniaudio
-        ${SDL2_LIBRARIES}
+
+    if(HAS_LIBAV)
+        target_include_directories(phigros_render PRIVATE ${LIBAV_INCLUDE_DIRS})
+        if(LIBAV_LIBRARY_DIRS)
+            target_link_directories(phigros_render PRIVATE ${LIBAV_LIBRARY_DIRS})
+        endif()
+        target_link_libraries(phigros_render PRIVATE ${LIBAV_LIBRARIES})
+        target_compile_definitions(phigros_render PRIVATE PHIGROS_HAS_LIBAV=1)
+    endif()
+
+    # ── iOS app bundle (only when targeting iOS via Xcode) ───────────────────
+    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        add_subdirectory(ios)
+    endif()
+endif()
+
+if(BUILD_PYTHON_BINDINGS)
+    find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
+    find_package(pybind11 CONFIG QUIET)
+    if(NOT pybind11_FOUND)
+        FetchContent_Declare(
+            pybind11
+            GIT_REPOSITORY https://github.com/pybind/pybind11.git
+            GIT_TAG v2.13.6
+            GIT_SHALLOW TRUE
+        )
+        FetchContent_MakeAvailable(pybind11)
+    endif()
+
+    pybind11_add_module(_core src/python/module.cpp)
+    target_include_directories(_core PRIVATE include)
+    target_link_libraries(_core PRIVATE phigros_python_api_lib)
+    set_target_properties(_core PROPERTIES
+        OUTPUT_NAME "_core"
     )
-    target_compile_options(phigros_render PRIVATE ${SDL2_CFLAGS_OTHER})
-    target_compile_definitions(phigros_render PRIVATE PHIGROS_SDL2=1)
-endif()
-
-if(HAS_BGFX)
-    target_link_libraries(phigros_render PRIVATE bgfx bx bimg)
-    target_compile_definitions(phigros_render PRIVATE PHIGROS_HAS_BGFX=1)
-endif()
-
-if(HAS_LIBAV)
-    target_include_directories(phigros_render PRIVATE ${LIBAV_INCLUDE_DIRS})
-    if(LIBAV_LIBRARY_DIRS)
-        target_link_directories(phigros_render PRIVATE ${LIBAV_LIBRARY_DIRS})
-    endif()
-    target_link_libraries(phigros_render PRIVATE ${LIBAV_LIBRARIES})
-    target_compile_definitions(phigros_render PRIVATE PHIGROS_HAS_LIBAV=1)
-endif()
-
-# ── iOS app bundle (only when targeting iOS via Xcode) ────────────────────────
-if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    add_subdirectory(ios)
+    install(TARGETS _core
+        LIBRARY DESTINATION phigros_cpp
+        RUNTIME DESTINATION phigros_cpp
+    )
 endif()

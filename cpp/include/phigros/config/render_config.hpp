@@ -38,6 +38,8 @@ struct RenderConfig {
     double note_flow_speed_multiplier = 1.0;
     bool note_speed_mul_affects_travel = false;
     double note_alpha = 1.0;        // Global note alpha multiplier [0,1]
+    double font_size = 1.0;         // HUD/debug text scale multiplier
+    bool overlay_transparent = false; // lighter translucent HUD/debug panels
 
     // Line settings
     std::optional<double> force_line_alpha01;
@@ -125,12 +127,7 @@ inline std::string strip_jsonc_comments(const std::string& src) {
     return out;
 }
 
-inline RenderConfig load_config(const std::string& path) {
-    std::ifstream f(path);
-    std::string text((std::istreambuf_iterator<char>(f)),
-                      std::istreambuf_iterator<char>());
-    auto j = nlohmann::json::parse(strip_jsonc_comments(text));
-
+inline RenderConfig load_config_json(const nlohmann::json& j) {
     RenderConfig cfg;
 
     if (j.contains("window")) {
@@ -156,6 +153,8 @@ inline RenderConfig load_config(const std::string& path) {
         get_d("note_scale_y", cfg.note_scale_y);
         get_d("note_flow_speed_multiplier", cfg.note_flow_speed_multiplier);
         get_d("note_alpha", cfg.note_alpha);
+        get_d("font_size", cfg.font_size);
+        get_b("overlay_transparent", cfg.overlay_transparent);
         get_d("overrender", cfg.overrender);
         get_b("note_outline", cfg.note_outline);
         get_d("hold_body_glow_alpha", cfg.hold_body_glow_alpha);
@@ -177,6 +176,7 @@ inline RenderConfig load_config(const std::string& path) {
         cfg.approach              = std::max(0.1, std::min(30.0, cfg.approach));
         cfg.chart_speed           = std::max(0.1, std::min(20.0, cfg.chart_speed));
         cfg.note_alpha            = std::max(0.0, std::min(1.0,  cfg.note_alpha));
+        cfg.font_size             = std::max(0.5, std::min(3.0,  cfg.font_size));
         cfg.hold_body_glow_alpha  = std::max(0.0, std::min(1.0,  cfg.hold_body_glow_alpha));
         cfg.hitfx_intensity= std::max(0.0, std::min(2.0,  cfg.hitfx_intensity));
         cfg.particle_count = std::max(0,   std::min(64,   cfg.particle_count));
@@ -240,8 +240,19 @@ inline RenderConfig load_config(const std::string& path) {
 
     if (j.contains("backend") && !j["backend"].is_null())
         cfg.backend = j["backend"].get<std::string>();
-
     return cfg;
+}
+
+inline RenderConfig load_config_text(const std::string& text) {
+    auto j = nlohmann::json::parse(strip_jsonc_comments(text));
+    return load_config_json(j);
+}
+
+inline RenderConfig load_config(const std::string& path) {
+    std::ifstream f(path);
+    std::string text((std::istreambuf_iterator<char>(f)),
+                      std::istreambuf_iterator<char>());
+    return load_config_text(text);
 }
 
 // Serialize a RenderConfig back to a JSON object.
@@ -260,6 +271,8 @@ inline nlohmann::json config_to_json(const RenderConfig& cfg) {
     r["note_scale_y"]               = cfg.note_scale_y;
     r["note_flow_speed_multiplier"] = cfg.note_flow_speed_multiplier;
     r["note_alpha"]                 = cfg.note_alpha;
+    r["font_size"]                  = cfg.font_size;
+    r["overlay_transparent"]        = cfg.overlay_transparent;
     r["note_outline"]               = cfg.note_outline;
     r["hold_body_glow_alpha"]       = cfg.hold_body_glow_alpha;
     r["no_cull"]                    = cfg.no_cull;

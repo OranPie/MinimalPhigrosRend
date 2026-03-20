@@ -4,6 +4,8 @@
 C++ 渲染器（`phigros_render`）是用于 Phigros 谱面的高性能、支持无头模式的原生渲染器。
 它与 Python 版 `phic_renderer` 无任何运行时依赖，支持桌面平台（SDL 2/3）和 WebAssembly（Emscripten）。
 
+关于新的 C++ 驱动 Python 处理模块，见 [PYTHON_BINDINGS.zh.md](PYTHON_BINDINGS.zh.md)。
+
 ---
 
 ## 目录

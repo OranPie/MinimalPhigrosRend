@@ -5,6 +5,9 @@
 High-performance Phigros chart renderer rewritten in C++17.  
 Cross-platform: Desktop (SDL3), Web (WASM/Emscripten + SDL2), Mobile.
 
+Python chart-processing bindings are also available via `phigros_cpp`.
+See [`../docs/PYTHON_BINDINGS.md`](../docs/PYTHON_BINDINGS.md).
+
 ## Features
 
 - Parses **Official**, **RPE**, and **PEC** chart formats

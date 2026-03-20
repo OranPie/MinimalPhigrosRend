@@ -1,0 +1,14 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.12"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "phigros-cpp"
+version = "0.1.0"
+description = "Python bindings for MinimalPhigrosRend chart evaluation and processing"
+requires-python = ">=3.10"
+
+[tool.scikit-build]
+cmake.source-dir = "cpp"
+wheel.packages = ["python/phigros_cpp"]
+

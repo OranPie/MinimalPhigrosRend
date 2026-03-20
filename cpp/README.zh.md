@@ -5,6 +5,9 @@
 用 C++17 重写的高性能 Phigros 谱面渲染器。  
 跨平台支持：桌面端（SDL3）、Web（WASM/Emscripten）、移动端。
 
+另外也提供 `phigros_cpp` Python 谱面处理绑定。
+详见 [`../docs/PYTHON_BINDINGS.zh.md`](../docs/PYTHON_BINDINGS.zh.md)。
+
 ## 功能特性
 
 - 解析 **Official**、**RPE** 和 **PEC** 谱面格式
