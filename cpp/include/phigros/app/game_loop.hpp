@@ -105,7 +105,7 @@ struct GameLoop {
     // MISS_INDICATOR: track recently missed note IDs with a fade timer
     std::unordered_map<int, double> debug_miss_flash;  // nid -> time_remaining (seconds)
     // JUDGMENT_HISTORY: recent judgment results for feed display
-    struct JudgeEntry { std::string text; double age; };
+    struct JudgeEntry { int nid; std::string text; double age; };
     std::deque<JudgeEntry> debug_judge_history;
     // SCORE_BREAKDOWN: per-grade counters (updated from NoteState)
     int debug_cnt_perfect = 0, debug_cnt_good = 0, debug_cnt_bad = 0, debug_cnt_miss = 0;
@@ -1264,9 +1264,8 @@ private:
         // Update MISS_INDICATOR flash timers
         if (has_debug(DebugFlag::MISS_INDICATOR)) {
             for (const auto& s : states) {
-                if (s.miss && s.note &&
-                    debug_miss_flash.find(s.note->nid) == debug_miss_flash.end()) {
-                    debug_miss_flash[s.note->nid] = 0.5; // 0.5s flash
+                if (s.miss && s.note) {
+                    debug_miss_flash.try_emplace(s.note->nid, 0.5); // 0.5s flash
                 }
             }
             for (auto it = debug_miss_flash.begin(); it != debug_miss_flash.end(); ) {
@@ -1281,21 +1280,18 @@ private:
         // Update JUDGMENT_HISTORY feed
         if (has_debug(DebugFlag::JUDGMENT_HISTORY)) {
             for (const auto& s : states) {
-                if (!s.judged || s.judge_grade.empty()) continue;
-                // Check if this note is already recorded
+                if (!s.judged || s.judge_grade.empty() || !s.note) continue;
+                int nid = s.note->nid;
+                // Check if this note is already recorded (by nid)
                 bool found = false;
                 for (const auto& e : debug_judge_history) {
-                    if (e.text.size() > 1 && e.text[0] == 'N' &&
-                        e.text.find(std::to_string(s.note->nid)) != std::string::npos &&
-                        e.text.find(s.judge_grade) != std::string::npos) {
-                        found = true; break;
-                    }
+                    if (e.nid == nid) { found = true; break; }
                 }
                 if (!found) {
                     char buf[80];
                     std::snprintf(buf, sizeof(buf), "N%d %s dt=%+.1fms",
-                                  s.note->nid, s.judge_grade.c_str(), s.judge_delta_ms);
-                    debug_judge_history.push_front({buf, 0.0});
+                                  nid, s.judge_grade.c_str(), s.judge_delta_ms);
+                    debug_judge_history.push_front({nid, buf, 0.0});
                     while (debug_judge_history.size() > 20) debug_judge_history.pop_back();
                 }
             }
