@@ -149,6 +149,8 @@ inline bool parse_debug_flags(const std::string& raw,
         if (!token.empty()) {
             if (token == "ALL") {
                 out = all_debug_flags();
+                if (stop == std::string::npos) break;
+                start = stop + 1;
                 continue;
             }
             bool matched = false;
