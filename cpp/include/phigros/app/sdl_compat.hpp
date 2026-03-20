@@ -31,8 +31,7 @@ inline bool sdl_init() {
 }
 
 inline SDL_Window* create_window(const char* title, int w, int h, bool hidden) {
-    Uint32 flags = SDL_WINDOW_HIGH_PIXEL_DENSITY;
-    if (hidden) flags |= SDL_WINDOW_HIDDEN;
+    Uint32 flags = hidden ? SDL_WINDOW_HIDDEN : SDL_WINDOW_HIGH_PIXEL_DENSITY;
     return SDL_CreateWindow(title, w, h, flags);
 }
 
@@ -90,20 +89,47 @@ inline void set_draw_color(SDL_Renderer* ren, uint8_t r, uint8_t g,
 inline bool read_pixels_rgba(SDL_Renderer* ren, uint8_t* out, int w, int h) {
     SDL_Surface* surf = SDL_RenderReadPixels(ren, nullptr);
     if (!surf) return false;
-    // Fast path: surface is already RGBA32 (common for hardware renderers)
-    if (surf->format == SDL_PIXELFORMAT_RGBA32) {
-        SDL_LockSurface(surf);
-        std::memcpy(out, surf->pixels, static_cast<size_t>(w) * h * 4);
-        SDL_UnlockSurface(surf);
+    SDL_Surface* rgba = surf;
+    // Convert to RGBA32 if needed so the resample/copy path can assume 4 bytes/pixel.
+    if (surf->format != SDL_PIXELFORMAT_RGBA32) {
+        rgba = SDL_ConvertSurface(surf, SDL_PIXELFORMAT_RGBA32);
         SDL_DestroySurface(surf);
+        if (!rgba) return false;
+    }
+
+    SDL_LockSurface(rgba);
+    const uint8_t* src = static_cast<const uint8_t*>(rgba->pixels);
+    const int src_w = rgba->w;
+    const int src_h = rgba->h;
+    const int src_pitch = rgba->pitch;
+
+    if (src_w == w && src_h == h) {
+        for (int y = 0; y < h; ++y) {
+            std::memcpy(out + static_cast<size_t>(y) * w * 4,
+                        src + static_cast<size_t>(y) * src_pitch,
+                        static_cast<size_t>(w) * 4);
+        }
+        SDL_UnlockSurface(rgba);
+        SDL_DestroySurface(rgba);
         return true;
     }
-    // Slow path: need format conversion
-    SDL_Surface* rgba = SDL_ConvertSurface(surf, SDL_PIXELFORMAT_RGBA32);
-    SDL_DestroySurface(surf);
-    if (!rgba) return false;
-    SDL_LockSurface(rgba);
-    std::memcpy(out, rgba->pixels, static_cast<size_t>(w) * h * 4);
+
+    // Resample to the logical render size expected by the recorder.
+    for (int y = 0; y < h; ++y) {
+        const int sy = std::clamp((y * src_h) / std::max(1, h), 0, std::max(0, src_h - 1));
+        const uint8_t* src_row = src + static_cast<size_t>(sy) * src_pitch;
+        uint8_t* dst_row = out + static_cast<size_t>(y) * w * 4;
+        for (int x = 0; x < w; ++x) {
+            const int sx = std::clamp((x * src_w) / std::max(1, w), 0, std::max(0, src_w - 1));
+            const uint8_t* src_px = src_row + static_cast<size_t>(sx) * 4;
+            uint8_t* dst_px = dst_row + static_cast<size_t>(x) * 4;
+            dst_px[0] = src_px[0];
+            dst_px[1] = src_px[1];
+            dst_px[2] = src_px[2];
+            dst_px[3] = src_px[3];
+        }
+    }
+
     SDL_UnlockSurface(rgba);
     SDL_DestroySurface(rgba);
     return true;

@@ -198,6 +198,8 @@ int main(int argc, char* argv[]) {
     if (args.note_scale_x >= 0.0) cfg.note_scale_x  = args.note_scale_x;
     if (args.note_scale_y >= 0.0) cfg.note_scale_y  = args.note_scale_y;
     if (args.note_alpha   >= 0.0) cfg.note_alpha     = args.note_alpha;
+    if (args.font_size    >= 0.0) cfg.font_size      = args.font_size;
+    if (args.overlay_transparent) cfg.overlay_transparent = true;
     const int W = cfg.window_w, H = cfg.window_h;
     PHLOG_DEBUG(General, "Effective config: backend=" << cfg.backend
         << " window=" << W << "x" << H
@@ -206,7 +208,9 @@ int main(int argc, char* argv[]) {
         << " chart_speed=" << cfg.chart_speed
         << " expand=" << cfg.expand_factor
         << " note_scale=(" << cfg.note_scale_x << "," << cfg.note_scale_y << ")"
-        << " note_alpha=" << cfg.note_alpha);
+        << " note_alpha=" << cfg.note_alpha
+        << " font_size=" << cfg.font_size
+        << " overlay_transparent=" << cfg.overlay_transparent);
 
     // ── Info mode (no full parse) ─────────────────────────────────────────────
     if (args.info_mode) {

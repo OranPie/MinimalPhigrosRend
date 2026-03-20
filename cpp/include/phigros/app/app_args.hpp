@@ -70,6 +70,8 @@ struct AppArgs {
     double      note_scale_x        = -1.0;  // --note-scale-x <mul>
     double      note_scale_y        = -1.0;  // --note-scale-y <mul>
     double      note_alpha          = -1.0;  // --note-alpha <0-1>
+    double      font_size           = -1.0;  // --font-size <mul>
+    bool        overlay_transparent = false; // --overlay-transparent
     DebugFlag   debug_flags         = DebugFlag::NONE; // --debug-flags A|B|C
     // ── Logging ────────────────────────────────────────────────────────────────
     std::string log_level;    // --log-level trace|debug|info|warn|error|fatal|off
@@ -107,6 +109,8 @@ inline AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--note-scale-x"  && i+1 < argc) args.note_scale_x  = std::atof(argv[++i]);
         else if (a == "--note-scale-y"  && i+1 < argc) args.note_scale_y  = std::atof(argv[++i]);
         else if (a == "--note-alpha"    && i+1 < argc) args.note_alpha     = std::atof(argv[++i]);
+        else if (a == "--font-size"     && i+1 < argc) args.font_size      = std::atof(argv[++i]);
+        else if (a == "--overlay-transparent")         args.overlay_transparent = true;
         else if (a.rfind("--debug-flags=", 0) == 0 || a.rfind("--debug_flags=", 0) == 0) {
             std::string err;
             auto eq = a.find('=');
@@ -211,6 +215,8 @@ inline void print_usage(const char* prog) {
         "  --note-scale-x <mul>      Note width scale (default 2.5)\n"
         "  --note-scale-y <mul>      Note height scale (default 1.0)\n"
         "  --note-alpha <0-1>        Global note opacity (default 1.0)\n"
+        "  --font-size <mul>         HUD/debug text scale multiplier (default 1.0)\n"
+        "  --overlay-transparent     Use lighter translucent HUD/debug panels\n"
         "  --debug-flags <flags>     Pipe/comma-separated debug overlays, e.g.\n"
         "                            FRAME_TIME|AUDIO_INFO|JUDGE_LINE_NUMBER\n"
         "\n"

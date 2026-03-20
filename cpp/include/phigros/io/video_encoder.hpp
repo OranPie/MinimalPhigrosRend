@@ -21,6 +21,7 @@
 #include <condition_variable>
 #include <algorithm>
 #include <cctype>
+#include <fstream>
 
 #ifdef _WIN32
 #define popen _popen
@@ -140,6 +141,70 @@ struct AudioMixer {
                           "\"" + output_wav + "\" 2>&1";
         int ret = std::system(cmd.c_str());
         return ret == 0;
+    }
+
+    static bool load_wav_s16(const std::string& path, std::vector<int16_t>& pcm_out) {
+        ma_decoder_config cfg = ma_decoder_config_init(ma_format_s16, 2, 44100);
+        ma_decoder dec;
+        if (ma_decoder_init_file(path.c_str(), &cfg, &dec) != MA_SUCCESS) return false;
+        ma_uint64 length_frames = 0;
+        if (ma_data_source_get_length_in_pcm_frames(&dec, &length_frames) != MA_SUCCESS) {
+            ma_decoder_uninit(&dec);
+            return false;
+        }
+        pcm_out.resize(static_cast<size_t>(length_frames) * 2);
+        ma_uint64 frames_read = 0;
+        bool ok = ma_decoder_read_pcm_frames(&dec, pcm_out.data(), length_frames, &frames_read) == MA_SUCCESS;
+        pcm_out.resize(static_cast<size_t>(frames_read) * 2);
+        ma_decoder_uninit(&dec);
+        return ok;
+    }
+
+    static bool decode_ogg_memory_s16(const std::vector<uint8_t>& data, std::vector<int16_t>& pcm_out) {
+        if (data.empty()) return false;
+        ma_decoder_config cfg = ma_decoder_config_init(ma_format_s16, 2, 44100);
+        ma_decoder dec;
+        if (ma_decoder_init_memory(data.data(), data.size(), &cfg, &dec) != MA_SUCCESS) return false;
+        ma_uint64 length_frames = 0;
+        if (ma_data_source_get_length_in_pcm_frames(&dec, &length_frames) != MA_SUCCESS) {
+            ma_decoder_uninit(&dec);
+            return false;
+        }
+        pcm_out.resize(static_cast<size_t>(length_frames) * 2);
+        ma_uint64 frames_read = 0;
+        bool ok = ma_decoder_read_pcm_frames(&dec, pcm_out.data(), length_frames, &frames_read) == MA_SUCCESS;
+        pcm_out.resize(static_cast<size_t>(frames_read) * 2);
+        ma_decoder_uninit(&dec);
+        return ok;
+    }
+
+    static bool write_wav_s16(const std::string& path, const std::vector<int16_t>& pcm) {
+        std::ofstream f(path, std::ios::binary);
+        if (!f.is_open()) return false;
+        const uint32_t data_bytes = static_cast<uint32_t>(pcm.size() * sizeof(int16_t));
+        const uint32_t riff_size = 36u + data_bytes;
+        const uint16_t audio_format = 1;
+        const uint16_t channels = 2;
+        const uint32_t sample_rate = 44100;
+        const uint16_t bits_per_sample = 16;
+        const uint16_t block_align = channels * bits_per_sample / 8;
+        const uint32_t byte_rate = sample_rate * block_align;
+        f.write("RIFF", 4);
+        f.write(reinterpret_cast<const char*>(&riff_size), 4);
+        f.write("WAVE", 4);
+        f.write("fmt ", 4);
+        const uint32_t fmt_size = 16;
+        f.write(reinterpret_cast<const char*>(&fmt_size), 4);
+        f.write(reinterpret_cast<const char*>(&audio_format), 2);
+        f.write(reinterpret_cast<const char*>(&channels), 2);
+        f.write(reinterpret_cast<const char*>(&sample_rate), 4);
+        f.write(reinterpret_cast<const char*>(&byte_rate), 4);
+        f.write(reinterpret_cast<const char*>(&block_align), 2);
+        f.write(reinterpret_cast<const char*>(&bits_per_sample), 2);
+        f.write("data", 4);
+        f.write(reinterpret_cast<const char*>(&data_bytes), 4);
+        f.write(reinterpret_cast<const char*>(pcm.data()), static_cast<std::streamsize>(data_bytes));
+        return f.good();
     }
 
     // Mix hitsound into PCM buffer at specific time offset
@@ -403,6 +468,12 @@ struct RecordConfig {
     double end_time = 0.0;                // 0 = full chart
     std::string audio_path;               // BGM for muxing
     bool no_hitsound = false;
+    std::vector<uint8_t> hitsound_ogg[5];
+};
+
+struct HitsoundEvent {
+    int kind = 0;
+    double time_sec = 0.0;
 };
 
 class RecordingSession {
@@ -591,9 +662,20 @@ public:
         // Audio mux step
         if (!cfg_.audio_path.empty() && !video_tmp_.empty()) {
             PHLOG_INFO(Record, "Muxing audio…");
-            bool ok = VideoEncoder::mux_audio(video_tmp_, cfg_.audio_path, cfg_.output);
+            std::string mux_audio_path = cfg_.audio_path;
+            std::string mixed_audio_tmp;
+            if (!cfg_.no_hitsound && !hitsound_events_.empty()) {
+                mixed_audio_tmp = cfg_.output + ".audio_tmp.wav";
+                if (build_mixed_audio_track(mixed_audio_tmp)) {
+                    mux_audio_path = mixed_audio_tmp;
+                } else {
+                    PHLOG_WARN(Record, "Failed to build mixed hitsound track; muxing raw BGM only");
+                }
+            }
+            bool ok = VideoEncoder::mux_audio(video_tmp_, mux_audio_path, cfg_.output);
             // Clean up temp video
             std::filesystem::remove(video_tmp_);
+            if (!mixed_audio_tmp.empty()) std::filesystem::remove(mixed_audio_tmp);
             if (!ok) {
                 PHLOG_ERROR(Record, "Audio mux failed");
                 return false;
@@ -608,6 +690,10 @@ public:
 
     bool is_active() const { return started_; }
     RecordStats stats_snapshot() const { return encoder_.stats_snapshot(); }
+    void record_hitsound(int kind, double time_sec) {
+        if (cfg_.no_hitsound || kind < 1 || kind > 4) return;
+        hitsound_events_.push_back({kind, time_sec});
+    }
     void log_progress(double chart_time, double chart_end) const {
         auto s = encoder_.stats_snapshot();
         double pct = (chart_end > 0) ? (chart_time / chart_end * 100.0) : 0.0;
@@ -634,6 +720,31 @@ public:
     }
 
 private:
+    bool build_mixed_audio_track(const std::string& output_wav) {
+        const std::string bgm_tmp = output_wav + ".bgm.wav";
+        if (!AudioMixer::extract_audio_wav(cfg_.audio_path, bgm_tmp)) return false;
+        std::vector<int16_t> mixed_pcm;
+        if (!AudioMixer::load_wav_s16(bgm_tmp, mixed_pcm)) {
+            std::filesystem::remove(bgm_tmp);
+            return false;
+        }
+        std::filesystem::remove(bgm_tmp);
+
+        std::vector<int16_t> hitsound_pcm[5];
+        for (int k = 1; k <= 4; ++k) {
+            if (!cfg_.hitsound_ogg[k].empty())
+                AudioMixer::decode_ogg_memory_s16(cfg_.hitsound_ogg[k], hitsound_pcm[k]);
+        }
+
+        for (const auto& ev : hitsound_events_) {
+            int kind = ev.kind;
+            if (kind == 3 && hitsound_pcm[3].empty()) kind = 1;
+            if (kind < 1 || kind > 4 || hitsound_pcm[kind].empty()) continue;
+            AudioMixer::mix_hitsound(mixed_pcm, hitsound_pcm[kind], ev.time_sec, 0.65f);
+        }
+        return AudioMixer::write_wav_s16(output_wav, mixed_pcm);
+    }
+
     void worker_main() {
         for (;;) {
             std::vector<uint8_t> frame;
@@ -677,6 +788,7 @@ private:
     bool started_ = false;
     int capture_w_ = 0;
     int capture_h_ = 0;
+    std::vector<HitsoundEvent> hitsound_events_;
 
     mutable std::mutex queue_mu_;
     std::condition_variable queue_cv_not_empty_;

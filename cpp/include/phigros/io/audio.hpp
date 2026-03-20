@@ -3,6 +3,8 @@
 #include <string>
 #include <vector>
 #include <cstdio>
+#include <mutex>
+#include <algorithm>
 
 // Forward-declare miniaudio types (defined in audio_impl.cpp)
 #include "miniaudio.h"
@@ -74,9 +76,14 @@ struct HitsoundPool {
 struct AudioSystem {
     ma_engine engine{};
     ma_sound  bgm{};
+    ma_decoder analysis_decoder{};
     bool engine_ok  = false;
     bool bgm_loaded = false;
+    bool analysis_loaded = false;
     double offset_sec = 0.0;
+    ma_uint32 analysis_sample_rate = 44100;
+    ma_uint32 analysis_channels = 2;
+    mutable std::mutex analysis_mu;
 
     // Hitsound pools indexed by note kind (1=tap, 2=drag, 3=hold, 4=flick).
     // Index 0 unused; holds fall back to tap sound if no dedicated pool loaded.
@@ -103,6 +110,20 @@ struct AudioSystem {
         if (ma_sound_init_from_file(&engine, path.c_str(), 0, nullptr, nullptr, &bgm) != MA_SUCCESS) {
             PHLOG_ERROR(Audio, "Failed to load BGM: " << path);
             return false;
+        }
+        ma_decoder_config analysis_cfg = ma_decoder_config_init(ma_format_f32, 2, 44100);
+        if (ma_decoder_init_file(path.c_str(), &analysis_cfg, &analysis_decoder) == MA_SUCCESS) {
+            ma_format fmt = ma_format_unknown;
+            ma_uint32 channel_count = 0;
+            ma_uint32 sample_rate = 0;
+            if (ma_data_source_get_data_format(&analysis_decoder, &fmt, &channel_count,
+                                               &sample_rate, nullptr, 0) == MA_SUCCESS) {
+                analysis_channels = std::max<ma_uint32>(1, channel_count);
+                analysis_sample_rate = std::max<ma_uint32>(1, sample_rate);
+            }
+            analysis_loaded = true;
+        } else {
+            PHLOG_WARN(Audio, "Failed to init analysis decoder for PCM taps: " << path);
         }
         bgm_loaded = true;
         PHLOG_INFO(Audio, "BGM loaded: " << path << " offset=" << offset << "s");
@@ -180,10 +201,45 @@ struct AudioSystem {
         return ma_sound_at_end(const_cast<ma_sound*>(&bgm));
     }
 
+    bool has_pcm_tap() const {
+        return analysis_loaded;
+    }
+
+    std::vector<float> capture_recent_pcm(size_t sample_count) const {
+        std::vector<float> mono(sample_count, 0.0f);
+        if (!analysis_loaded || sample_count == 0) return mono;
+
+        std::lock_guard<std::mutex> lk(analysis_mu);
+        const double t = std::max(0.0, get_playback_time());
+        const ma_uint64 center_frame = static_cast<ma_uint64>(t * static_cast<double>(analysis_sample_rate));
+        const ma_uint64 frame_count = static_cast<ma_uint64>(sample_count);
+        const ma_uint64 start_frame = (center_frame > frame_count) ? (center_frame - frame_count) : 0;
+        if (ma_decoder_seek_to_pcm_frame(const_cast<ma_decoder*>(&analysis_decoder), start_frame) != MA_SUCCESS)
+            return mono;
+
+        std::vector<float> interleaved(sample_count * analysis_channels, 0.0f);
+        ma_uint64 frames_read = 0;
+        if (ma_decoder_read_pcm_frames(const_cast<ma_decoder*>(&analysis_decoder), interleaved.data(),
+                                       frame_count, &frames_read) != MA_SUCCESS)
+            return mono;
+
+        for (size_t i = 0; i < static_cast<size_t>(frames_read); ++i) {
+            float acc = 0.0f;
+            for (ma_uint32 ch = 0; ch < analysis_channels; ++ch)
+                acc += interleaved[i * analysis_channels + ch];
+            mono[i] = acc / static_cast<float>(analysis_channels);
+        }
+        return mono;
+    }
+
     void destroy() {
         PHLOG_DEBUG(Audio, "AudioSystem destroy: bgm_loaded=" << bgm_loaded
             << " engine_ok=" << engine_ok);
         if (bgm_loaded) { ma_sound_uninit(&bgm); bgm_loaded = false; }
+        if (analysis_loaded) {
+            ma_decoder_uninit(&analysis_decoder);
+            analysis_loaded = false;
+        }
         for (int k = 1; k <= 4; ++k) hitsounds[k].destroy();
         if (engine_ok) { ma_engine_uninit(&engine); engine_ok = false; }
     }

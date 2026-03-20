@@ -22,6 +22,7 @@ struct FontAtlas {
     stbtt_bakedchar cdata[128]; // ASCII only
     int atlas_w = 512, atlas_h = 512;
     float font_size = 32.0f;
+    float top_align_offset = 0.0f;
     bool valid = false;
 
     bool load(SDL_Renderer* ren, const std::string& font_path, float size) {
@@ -43,6 +44,16 @@ struct FontAtlas {
         int ret = stbtt_BakeFontBitmap(font_data.data(), 0, size,
             atlas_pixels.data(), atlas_w, atlas_h, 32, 96, cdata);
         if (ret <= 0) return false;
+
+        float min_yoff = 0.0f;
+        bool first = true;
+        for (int i = 0; i < 96; ++i) {
+            if (first || cdata[i].yoff < min_yoff) {
+                min_yoff = cdata[i].yoff;
+                first = false;
+            }
+        }
+        top_align_offset = std::max(0.0f, -min_yoff);
 
         // Convert grayscale to RGBA
         std::vector<uint8_t> rgba(atlas_w * atlas_h * 4);
@@ -66,12 +77,17 @@ struct HudRenderer {
 
     bool has_font = false;
     int screen_w = 0, screen_h = 0;
+    double font_scale = 1.0;
+    bool overlay_transparent = false;
 
-    bool init(SDL_Renderer* ren, const std::string& font_path, int w, int h) {
+    bool init(SDL_Renderer* ren, const std::string& font_path, int w, int h,
+              double font_scale_mul = 1.0, bool overlay_transparent_panels = false) {
         screen_w = w; screen_h = h;
+        font_scale = std::max(0.5, std::min(3.0, font_scale_mul));
+        overlay_transparent = overlay_transparent_panels;
         if (!font_path.empty()) {
-            has_font = font_large.load(ren, font_path, 36.0f);
-            if (has_font) font_small.load(ren, font_path, 20.0f);
+            has_font = font_large.load(ren, font_path, static_cast<float>(36.0 * font_scale));
+            if (has_font) font_small.load(ren, font_path, static_cast<float>(20.0 * font_scale));
         }
         return true;
     }
@@ -102,7 +118,7 @@ struct HudRenderer {
             src.h = bc.y1 - bc.y0;
 
             double dx = xpos + bc.xoff;
-            double dy = ypos + bc.yoff;
+            double dy = ypos + font.top_align_offset + bc.yoff;
             double dw = src.w;
             double dh = src.h;
 
@@ -207,9 +223,12 @@ struct HudRenderer {
 
     void draw(const SpriteBatch& batch, const hud::HudState& hud, double fps = 0) const {
         int W = screen_w, H = screen_h;
+        const double panel_alpha = overlay_transparent ? 88.0 : 132.0;
+        const double panel_pad = 10.0 * font_scale;
+        const double panel_gap = 8.0 * font_scale;
+        const double bar_h = std::max(4.0, 4.0 * font_scale);
 
         // Progress bar at top
-        double bar_h = 4.0;
         batch.draw_rect(0, 0, W, bar_h, 40, 40, 40, 180);
         batch.draw_rect(0, 0, W * hud.progress, bar_h, 230, 230, 230, 220);
 
@@ -221,15 +240,17 @@ struct HudRenderer {
         // Score (top right)
         {
             double tw = text_width(font_large, hud.score_text);
+            double acc_tw = text_width(font_small, hud.acc_text);
+            double px = W - std::max(tw, acc_tw) - panel_pad * 2.0 - 16.0;
+            double py = bar_h + 8.0 * font_scale;
+            double panel_h = text_line_height(font_large) + text_line_height(font_small) + panel_pad * 2.0;
+            batch.draw_rect(px, py, std::max(tw, acc_tw) + panel_pad * 2.0, panel_h,
+                            0, 0, 0, static_cast<uint8_t>(panel_alpha));
             draw_text(batch, font_large, hud.score_text,
-                      W - tw - 16, bar_h + 8, 255, 255, 255, 230);
-        }
-
-        // Accuracy (below score)
-        {
-            double tw = text_width(font_small, hud.acc_text);
+                      px + panel_pad, py + panel_pad * 0.6, 255, 255, 255, 230);
             draw_text(batch, font_small, hud.acc_text,
-                      W - tw - 16, bar_h + 48, 200, 200, 200, 200);
+                      px + panel_pad, py + panel_pad * 0.6 + text_line_height(font_large),
+                      200, 200, 200, 200);
         }
 
         // Compact stats panel (top-left): Score / Acc / Combo
@@ -241,10 +262,17 @@ struct HudRenderer {
             std::string s_combo = combo_line;
 
             const double x = 16.0;
-            const double y0 = bar_h + 10.0;
+            const double y0 = bar_h + 8.0 * font_scale;
+            double tw = std::max({text_width(font_small, s_score),
+                                  text_width(font_small, s_acc),
+                                  text_width(font_small, s_combo)});
+            double row_h = text_line_height(font_small) + 2.0 * font_scale;
+            batch.draw_rect(x - panel_pad, y0 - panel_pad * 0.45,
+                            tw + panel_pad * 2.0, row_h * 3.0 + panel_pad,
+                            0, 0, 0, static_cast<uint8_t>(panel_alpha));
             draw_text(batch, font_small, s_score, x, y0 + 0.0, 235, 235, 235, 210);
-            draw_text(batch, font_small, s_acc,   x, y0 + 22.0, 210, 210, 210, 200);
-            draw_text(batch, font_small, s_combo, x, y0 + 44.0, 210, 210, 210, 200);
+            draw_text(batch, font_small, s_acc,   x, y0 + row_h, 210, 210, 210, 200);
+            draw_text(batch, font_small, s_combo, x, y0 + row_h * 2.0, 210, 210, 210, 200);
         }
 
         // Combo (top center)
@@ -253,20 +281,26 @@ struct HudRenderer {
             std::snprintf(combo_str, sizeof(combo_str), "%d", hud.combo);
             std::string combo_text = combo_str;
             double tw = text_width(font_large, combo_text);
-            draw_text(batch, font_large, combo_text,
-                      (W - tw) * 0.5, bar_h + 8, 255, 255, 255, 240);
-
             std::string label = "COMBO";
             double lw = text_width(font_small, label);
+            double panel_w = std::max(tw, lw) + panel_pad * 2.0;
+            double px = (W - panel_w) * 0.5;
+            double py = bar_h + 8.0 * font_scale;
+            double panel_h = text_line_height(font_large) + text_line_height(font_small) + panel_pad * 1.8;
+            batch.draw_rect(px, py, panel_w, panel_h, 0, 0, 0, static_cast<uint8_t>(panel_alpha));
+            draw_text(batch, font_large, combo_text,
+                      px + (panel_w - tw) * 0.5, py + panel_pad * 0.4, 255, 255, 255, 240);
             draw_text(batch, font_small, label,
-                      (W - lw) * 0.5, bar_h + 46, 200, 200, 200, 180);
+                      px + (panel_w - lw) * 0.5,
+                      py + panel_pad * 0.4 + text_line_height(font_large) + panel_gap * 0.2,
+                      200, 200, 200, 180);
         }
 
         // FPS (bottom left, debug)
         if (fps > 0) {
             char fps_str[32];
             std::snprintf(fps_str, sizeof(fps_str), "%.0f FPS", fps);
-            draw_text(batch, font_small, fps_str, 8, H - 28, 150, 150, 150, 160);
+            draw_text(batch, font_small, fps_str, 8, H - (28.0 * font_scale), 150, 150, 150, 160);
         }
     }
 

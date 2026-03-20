@@ -57,6 +57,7 @@ struct GameLoop {
     const double                       progress_end;
     const bool                         is_play_mode;
     const double                       audio_offset_sec;  // cfg.audio_offset_ms/1000
+    const bool                         mute_live_audio;
 
     // ── Simulation state ─────────────────────────────────────────────────────
     std::vector<NoteState>             states;
@@ -197,6 +198,7 @@ struct GameLoop {
         , progress_end((args_.duration > 0.0) ? std::min(chart_end_, args_.duration) : chart_end_)
         , is_play_mode(args_.play_mode || !args_.play_replay_path.empty())
         , audio_offset_sec(cfg_.audio_offset_ms / 1000.0)
+        , mute_live_audio(!args_.record_output.empty())
     {
         // Init note states
         states.resize(chart.notes.size());
@@ -281,6 +283,8 @@ struct GameLoop {
             if (rc.audio_path.empty())
                 rc.audio_path = find_chart_audio(
                     std::filesystem::path(args.chart_path).parent_path().string());
+            for (int k = 1; k <= 4; ++k)
+                rc.hitsound_ogg[k] = ctx.respack.hitsound_ogg[k];
             PHLOG_DEBUG(Record, "Record config: output=" << rc.output
                 << " fps=" << rc.fps << " preset=" << rc.preset_name
                 << " queue_depth=" << rc.queue_depth
@@ -349,7 +353,7 @@ struct GameLoop {
         }
 
         // === 3. ADVANCE TIME ===
-        if (ctx.has_audio && ctx.started_audio) {
+        if (!mute_live_audio && ctx.has_audio && ctx.started_audio) {
             t = ctx.audio.get_playback_time() + audio_offset_sec;
         } else if (args.headless) {
             t += sim_dt;
@@ -357,7 +361,7 @@ struct GameLoop {
             t += dt_frame;
         }
 
-        if (ctx.has_audio && !ctx.started_audio && t >= 0.0) {
+        if (!mute_live_audio && ctx.has_audio && !ctx.started_audio && t >= 0.0) {
             PHLOG_DEBUG(Audio, "Audio start threshold reached at t=" << t);
             ctx.audio.play();
             ctx.started_audio = true;
@@ -376,7 +380,7 @@ struct GameLoop {
             if (!is_play_mode) return false;
         }
         if (result_shown && Window::get_time_sec() - result_t > 5.0) return false;
-        if (ctx.has_audio && ctx.started_audio && ctx.audio.is_at_end() && t > 1.0) {
+        if (!mute_live_audio && ctx.has_audio && ctx.started_audio && ctx.audio.is_at_end() && t > 1.0) {
             PHLOG_INFO(Engine, "Stopping because audio reached end at t=" << t);
             if (is_play_mode && !result_shown) mark_result();
             if (!is_play_mode) return false;
@@ -390,7 +394,8 @@ struct GameLoop {
                         [&](int nidx, float ft, const std::string& g) {
                             if (nidx < 0 || nidx >= static_cast<int>(chart.notes.size())) return;
                             const auto& note = chart.notes[nidx];
-                            ctx.audio.play_hitsound(note.kind);
+                            if (!mute_live_audio) ctx.audio.play_hitsound(note.kind);
+                            if (is_recording) recorder.record_hitsound(note.kind, ft);
                             math::RGB col = resolve_hitfx_color(note, g);
                             for (const auto& ns : render::build_frame(
                                      ft, chart, states, judge, cfg).notes) {
@@ -407,8 +412,11 @@ struct GameLoop {
                     manual_judge.on_judgment = [&](int nidx, float ft, const std::string& g) {
                         if (!args.save_replay_path.empty())
                             replay_writer.record(ft, (uint32_t)nidx, g);
-                        if (nidx >= 0 && nidx < static_cast<int>(chart.notes.size()))
-                            ctx.audio.play_hitsound(chart.notes[nidx].kind);
+                        if (nidx >= 0 && nidx < static_cast<int>(chart.notes.size())) {
+                            int kind = chart.notes[nidx].kind;
+                            if (!mute_live_audio) ctx.audio.play_hitsound(kind);
+                            if (is_recording) recorder.record_hitsound(kind, ft);
+                        }
                     };
                     auto judge_input = ctx.input.to_judge_input();
                     manual_judge.process_frame(judge_input, mj_frame,
@@ -428,7 +436,8 @@ struct GameLoop {
                 for (const auto& ev : s_hit_events) {
                     if (ev.note_idx < 0 || ev.note_idx >= static_cast<int>(chart.notes.size())) continue;
                     const auto& n = chart.notes[ev.note_idx];
-                    ctx.audio.play_hitsound(n.kind);
+                    if (!mute_live_audio) ctx.audio.play_hitsound(n.kind);
+                    if (is_recording) recorder.record_hitsound(n.kind, ev.judge_t);
                     if (cfg.show_hitfx) {
                         auto col = resolve_hitfx_color(n, ev.grade);
                         effects.add_hitfx(ev.x, ev.y, ev.judge_t, col);
@@ -638,12 +647,13 @@ private:
         const double base_note_h = 0.018 * H * cfg.note_scale_y;
 
         // Panel-to-text inset (consistent across all panels)
-        constexpr double kPanelPad = 6.0;
+        const double kPanelPad = 6.0 * cfg.font_size;
+        const uint8_t kPanelAlpha = static_cast<uint8_t>(cfg.overlay_transparent ? 88 : 140);
         // Row height for stacked debug text (matches font_small size)
-        const double kRow = std::max(18.0, ctx.hud_ren.text_line_height(ctx.hud_ren.font_small));
+        const double kRow = std::max(18.0 * cfg.font_size, ctx.hud_ren.text_line_height(ctx.hud_ren.font_small));
         // Vertical position trackers — start below the HUD stats panel
-        double left_y  = std::max(88.0, H * 0.08);
-        double right_y = std::max(16.0, H * 0.015);
+        double left_y  = std::max(96.0 * cfg.font_size, H * 0.08);
+        double right_y = std::max(16.0 * cfg.font_size, H * 0.015);
 
         auto note_lookup = [&](int nid) -> const Note* {
             auto it = debug_note_by_id.find(nid);
@@ -651,7 +661,7 @@ private:
         };
 
         auto draw_panel = [&](double x, double y, double w, double h) {
-            ctx.batch.draw_rect(x, y, w, h, 0, 0, 0, 140);
+            ctx.batch.draw_rect(x, y, w, h, 0, 0, 0, kPanelAlpha);
         };
 
         auto draw_box_outline = [&](double x, double y, double w, double h,
@@ -759,21 +769,73 @@ private:
         }
 
         if (has_debug(DebugFlag::AUDIO_WAVEFORM)) {
-            const char* msg = "audio waveform unavailable: PCM taps not exposed";
-            double tw = ctx.hud_ren.text_width(ctx.hud_ren.font_small, msg);
-            double pw = tw + kPanelPad * 2.0 + 4.0;
-            draw_panel(10, left_y - 4, pw, kRow + 8.0);
-            debug_text(10 + kPanelPad, left_y, msg, 255, 170, 170, 225);
-            left_y += kRow + 10.0;
+            const double gw = 220.0 * cfg.font_size;
+            const double gh = 80.0 * cfg.font_size;
+            const double gx = 10.0;
+            const double gy = left_y - 4.0;
+            draw_panel(gx, gy, gw, gh);
+            debug_text(gx + kPanelPad, gy + 4.0, "audio waveform", 180, 235, 255, 225);
+            if (ctx.audio.has_pcm_tap()) {
+                auto pcm = ctx.audio.capture_recent_pcm(160);
+                double mid_y = gy + gh * 0.58;
+                double amp = gh * 0.28;
+                double px = gx + 8.0;
+                double py = mid_y;
+                double dx = (gw - 16.0) / std::max<size_t>(1, pcm.size() - 1);
+                bool first = true;
+                for (size_t i = 0; i < pcm.size(); ++i) {
+                    double x = gx + 8.0 + dx * static_cast<double>(i);
+                    double y = mid_y - amp * std::clamp<double>(pcm[i], -1.0, 1.0);
+                    if (!first)
+                        ctx.batch.draw_line(px, py, x, y, 1.0, 120, 255, 200, 220);
+                    first = false;
+                    px = x;
+                    py = y;
+                }
+                ctx.batch.draw_line(gx + 8.0, mid_y, gx + gw - 8.0, mid_y, 1.0, 100, 120, 130, 120);
+            } else {
+                debug_text(gx + kPanelPad, gy + kRow + 8.0, "PCM tap unavailable", 255, 170, 170, 225);
+            }
+            left_y += gh + 8.0;
         }
 
         if (has_debug(DebugFlag::AUDIO_SPECTRUM)) {
-            const char* msg = "audio spectrum unavailable: PCM taps not exposed";
-            double tw = ctx.hud_ren.text_width(ctx.hud_ren.font_small, msg);
-            double pw = tw + kPanelPad * 2.0 + 4.0;
-            draw_panel(10, left_y - 4, pw, kRow + 8.0);
-            debug_text(10 + kPanelPad, left_y, msg, 255, 170, 170, 225);
-            left_y += kRow + 10.0;
+            const double gw = 220.0 * cfg.font_size;
+            const double gh = 88.0 * cfg.font_size;
+            const double gx = 10.0;
+            const double gy = left_y - 4.0;
+            draw_panel(gx, gy, gw, gh);
+            debug_text(gx + kPanelPad, gy + 4.0, "audio spectrum", 180, 235, 255, 225);
+            if (ctx.audio.has_pcm_tap()) {
+                auto pcm = ctx.audio.capture_recent_pcm(256);
+                constexpr int BINS = 24;
+                double mags[BINS] = {};
+                for (int k = 0; k < BINS; ++k) {
+                    double re = 0.0, im = 0.0;
+                    for (size_t n = 0; n < pcm.size(); ++n) {
+                        double phase = 2.0 * M_PI * static_cast<double>(k + 1) * static_cast<double>(n)
+                                     / static_cast<double>(pcm.size());
+                        re += pcm[n] * std::cos(phase);
+                        im -= pcm[n] * std::sin(phase);
+                    }
+                    mags[k] = std::sqrt(re * re + im * im) / std::max<size_t>(1, pcm.size());
+                }
+                double max_mag = 1e-6;
+                for (double m : mags) max_mag = std::max(max_mag, m);
+                double bar_w = (gw - 16.0) / BINS;
+                for (int i = 0; i < BINS; ++i) {
+                    double norm = std::clamp(mags[i] / max_mag, 0.0, 1.0);
+                    double bh = (gh - 24.0) * norm;
+                    double bx = gx + 8.0 + bar_w * i;
+                    double by = gy + gh - 8.0 - bh;
+                    uint8_t r = static_cast<uint8_t>(120 + 80 * norm);
+                    uint8_t g = static_cast<uint8_t>(180 + 75 * norm);
+                    ctx.batch.draw_rect(bx, by, std::max(1.0, bar_w - 1.0), bh, r, g, 255, 210);
+                }
+            } else {
+                debug_text(gx + kPanelPad, gy + kRow + 8.0, "PCM tap unavailable", 255, 170, 170, 225);
+            }
+            left_y += gh + 8.0;
         }
 
         if (has_debug(DebugFlag::FRAME_TIME_GRAPH) && !debug_frame_ms_hist.empty()) {
