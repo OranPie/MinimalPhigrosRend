@@ -86,6 +86,7 @@ struct GameLoop {
     bool                    is_recording = false;
     std::vector<uint8_t>    readback_rgba;
     int                     record_log_frames = 0;
+    bool                    record_profile_reported = false;
 
     // ── Screenshot ───────────────────────────────────────────────────────────
     int screenshot_counter = 0;
@@ -181,6 +182,140 @@ struct GameLoop {
             return true;
         }
     } prof;
+
+    struct RecordCliProfiler {
+        static constexpr int PHASES = 9;
+        static constexpr int REPORT_INTERVAL = 120;
+        enum Phase {
+            SimUpdate = 0,
+            BuildFrame = 1,
+            RenderScene = 2,
+            HudPresent = 3,
+            ReadbackAPI = 4,
+            ReadbackConvert = 5,
+            ReadbackCopy = 6,
+            RecorderQueue = 7,
+            FrameTotal = 8,
+        };
+
+        uint64_t freq = 1;
+        int frames = 0;
+        int reports = 0;
+        double sum_ms[PHASES] = {};
+        double max_ms[PHASES] = {};
+
+        static const char* phase_name(int i) {
+            static const char* names[PHASES] = {
+                "sim_update",
+                "build_frame",
+                "render_scene",
+                "hud_present",
+                "readback_api",
+                "readback_convert",
+                "readback_copy",
+                "record_queue",
+                "frame_total"
+            };
+            return names[i];
+        }
+
+        void init() { freq = SDL_GetPerformanceFrequency(); }
+        uint64_t now() const { return SDL_GetPerformanceCounter(); }
+        double to_ms(uint64_t ticks) const {
+            return static_cast<double>(ticks) * 1000.0 / static_cast<double>(freq);
+        }
+        void record(int phase, uint64_t start, uint64_t end) {
+            const double ms = to_ms(end - start);
+            record_ms(phase, ms);
+        }
+        void record_ms(int phase, double ms) {
+            sum_ms[phase] += ms;
+            max_ms[phase] = std::max(max_ms[phase], ms);
+        }
+        void finish_frame() { ++frames; }
+        void maybe_report(const io::RecordingSession& recorder) {
+            if (frames == 0 || frames % REPORT_INTERVAL != 0) return;
+            ++reports;
+            const int window = REPORT_INTERVAL;
+            double worst_mean = -1.0;
+            int worst_phase = 0;
+            std::ostringstream oss;
+            oss << "[RecordProfile] window=" << reports
+                << " frames=" << window;
+            for (int p = 0; p < PHASES; ++p) {
+                const double mean = sum_ms[p] / window;
+                if (p != FrameTotal && mean > worst_mean) {
+                    worst_mean = mean;
+                    worst_phase = p;
+                }
+                oss << " | " << phase_name(p)
+                    << " avg=" << std::fixed << std::setprecision(2) << mean
+                    << "ms max=" << max_ms[p] << "ms";
+            }
+            auto enc = recorder.stats_snapshot();
+            auto rec = recorder.profiler_stats_snapshot();
+            oss << " | bottleneck=" << phase_name(worst_phase)
+                << " | encode_write avg=" << enc.avg_write_ms()
+                << "ms max=" << enc.max_write_ms
+                << "ms"
+                << " | queue_wait avg=" << rec.avg_enqueue_wait_ms()
+                << "ms";
+            PHLOG_INFO(Record, oss.str());
+            reset_window();
+        }
+        void final_report(const io::RecordingSession& recorder) {
+            if (frames == 0) return;
+            merge_window_into_totals();
+            double worst_mean = -1.0;
+            int worst_phase = 0;
+            std::ostringstream oss;
+            oss << "[RecordProfile] summary frames=" << frames;
+            for (int p = 0; p < PHASES; ++p) {
+                const double mean = total_sum_ms[p] / frames;
+                if (p != FrameTotal && mean > worst_mean) {
+                    worst_mean = mean;
+                    worst_phase = p;
+                }
+                oss << " | " << phase_name(p)
+                    << " avg=" << std::fixed << std::setprecision(2) << mean
+                    << "ms max=" << total_max_ms[p] << "ms";
+            }
+            auto enc = recorder.stats_snapshot();
+            auto rec = recorder.profiler_stats_snapshot();
+            oss << " | bottleneck=" << phase_name(worst_phase)
+                << " | encode_write avg=" << enc.avg_write_ms()
+                << "ms max=" << enc.max_write_ms
+                << "ms slow=" << enc.slow_writes
+                << " | queue_wait avg=" << rec.avg_enqueue_wait_ms()
+                << "ms max=" << rec.enqueue_max_wait_ms
+                << "ms"
+                << " | queue_copy avg=" << rec.avg_enqueue_copy_ms()
+                << "ms max=" << rec.enqueue_max_copy_ms
+                << "ms"
+                << " | close=" << rec.finish_encoder_close_ms
+                << "ms"
+                << " | audio_mix=" << rec.finish_audio_mix_ms
+                << "ms"
+                << " | mux=" << rec.finish_mux_ms << "ms";
+            PHLOG_INFO(Record, oss.str());
+        }
+        void merge_window_into_totals() {
+            for (int p = 0; p < PHASES; ++p) {
+                total_sum_ms[p] += sum_ms[p];
+                total_max_ms[p] = std::max(total_max_ms[p], max_ms[p]);
+            }
+        }
+    private:
+        double total_sum_ms[PHASES] = {};
+        double total_max_ms[PHASES] = {};
+        void reset_window() {
+            merge_window_into_totals();
+            for (int p = 0; p < PHASES; ++p) {
+                sum_ms[p] = 0.0;
+                max_ms[p] = 0.0;
+            }
+        }
+    } record_prof;
 
     // ── Derived constants ────────────────────────────────────────────────────
     double sim_dt            = 1.0 / 240.0;
@@ -306,11 +441,15 @@ struct GameLoop {
             std::filesystem::create_directories(args.screenshot_dir);
 
         prof.init();
+        record_prof.init();
     }
 
     // ── run_frame() ──────────────────────────────────────────────────────────
     // Returns true to keep running, false to exit the loop.
     bool run_frame() {
+        uint64_t rp_frame_begin = 0;
+        if (args.record_profile && is_recording)
+            rp_frame_begin = record_prof.now();
         // === 1. TIMING + EVENTS (on render frames only in headless mode) ===
         if (!args.headless || headless_sub == 0) {
             double now = Window::get_time_sec();
@@ -391,6 +530,9 @@ struct GameLoop {
         }
 
         // === 5. ENGINE UPDATE ===
+        uint64_t rp_sim_begin = 0;
+        if (args.record_profile && is_recording)
+            rp_sim_begin = record_prof.now();
         if (is_play_mode) {
             if (!result_shown && t >= 0.0) {
                 if (replay_player.enabled()) {
@@ -467,6 +609,8 @@ struct GameLoop {
                                  ctx.respack.cfg.color_perfect);
             effects.update(t, t * 1000.0, ctx.respack.cfg.hitfx_duration);
         }
+        if (args.record_profile && is_recording)
+            record_prof.record(RecordCliProfiler::SimUpdate, rp_sim_begin, record_prof.now());
 
         // === 6. SKIP RENDER ON INTERMEDIATE SIM TICKS ===
         if (args.headless && ++headless_sub < sim_steps_per_render) return true;
@@ -476,11 +620,14 @@ struct GameLoop {
         uint64_t t0_build = prof.now();
         auto frame = render::build_frame(t, chart, states, judge, cfg);
         uint64_t t1_build = prof.now();
+        if (args.record_profile && is_recording)
+            record_prof.record(RecordCliProfiler::BuildFrame, t0_build, t1_build);
 
         // === 8. RENDER ===
         ctx.window.begin_frame();
 
         uint64_t t0_trail = prof.now();
+        uint64_t rp_render_begin = (args.record_profile && is_recording) ? record_prof.now() : 0;
         if (ctx.motion_blur.enabled()) {
             ctx.bg.draw(ctx.batch, cfg.bg_dim);
             ctx.motion_blur.begin_accumulate(ctx.window.ren);
@@ -525,7 +672,10 @@ struct GameLoop {
             prof.record(1, t0_scene, prof.now());
         }
         uint64_t t1_trail = prof.now();
+        if (args.record_profile && is_recording)
+            record_prof.record(RecordCliProfiler::RenderScene, rp_render_begin, record_prof.now());
 
+        uint64_t rp_hud_begin = (args.record_profile && is_recording) ? record_prof.now() : 0;
         ctx.hud_ren.draw(ctx.batch, frame.hud, fps_display);
         draw_debug_overlay(frame);
 
@@ -540,9 +690,12 @@ struct GameLoop {
         uint64_t t0_present = prof.now();
         ctx.window.end_frame();
         uint64_t t1_present = prof.now();
+        if (args.record_profile && is_recording)
+            record_prof.record(RecordCliProfiler::HudPresent, rp_hud_begin, record_prof.now());
 
         // === 9. VIDEO CAPTURE ===
         uint64_t t0_readback = prof.now();
+        uint64_t rp_capture_begin = (args.record_profile && is_recording) ? record_prof.now() : 0;
         if (is_recording) do_capture();
         uint64_t t1_readback = prof.now();
 
@@ -555,6 +708,24 @@ struct GameLoop {
         prof.record(3, t0_readback, t1_readback);
         prof.record(4, t0_present,  t1_present);
         prof.end_frame(args.profile);
+        if (args.record_profile && (is_recording || rp_capture_begin != 0)) {
+            if (last_capture_readback_api_ms_ > 0.0)
+                record_prof.record_ms(RecordCliProfiler::ReadbackAPI,
+                                      last_capture_readback_api_ms_);
+            if (last_capture_readback_convert_ms_ > 0.0)
+                record_prof.record_ms(RecordCliProfiler::ReadbackConvert,
+                                      last_capture_readback_convert_ms_);
+            if (last_capture_readback_copy_ms_ > 0.0)
+                record_prof.record_ms(RecordCliProfiler::ReadbackCopy,
+                                      last_capture_readback_copy_ms_);
+            if (last_capture_queue_ms_ > 0.0)
+                record_prof.record_ms(RecordCliProfiler::RecorderQueue,
+                                      last_capture_queue_ms_);
+            if (rp_frame_begin != 0)
+                record_prof.record(RecordCliProfiler::FrameTotal, rp_frame_begin, record_prof.now());
+            record_prof.finish_frame();
+            record_prof.maybe_report(recorder);
+        }
         remember_debug_frame(frame);
 
         return !ctx.window.quit_requested;
@@ -568,7 +739,7 @@ struct GameLoop {
     void finish() {
         if (is_recording) {
             PHLOG_DEBUG(Record, "Finishing recording…");
-            recorder.finish();
+            stop_recording_session();
         }
         if (!args.save_replay_path.empty() && !replay_writer.events.empty()) {
             uint32_t hash = io::chart_path_hash(args.chart_path);
@@ -1722,7 +1893,21 @@ private:
         return engine::SimMode::Aggressive;
     }
 
+    void stop_recording_session() {
+        const bool was_recording = is_recording;
+        if (recorder.is_active()) recorder.finish();
+        is_recording = false;
+        if (args.record_profile && was_recording && !record_profile_reported) {
+            record_prof.final_report(recorder);
+            record_profile_reported = true;
+        }
+    }
+
     void do_capture() {
+        last_capture_readback_api_ms_ = 0.0;
+        last_capture_readback_convert_ms_ = 0.0;
+        last_capture_readback_copy_ms_ = 0.0;
+        last_capture_queue_ms_ = 0.0;
         if (args.record_start > -0.5 && t < args.record_start) {
             PHLOG_TRACE(Record, "Capture waiting for start: t=" << t
                 << " start=" << args.record_start);
@@ -1731,16 +1916,28 @@ private:
         if (args.record_end > 0.0 && t > args.record_end) {
             PHLOG_INFO(Record, "Capture reached end: t=" << t
                 << " end=" << args.record_end);
-            recorder.finish();
-            is_recording = false;
+            stop_recording_session();
             return;
         }
-        ctx.window.read_pixels_rgba(readback_rgba.data());
+        sdl::ReadbackTiming readback_timing{};
+        if (!ctx.window.read_pixels_rgba(readback_rgba.data(),
+                                         args.record_profile ? &readback_timing : nullptr)) {
+            PHLOG_ERROR(Record, "Readback failed, stopping recorder");
+            stop_recording_session();
+            return;
+        }
+        uint64_t q0 = args.record_profile ? record_prof.now() : 0;
         if (!recorder.capture_rgba(readback_rgba.data(), W, H, t)) {
             PHLOG_ERROR(Record, "Capture failed, stopping recorder");
-            recorder.finish();
-            is_recording = false;
+            stop_recording_session();
             return;
+        }
+        uint64_t q1 = args.record_profile ? record_prof.now() : 0;
+        if (args.record_profile) {
+            last_capture_readback_api_ms_ = readback_timing.api_ms;
+            last_capture_readback_convert_ms_ = readback_timing.convert_ms;
+            last_capture_readback_copy_ms_ = readback_timing.copy_ms;
+            last_capture_queue_ms_ = record_prof.to_ms(q1 - q0);
         }
         if (++record_log_frames % static_cast<int>(args.record_fps) == 0)
             recorder.log_progress(t, progress_end);
@@ -1758,6 +1955,11 @@ private:
             screenshot_counter = expected + 1;
         }
     }
+
+    double last_capture_readback_api_ms_ = 0.0;
+    double last_capture_readback_convert_ms_ = 0.0;
+    double last_capture_readback_copy_ms_ = 0.0;
+    double last_capture_queue_ms_ = 0.0;
 };
 
 } // namespace phigros::app

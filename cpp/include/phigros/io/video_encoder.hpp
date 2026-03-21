@@ -108,6 +108,24 @@ struct RecordStats {
     }
 };
 
+struct RecordProfilerStats {
+    int capture_calls = 0;
+    double enqueue_wait_ms = 0.0;
+    double enqueue_copy_ms = 0.0;
+    double enqueue_max_wait_ms = 0.0;
+    double enqueue_max_copy_ms = 0.0;
+    double finish_mux_ms = 0.0;
+    double finish_audio_mix_ms = 0.0;
+    double finish_encoder_close_ms = 0.0;
+
+    double avg_enqueue_wait_ms() const {
+        return (capture_calls > 0) ? (enqueue_wait_ms / capture_calls) : 0.0;
+    }
+    double avg_enqueue_copy_ms() const {
+        return (capture_calls > 0) ? (enqueue_copy_ms / capture_calls) : 0.0;
+    }
+};
+
 // --- Frame Capture Buffer ---
 
 struct FrameBuffer {
@@ -506,6 +524,7 @@ public:
         first_capture_chart_time_ = 0.0;
         first_capture_chart_time_valid_ = false;
         hitsound_events_.clear();
+        profiler_stats_ = RecordProfilerStats{};
 
         capture_w_ = (rc.capture_width > 0) ? rc.capture_width : window_w;
         capture_h_ = (rc.capture_height > 0) ? rc.capture_height : window_h;
@@ -609,20 +628,33 @@ public:
         size_t len = static_cast<size_t>(w) * h * 4;
         if (!async_enabled_) {
             PHLOG_TRACE(Record, "capture_rgba sync write len=" << len);
+            ++profiler_stats_.capture_calls;
             return encoder_.write_frame_ptr(rgba, len);
         }
 
+        auto wait_begin = std::chrono::steady_clock::now();
         std::vector<uint8_t> frame(len);
-        std::memcpy(frame.data(), rgba, len);
         std::unique_lock<std::mutex> lock(queue_mu_);
         queue_cv_not_full_.wait(lock, [this]() {
             return queue_.size() < queue_capacity_ || stop_worker_ || worker_failed_;
         });
+        auto wait_end = std::chrono::steady_clock::now();
         if (stop_worker_ || worker_failed_) return false;
+        auto copy_begin = std::chrono::steady_clock::now();
+        std::memcpy(frame.data(), rgba, len);
+        auto copy_end = std::chrono::steady_clock::now();
         queue_.push_back(std::move(frame));
         if (queue_.size() > queue_peak_) queue_peak_ = queue_.size();
         lock.unlock();
         queue_cv_not_empty_.notify_one();
+
+        const double wait_ms = std::chrono::duration<double, std::milli>(wait_end - wait_begin).count();
+        const double copy_ms = std::chrono::duration<double, std::milli>(copy_end - copy_begin).count();
+        ++profiler_stats_.capture_calls;
+        profiler_stats_.enqueue_wait_ms += wait_ms;
+        profiler_stats_.enqueue_copy_ms += copy_ms;
+        profiler_stats_.enqueue_max_wait_ms = std::max(profiler_stats_.enqueue_max_wait_ms, wait_ms);
+        profiler_stats_.enqueue_max_copy_ms = std::max(profiler_stats_.enqueue_max_copy_ms, copy_ms);
         return true;
     }
 
@@ -646,7 +678,11 @@ public:
             async_enabled_ = false;
         }
 
+        auto close_begin = std::chrono::steady_clock::now();
         int ret = encoder_.close();
+        auto close_end = std::chrono::steady_clock::now();
+        profiler_stats_.finish_encoder_close_ms =
+            std::chrono::duration<double, std::milli>(close_end - close_begin).count();
         auto s = encoder_.stats_snapshot();
         double pipe_mb = s.bytes_written / (1024.0 * 1024.0);
         {
@@ -676,13 +712,24 @@ public:
             PHLOG_INFO(Record, "Muxing audio…");
             std::string mux_audio_path = cfg_.audio_path;
             std::string mixed_audio_tmp = cfg_.output + ".audio_tmp.wav";
+            auto audio_mix_begin = std::chrono::steady_clock::now();
             if (build_processed_audio_track(mixed_audio_tmp)) {
+                auto audio_mix_end = std::chrono::steady_clock::now();
+                profiler_stats_.finish_audio_mix_ms =
+                    std::chrono::duration<double, std::milli>(audio_mix_end - audio_mix_begin).count();
                 mux_audio_path = mixed_audio_tmp;
             } else {
+                auto audio_mix_end = std::chrono::steady_clock::now();
+                profiler_stats_.finish_audio_mix_ms =
+                    std::chrono::duration<double, std::milli>(audio_mix_end - audio_mix_begin).count();
                 PHLOG_WARN(Record, "Failed to build processed audio track; muxing raw BGM only");
                 mixed_audio_tmp.clear();
             }
+            auto mux_begin = std::chrono::steady_clock::now();
             bool ok = VideoEncoder::mux_audio(video_tmp_, mux_audio_path, cfg_.output);
+            auto mux_end = std::chrono::steady_clock::now();
+            profiler_stats_.finish_mux_ms =
+                std::chrono::duration<double, std::milli>(mux_end - mux_begin).count();
             // Clean up temp video
             std::filesystem::remove(video_tmp_);
             if (!mixed_audio_tmp.empty()) std::filesystem::remove(mixed_audio_tmp);
@@ -700,6 +747,7 @@ public:
 
     bool is_active() const { return started_; }
     RecordStats stats_snapshot() const { return encoder_.stats_snapshot(); }
+    RecordProfilerStats profiler_stats_snapshot() const { return profiler_stats_; }
     size_t queue_size_snapshot() const {
         std::lock_guard<std::mutex> lock(queue_mu_);
         return queue_.size();
@@ -837,6 +885,7 @@ private:
     bool worker_failed_ = false;
     double first_capture_chart_time_ = 0.0;
     bool first_capture_chart_time_valid_ = false;
+    RecordProfilerStats profiler_stats_;
 };
 
 } // namespace phigros::io

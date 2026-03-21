@@ -2,6 +2,7 @@
 // SDL compatibility layer: enables building with either SDL2 or SDL3.
 // All rendering code should include this instead of SDL headers directly.
 #include <cstring>  // std::memcpy used in read_pixels_rgba
+#include <algorithm>
 
 #if defined(PHIGROS_SDL3)
 #include <SDL3/SDL.h>
@@ -25,6 +26,17 @@
 #define PHIGROS_KEY_SCANCODE(e)  ((e).key.scancode)
 
 namespace phigros::app::sdl {
+
+struct ReadbackTiming {
+    double api_ms = 0.0;      // SDL_RenderReadPixels
+    double convert_ms = 0.0;  // pixel format conversion
+    double copy_ms = 0.0;     // row copy / resample copy
+    double total_ms = 0.0;    // full readback path
+    int src_w = 0;
+    int src_h = 0;
+    bool converted = false;
+    bool resampled = false;
+};
 
 inline bool sdl_init() {
     return SDL_Init(SDL_INIT_VIDEO);
@@ -86,15 +98,35 @@ inline void set_draw_color(SDL_Renderer* ren, uint8_t r, uint8_t g,
 }
 
 // SDL3: RenderReadPixels returns an SDL_Surface*
-inline bool read_pixels_rgba(SDL_Renderer* ren, uint8_t* out, int w, int h) {
+inline bool read_pixels_rgba(SDL_Renderer* ren, uint8_t* out, int w, int h,
+                             ReadbackTiming* timing = nullptr) {
+    const uint64_t t_begin = SDL_GetPerformanceCounter();
+    const uint64_t freq = SDL_GetPerformanceFrequency();
+    auto ticks_to_ms = [freq](uint64_t ticks) -> double {
+        return static_cast<double>(ticks) * 1000.0 / static_cast<double>(freq);
+    };
+
+    const uint64_t t_api0 = SDL_GetPerformanceCounter();
     SDL_Surface* surf = SDL_RenderReadPixels(ren, nullptr);
+    const uint64_t t_api1 = SDL_GetPerformanceCounter();
     if (!surf) return false;
     SDL_Surface* rgba = surf;
+    if (timing) {
+        timing->api_ms = ticks_to_ms(t_api1 - t_api0);
+        timing->src_w = surf->w;
+        timing->src_h = surf->h;
+    }
     // Convert to RGBA32 if needed so the resample/copy path can assume 4 bytes/pixel.
     if (surf->format != SDL_PIXELFORMAT_RGBA32) {
+        const uint64_t t_conv0 = SDL_GetPerformanceCounter();
         rgba = SDL_ConvertSurface(surf, SDL_PIXELFORMAT_RGBA32);
+        const uint64_t t_conv1 = SDL_GetPerformanceCounter();
         SDL_DestroySurface(surf);
         if (!rgba) return false;
+        if (timing) {
+            timing->convert_ms = ticks_to_ms(t_conv1 - t_conv0);
+            timing->converted = true;
+        }
     }
 
     SDL_LockSurface(rgba);
@@ -104,17 +136,24 @@ inline bool read_pixels_rgba(SDL_Renderer* ren, uint8_t* out, int w, int h) {
     const int src_pitch = rgba->pitch;
 
     if (src_w == w && src_h == h) {
+        const uint64_t t_copy0 = SDL_GetPerformanceCounter();
         for (int y = 0; y < h; ++y) {
             std::memcpy(out + static_cast<size_t>(y) * w * 4,
                         src + static_cast<size_t>(y) * src_pitch,
                         static_cast<size_t>(w) * 4);
         }
+        const uint64_t t_copy1 = SDL_GetPerformanceCounter();
         SDL_UnlockSurface(rgba);
         SDL_DestroySurface(rgba);
+        if (timing) {
+            timing->copy_ms = ticks_to_ms(t_copy1 - t_copy0);
+            timing->total_ms = ticks_to_ms(t_copy1 - t_begin);
+        }
         return true;
     }
 
     // Resample to the logical render size expected by the recorder.
+    const uint64_t t_copy0 = SDL_GetPerformanceCounter();
     for (int y = 0; y < h; ++y) {
         const int sy = std::clamp((y * src_h) / std::max(1, h), 0, std::max(0, src_h - 1));
         const uint8_t* src_row = src + static_cast<size_t>(sy) * src_pitch;
@@ -129,9 +168,15 @@ inline bool read_pixels_rgba(SDL_Renderer* ren, uint8_t* out, int w, int h) {
             dst_px[3] = src_px[3];
         }
     }
+    const uint64_t t_copy1 = SDL_GetPerformanceCounter();
 
     SDL_UnlockSurface(rgba);
     SDL_DestroySurface(rgba);
+    if (timing) {
+        timing->copy_ms = ticks_to_ms(t_copy1 - t_copy0);
+        timing->total_ms = ticks_to_ms(t_copy1 - t_begin);
+        timing->resampled = true;
+    }
     return true;
 }
 
@@ -187,6 +232,17 @@ inline bool handle_event_window_resized(const SDL_Event& e, int& w, int& h) {
 
 namespace phigros::app::sdl {
 
+struct ReadbackTiming {
+    double api_ms = 0.0;
+    double convert_ms = 0.0;
+    double copy_ms = 0.0;
+    double total_ms = 0.0;
+    int src_w = 0;
+    int src_h = 0;
+    bool converted = false;
+    bool resampled = false;
+};
+
 inline bool sdl_init() {
     SDL_SetHint(SDL_HINT_RENDER_BATCHING, "1");
     return SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER) == 0;
@@ -235,9 +291,21 @@ inline void set_draw_color(SDL_Renderer* ren, uint8_t r, uint8_t g,
     SDL_SetRenderDrawColor(ren, r, g, b, a);
 }
 
-inline bool read_pixels_rgba(SDL_Renderer* ren, uint8_t* out, int w, int h) {
-    return SDL_RenderReadPixels(ren, nullptr, SDL_PIXELFORMAT_RGBA32,
-                                out, w * 4) == 0;
+inline bool read_pixels_rgba(SDL_Renderer* ren, uint8_t* out, int w, int h,
+                             ReadbackTiming* timing = nullptr) {
+    const uint64_t t0 = SDL_GetPerformanceCounter();
+    const int ok = SDL_RenderReadPixels(ren, nullptr, SDL_PIXELFORMAT_RGBA32,
+                                        out, w * 4);
+    const uint64_t t1 = SDL_GetPerformanceCounter();
+    if (timing) {
+        const double ms = static_cast<double>(t1 - t0) * 1000.0 /
+                          static_cast<double>(SDL_GetPerformanceFrequency());
+        timing->api_ms = ms;
+        timing->total_ms = ms;
+        timing->src_w = w;
+        timing->src_h = h;
+    }
+    return ok == 0;
 }
 
 inline bool save_screenshot_bmp(SDL_Renderer* ren, const char* path, int w, int h) {

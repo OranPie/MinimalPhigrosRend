@@ -84,8 +84,8 @@ struct Window {
         return stbi_write_png(path.c_str(), w, h, 4, pixels.data(), w * 4) != 0;
     }
 
-    bool read_pixels_rgba(uint8_t* out) const {
-        return sdl::read_pixels_rgba(ren, out, w, h);
+    bool read_pixels_rgba(uint8_t* out, sdl::ReadbackTiming* timing = nullptr) const {
+        return sdl::read_pixels_rgba(ren, out, w, h, timing);
     }
 
     void destroy() {

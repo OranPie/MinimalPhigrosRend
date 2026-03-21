@@ -27,6 +27,7 @@ struct AppArgs {
     int         benchmark_iterations = 10;
     bool        play_mode           = false;
     bool        profile             = false;  // --profile: print per-phase frame timings
+    bool        record_profile      = false;  // --record-profile: print record-mode bottleneck stats
     std::string save_replay_path;
     std::string play_replay_path;
     std::string backend;
@@ -127,6 +128,7 @@ inline AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--benchmark")   { args.benchmark = true; args.score_only = true; args.headless = true; }
         else if (a == "--benchmark-iterations" && i+1 < argc) args.benchmark_iterations = std::atoi(argv[++i]);
         else if (a == "--profile")     args.profile = true;
+        else if (a == "--record-profile") args.record_profile = true;
         else if (a == "--play")        args.play_mode = true;
         else if (a == "--save-replay"  && i+1 < argc) args.save_replay_path = argv[++i];
         else if (a == "--play-replay"  && i+1 < argc) args.play_replay_path = argv[++i];
@@ -249,6 +251,7 @@ inline void print_usage(const char* prog) {
         "  --benchmark               Benchmark engine (implies --score-only)\n"
         "  --benchmark-iterations N  Benchmark runs (default 10)\n"
         "  --profile                 Print per-phase frame timing stats every 60 frames\n"
+        "  --record-profile          Print record-mode bottleneck stats to CLI\n"
         "  --info    (-i)            Print chart metadata and exit\n"
         "  --list-charts <dir>       Discover and list all charts under dir\n"
         "\n"
