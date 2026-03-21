@@ -39,6 +39,7 @@ struct RenderConfig {
     bool note_speed_mul_affects_travel = false;
     double note_alpha = 1.0;        // Global note alpha multiplier [0,1]
     double font_size = 1.0;         // HUD/debug text scale multiplier
+    bool font_align = true;         // Use aligned HUD glyph advances to reduce text-width shaking
     bool overlay_transparent = false; // lighter translucent HUD/debug panels
 
     // Line settings
@@ -154,6 +155,7 @@ inline RenderConfig load_config_json(const nlohmann::json& j) {
         get_d("note_flow_speed_multiplier", cfg.note_flow_speed_multiplier);
         get_d("note_alpha", cfg.note_alpha);
         get_d("font_size", cfg.font_size);
+        get_b("font_align", cfg.font_align);
         get_b("overlay_transparent", cfg.overlay_transparent);
         get_d("overrender", cfg.overrender);
         get_b("note_outline", cfg.note_outline);
@@ -272,6 +274,7 @@ inline nlohmann::json config_to_json(const RenderConfig& cfg) {
     r["note_flow_speed_multiplier"] = cfg.note_flow_speed_multiplier;
     r["note_alpha"]                 = cfg.note_alpha;
     r["font_size"]                  = cfg.font_size;
+    r["font_align"]                 = cfg.font_align;
     r["overlay_transparent"]        = cfg.overlay_transparent;
     r["note_outline"]               = cfg.note_outline;
     r["hold_body_glow_alpha"]       = cfg.hold_body_glow_alpha;

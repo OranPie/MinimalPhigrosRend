@@ -52,6 +52,7 @@
 | `note_flow_speed_multiplier` | float | `1.0` | 单个音符滚动速度倍率。 |
 | `note_speed_mul_affects_travel` | bool | `false` | RPE：单音符 `speed_mul` 影响进场距离。 |
 | `note_alpha` | float | `1.0` | 全局音符不透明度倍率，范围限制 `[0, 1]`。 |
+| `font_align` | bool | `true` | 对 HUD 数字使用对齐字宽，减少分数/准确率/连击因字符宽度不同产生的抖动。 |
 | `note_outline` | bool | `false` | 在音符前以 1.08× 音符大小绘制深色轮廓。 |
 
 ### 判定线 alpha → 音符 alpha
@@ -209,7 +210,7 @@
 
 - `--duration <sec>`：在 `N` 秒后停止模拟/录制。
 - `--truncate-at-duration`：与 `--duration` 同时使用时，将计分分母截断到 duration 窗口内音符。
-- `--sim-fps <fps>`：内部模拟采样率（影响无头/录制循环采样）。
+- `--sim-fps <fps>`：内部模拟采样率（影响无头/录制循环采样），默认跟随 `--record-fps`。
 - `--record-fps <fps>`：输出视频帧率。
 
 得分公式：

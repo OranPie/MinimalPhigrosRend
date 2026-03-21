@@ -23,6 +23,7 @@ struct FontAtlas {
     int atlas_w = 512, atlas_h = 512;
     float font_size = 32.0f;
     float top_align_offset = 0.0f;
+    float aligned_digit_advance = 0.0f;
     bool valid = false;
 
     bool load(SDL_Renderer* ren, const std::string& font_path, float size) {
@@ -54,6 +55,9 @@ struct FontAtlas {
             }
         }
         top_align_offset = std::max(0.0f, -min_yoff);
+        for (char ch = '0'; ch <= '9'; ++ch) {
+            aligned_digit_advance = std::max(aligned_digit_advance, cdata[ch - 32].xadvance);
+        }
 
         // Convert grayscale to RGBA
         std::vector<uint8_t> rgba(atlas_w * atlas_h * 4);
@@ -78,18 +82,31 @@ struct HudRenderer {
     bool has_font = false;
     int screen_w = 0, screen_h = 0;
     double font_scale = 1.0;
+    bool font_align = true;
     bool overlay_transparent = false;
 
     bool init(SDL_Renderer* ren, const std::string& font_path, int w, int h,
-              double font_scale_mul = 1.0, bool overlay_transparent_panels = false) {
+              double font_scale_mul = 1.0, bool font_align_enabled = true,
+              bool overlay_transparent_panels = false) {
         screen_w = w; screen_h = h;
         font_scale = std::max(0.5, std::min(3.0, font_scale_mul));
+        font_align = font_align_enabled;
         overlay_transparent = overlay_transparent_panels;
         if (!font_path.empty()) {
             has_font = font_large.load(ren, font_path, static_cast<float>(36.0 * font_scale));
             if (has_font) font_small.load(ren, font_path, static_cast<float>(20.0 * font_scale));
         }
         return true;
+    }
+
+    float glyph_advance(const FontAtlas& font, char ch) const {
+        const unsigned char uch = static_cast<unsigned char>(ch);
+        if (uch < 32 || uch >= 128) return 0.0f;
+        const float advance = font.cdata[uch - 32].xadvance;
+        if (font_align && ch >= '0' && ch <= '9' && font.aligned_digit_advance > 0.0f) {
+            return font.aligned_digit_advance;
+        }
+        return advance;
     }
 
     void draw_text(const SpriteBatch& batch, const FontAtlas& font,
@@ -108,8 +125,9 @@ struct HudRenderer {
                 ypos += font.font_size;
                 continue;
             }
-            if (ch < 32 || ch >= 128) continue;
-            stbtt_bakedchar bc = font.cdata[ch - 32];
+            const unsigned char uch = static_cast<unsigned char>(ch);
+            if (uch < 32 || uch >= 128) continue;
+            stbtt_bakedchar bc = font.cdata[uch - 32];
 
             SDL_Rect src;
             src.x = static_cast<int>(bc.x0);
@@ -132,7 +150,7 @@ struct HudRenderer {
             dst.h = static_cast<float>(dh);
 
             app::sdl::render_copy(batch.ren, font.atlas_tex.tex, &src, &dst);
-            xpos += bc.xadvance;
+            xpos += glyph_advance(font, ch);
         }
     }
 
@@ -142,8 +160,9 @@ struct HudRenderer {
         float max_w = 0;
         for (char ch : text) {
             if (ch == '\n') { max_w = std::max(max_w, w); w = 0; continue; }
-            if (ch < 32 || ch >= 128) continue;
-            w += font.cdata[ch - 32].xadvance;
+            const unsigned char uch = static_cast<unsigned char>(ch);
+            if (uch < 32 || uch >= 128) continue;
+            w += glyph_advance(font, ch);
         }
         return std::max(max_w, w);
     }
@@ -191,15 +210,17 @@ struct HudRenderer {
             // Total advance width for centering this line
             float total_adv = 0;
             for (char ch : line) {
-                if (ch < 32 || ch >= 128) continue;
-                total_adv += font.cdata[ch - 32].xadvance;
+                const unsigned char uch = static_cast<unsigned char>(ch);
+                if (uch < 32 || uch >= 128) continue;
+                total_adv += glyph_advance(font, ch);
             }
             total_adv *= sx;
 
             float cursor = -total_adv * 0.5f;
             for (char ch : line) {
-                if (ch < 32 || ch >= 128) continue;
-                const stbtt_bakedchar& bc = font.cdata[ch - 32];
+                const unsigned char uch = static_cast<unsigned char>(ch);
+                if (uch < 32 || uch >= 128) continue;
+                const stbtt_bakedchar& bc = font.cdata[uch - 32];
 
                 float gw = static_cast<float>(bc.x1 - bc.x0) * sx;
                 float gh = static_cast<float>(bc.y1 - bc.y0) * sy;
@@ -216,7 +237,7 @@ struct HudRenderer {
                 batch.draw_texture(font.atlas_tex, wx, wy, gw, gh,
                                    rot_rad, r, g, b, a, &src);
 
-                cursor += bc.xadvance * sx;
+                cursor += glyph_advance(font, ch) * sx;
             }
         }
     }

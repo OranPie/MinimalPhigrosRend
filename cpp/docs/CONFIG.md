@@ -62,6 +62,7 @@ You may also set `render.backend`; top-level `backend` takes precedence.
 | `note_flow_speed_multiplier` | float | `1.0` | Per-note scroll speed multiplier. |
 | `note_speed_mul_affects_travel` | bool | `false` | RPE: per-note `speed_mul` affects approach distance. |
 | `note_alpha` | float | `1.0` | Global note opacity multiplier. Clamped `[0, 1]`. |
+| `font_align` | bool | `true` | Use aligned HUD digit advances so score/accuracy/combo text does not visibly shake as digits change width. |
 | `note_outline` | bool | `false` | Draw a dark outline at 1.08× note size before the note. |
 
 ### Line alpha → note alpha
@@ -219,7 +220,7 @@ This page documents JSONC config fields. The following runtime behaviors are con
 
 - `--duration <sec>`: stop simulation/recording after `N` seconds.
 - `--truncate-at-duration`: when used with `--duration`, scoring denominator is truncated to notes inside the duration window.
-- `--sim-fps <fps>`: internal simulation sampling rate (used by headless/render loop timing).
+- `--sim-fps <fps>`: internal simulation sampling rate (used by headless/render loop timing). Defaults to `--record-fps`.
 - `--record-fps <fps>`: output video FPS.
 
 Score formula:

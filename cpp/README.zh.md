@@ -135,7 +135,7 @@ emmake make -j$(nproc)
   --record-codec <codec>       libx264/libx265/libvpx-vp9/h264_nvenc/...
   --record-hw <type>           nvenc|qsv|vaapi|amf|videotoolbox
   --record-fps <fps>           录制帧率（默认：60）
-  --sim-fps <fps>              内部模拟采样率（默认：240）
+  --sim-fps <fps>              内部模拟采样率（默认：与 record-fps 相同）
   --record-resolution WxH      输出视频分辨率
   --record-capture-resolution WxH  编码前渲染/回读分辨率
   --record-queue-depth <N>     异步编码队列深度

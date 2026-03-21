@@ -162,7 +162,7 @@ To load an encrypted `.phbc` at runtime, pass `--password <passphrase>`.
 | `--record-codec <codec>` | `libx264` \| `libx265` \| `libvpx-vp9` \| `h264_nvenc` \| `hevc_nvenc` \| `h264_qsv` \| `h264_vaapi` |
 | `--record-hw <type>` | `nvenc` \| `qsv` \| `vaapi` \| `amf` \| `videotoolbox` — selects hw codec when `--record-codec` is empty |
 | `--record-fps <fps>` | Recording framerate (default: 60) |
-| `--sim-fps <fps>` | Internal simulation sampling rate (default: 240) |
+| `--sim-fps <fps>` | Internal simulation sampling rate (default: same as `record-fps`) |
 | `--record-resolution WxH` | e.g. `1920x1080` |
 | `--record-capture-resolution WxH` | Render/readback resolution before encoding |
 | `--record-queue-depth N` | Async encoder queue depth (≤1 = sync write) |

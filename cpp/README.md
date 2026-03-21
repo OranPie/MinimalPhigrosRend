@@ -135,7 +135,7 @@ Video:
   --record-codec <codec>       libx264/libx265/libvpx-vp9/h264_nvenc/...
   --record-hw <type>           nvenc|qsv|vaapi|amf|videotoolbox
   --record-fps <fps>           Recording framerate (default: 60)
-  --sim-fps <fps>              Internal simulation sampling rate (default: 240)
+  --sim-fps <fps>              Internal simulation sampling rate (default: same as record-fps)
   --record-resolution WxH      Output video resolution
   --record-capture-resolution WxH  Render/readback resolution
   --record-queue-depth <N>     Async encoder queue depth

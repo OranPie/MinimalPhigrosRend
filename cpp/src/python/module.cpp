@@ -188,6 +188,7 @@ PYBIND11_MODULE(_core, m) {
         .def_readwrite("note_speed_mul_affects_travel", &config::RenderConfig::note_speed_mul_affects_travel)
         .def_readwrite("note_alpha", &config::RenderConfig::note_alpha)
         .def_readwrite("font_size", &config::RenderConfig::font_size)
+        .def_readwrite("font_align", &config::RenderConfig::font_align)
         .def_readwrite("overlay_transparent", &config::RenderConfig::overlay_transparent)
         .def_readwrite("line_alpha_mode", &config::RenderConfig::line_alpha_mode)
         .def_readwrite("approach", &config::RenderConfig::approach)

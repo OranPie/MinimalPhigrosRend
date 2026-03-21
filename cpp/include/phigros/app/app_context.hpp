@@ -218,7 +218,7 @@ struct AppContext {
             PHLOG_INFO(Render, "MotionBlur enabled: samples=" << cfg.motion_blur_samples.value()
                 << " shutter=" << cfg.motion_blur_shutter.value_or(0.5));
 
-        hud_ren.init(window.ren, font_path, W, H, cfg.font_size, cfg.overlay_transparent);
+        hud_ren.init(window.ren, font_path, W, H, cfg.font_size, cfg.font_align, cfg.overlay_transparent);
         hud_ren.screen_w = W;
         hud_ren.screen_h = H;
 

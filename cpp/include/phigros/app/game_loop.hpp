@@ -235,7 +235,8 @@ struct GameLoop {
                              cfg.simulateplay.cursor_radius_px);
 
         // Timing constants
-        sim_dt = 1.0 / std::max(1.0, args.sim_fps);
+        const double effective_sim_fps = (args.sim_fps > 0.0) ? args.sim_fps : args.record_fps;
+        sim_dt = 1.0 / std::max(1.0, effective_sim_fps);
         render_dt = args.record_output.empty() ? (1.0 / 60.0)
                                                : (1.0 / args.record_fps);
         sim_steps_per_render = std::max(1, static_cast<int>(
@@ -248,6 +249,7 @@ struct GameLoop {
             << " progress_end=" << progress_end);
         PHLOG_DEBUG(Engine, "GameLoop timing: sim_dt=" << sim_dt
             << " render_dt=" << render_dt
+            << " sim_fps=" << effective_sim_fps
             << " sim_steps_per_render=" << sim_steps_per_render
             << " audio_offset_sec=" << audio_offset_sec);
 

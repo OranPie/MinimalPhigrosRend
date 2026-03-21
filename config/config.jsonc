@@ -28,6 +28,7 @@
     "note_scale_x": 2.5,
     "note_scale_y": 1.0,
     "note_flow_speed_multiplier": 1.0,
+    "font_align": true,
     "overrender": 1.0,
     "trail_alpha": 0.3,
     "trail_blur": 1,

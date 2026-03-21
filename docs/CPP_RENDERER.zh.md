@@ -160,7 +160,7 @@ mod 格式参考请见 `docs/ADVANCE_MODE_GUIDE.md`。
 | `--record-codec <codec>` | `libx264` \| `libx265` \| `libvpx-vp9` \| `h264_nvenc` \| `hevc_nvenc` \| `h264_qsv` \| `h264_vaapi` |
 | `--record-hw <type>` | `nvenc` \| `qsv` \| `vaapi` \| `amf` \| `videotoolbox` — `--record-codec` 为空时自动选择硬件编码器 |
 | `--record-fps <fps>` | 录制帧率（默认：60） |
-| `--sim-fps <fps>` | 内部模拟采样率（默认：240） |
+| `--sim-fps <fps>` | 内部模拟采样率（默认：与 `record-fps` 相同） |
 | `--record-resolution WxH` | 例如 `1920x1080` |
 | `--record-capture-resolution WxH` | 渲染/回读分辨率（编码前） |
 | `--record-queue-depth N` | 异步编码队列深度（≤1 = 同步写入） |
