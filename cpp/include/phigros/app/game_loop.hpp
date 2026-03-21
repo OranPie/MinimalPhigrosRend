@@ -642,6 +642,17 @@ private:
         }
     }
 
+    bool note_uses_mh_texture(const render::NoteSnapshot& ns) const {
+        if (!ns.mh) return false;
+        switch (ns.kind) {
+        case 1: return ctx.respack.click_mh.valid();
+        case 2: return ctx.respack.drag_mh.valid();
+        case 3: return ctx.respack.has_hold_mh_variant();
+        case 4: return ctx.respack.flick_mh.valid();
+        default: return false;
+        }
+    }
+
     void draw_debug_overlay(const render::FrameSnapshot& fr) {
         if (args.debug_flags == DebugFlag::NONE) return;
 
@@ -1188,6 +1199,17 @@ private:
                               note->t_hit, ns.wx, ns.wy, ns.alpha, ns.size_px,
                               hold_prog * 100.0);
                 debug_text(x + 10.0, y + 10.0, buf, 220, 220, 255, 220);
+            }
+
+            if (has_debug(DebugFlag::MH_TEXTURE_STATUS) && ns.mh) {
+                const bool mh_tex = note_uses_mh_texture(ns);
+                const char* mode = mh_tex ? "mh-tex" : "base-tex";
+                uint8_t r = mh_tex ? 255 : 255;
+                uint8_t g = mh_tex ? 140 : 220;
+                uint8_t b = mh_tex ? 255 : 140;
+                char buf[96];
+                std::snprintf(buf, sizeof(buf), "MH %s %s", note_kind_name(ns.kind), mode);
+                debug_text(x + 10.0, y - 30.0, buf, r, g, b, 235);
             }
         }
 

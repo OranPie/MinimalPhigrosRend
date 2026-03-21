@@ -52,6 +52,21 @@ struct Respack {
 
     bool loaded = false;
 
+    static bool textures_match(const render::Texture& a, const render::Texture& b) {
+        if (!a.valid() || !b.valid()) return false;
+        if (a.w != b.w || a.h != b.h) return false;
+        if (a.pixel_data && b.pixel_data) return *a.pixel_data == *b.pixel_data;
+        return a.tex == b.tex;
+    }
+
+    bool has_hold_mh_variant() const {
+        if (!hold_mh.valid()) return false;
+        if (cfg.hold_head_h_mh != cfg.hold_head_h || cfg.hold_tail_h_mh != cfg.hold_tail_h) {
+            return true;
+        }
+        return !textures_match(hold, hold_mh);
+    }
+
     const render::Texture& note_texture(int kind, bool mh_flag) const {
         if (mh_flag) {
             switch (kind) {

@@ -46,6 +46,11 @@ enum class DebugFlag : uint64_t {
     CENTER_CROSSHAIR         = 1ull << 31,
     SIMULTANEOUS_INDICATOR   = 1ull << 32,
     NOTE_APPROACH_GUIDE      = 1ull << 33,
+    TIMING_CLOCKS            = 1ull << 34,
+    VISIBILITY_SUMMARY       = 1ull << 35,
+    RECORDING_STATUS         = 1ull << 36,
+    LINE_ACTIVITY_PANEL      = 1ull << 37,
+    MH_TEXTURE_STATUS        = 1ull << 38,
 };
 
 inline DebugFlag operator|(DebugFlag a, DebugFlag b) {
@@ -111,6 +116,11 @@ inline const std::vector<std::pair<const char*, DebugFlag>>& debug_flag_table() 
         {"CENTER_CROSSHAIR", DebugFlag::CENTER_CROSSHAIR},
         {"SIMULTANEOUS_INDICATOR", DebugFlag::SIMULTANEOUS_INDICATOR},
         {"NOTE_APPROACH_GUIDE", DebugFlag::NOTE_APPROACH_GUIDE},
+        {"TIMING_CLOCKS", DebugFlag::TIMING_CLOCKS},
+        {"VISIBILITY_SUMMARY", DebugFlag::VISIBILITY_SUMMARY},
+        {"RECORDING_STATUS", DebugFlag::RECORDING_STATUS},
+        {"LINE_ACTIVITY_PANEL", DebugFlag::LINE_ACTIVITY_PANEL},
+        {"MH_TEXTURE_STATUS", DebugFlag::MH_TEXTURE_STATUS},
     };
     return kFlags;
 }

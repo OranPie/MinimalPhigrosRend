@@ -3,6 +3,8 @@
 > 🌐 [中文](CONFIG.zh.md)
 All options are loaded from a JSONC file (JSON with `//` and `#` line comments).
 
+For CLI debug overlay flags, see [DEBUG_FLAGS.md](DEBUG_FLAGS.md).
+
 ```bash
 ./phigros_render chart.json --config config.jsonc
 ```

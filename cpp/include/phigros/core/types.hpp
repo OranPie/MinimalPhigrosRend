@@ -214,9 +214,32 @@ struct ChartData {
     void finalize() {
         chart_end_t = 0.0;
         playable_count = 0;
-        for (const auto& n : notes) {
+        for (auto& n : notes) {
+            n.mh = false;
             if (n.t_end > chart_end_t) chart_end_t = n.t_end;
             if (!n.fake) ++playable_count;
+        }
+
+        static constexpr double MH_EPS = 1e-4;
+        size_t i = 0;
+        while (i < notes.size()) {
+            if (notes[i].fake) { ++i; continue; }
+            size_t j = i + 1;
+            while (j < notes.size()) {
+                if (notes[j].fake) { ++j; continue; }
+                if (std::abs(notes[j].t_hit - notes[i].t_hit) > MH_EPS) break;
+                ++j;
+            }
+            int grouped = 0;
+            for (size_t k = i; k < j; ++k) {
+                if (!notes[k].fake) ++grouped;
+            }
+            if (grouped >= 2) {
+                for (size_t k = i; k < j; ++k) {
+                    if (!notes[k].fake) notes[k].mh = true;
+                }
+            }
+            i = j;
         }
     }
 };

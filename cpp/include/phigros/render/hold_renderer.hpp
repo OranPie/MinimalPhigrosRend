@@ -28,8 +28,8 @@ struct HoldRenderer {
         for (auto& ns : notes) {
             if (!ns.is_hold) continue;
 
-            const bool mh = ns.mh;
-            const auto& tex = respack.note_texture(3, mh);
+            const bool use_mh_variant = ns.mh && respack.has_hold_mh_variant();
+            const auto& tex = use_mh_variant ? respack.hold_mh : respack.hold;
             if (!tex.valid()) continue;
 
             double ws = base_note_w * note_scale_x * ns.size_px;
@@ -49,8 +49,8 @@ struct HoldRenderer {
             double angle = std::atan2(dy, dx) - M_PI * 0.5; // perpendicular to direction
 
             // Atlas dimensions
-            int head_h = mh ? respack.cfg.hold_head_h_mh : respack.cfg.hold_head_h;
-            int tail_h = mh ? respack.cfg.hold_tail_h_mh : respack.cfg.hold_tail_h;
+            int head_h = use_mh_variant ? respack.cfg.hold_head_h_mh : respack.cfg.hold_head_h;
+            int tail_h = use_mh_variant ? respack.cfg.hold_tail_h_mh : respack.cfg.hold_tail_h;
             int body_h = tex.h - head_h - tail_h;
             if (body_h <= 0) body_h = 1;
 

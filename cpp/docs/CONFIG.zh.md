@@ -4,6 +4,8 @@
 
 所有选项从 JSONC 文件（支持 `//` 和 `#` 行注释的 JSON）中加载。
 
+命令行调试覆盖层标记请参见 [DEBUG_FLAGS.zh.md](DEBUG_FLAGS.zh.md)。
+
 ```bash
 ./phigros_render chart.json --config config.jsonc
 ```
