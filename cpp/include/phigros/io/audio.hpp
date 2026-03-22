@@ -5,6 +5,9 @@
 #include <cstdio>
 #include <mutex>
 #include <algorithm>
+#include <array>
+#include <chrono>
+#include <cmath>
 
 // Forward-declare miniaudio types (defined in audio_impl.cpp)
 #include "miniaudio.h"
@@ -15,13 +18,43 @@ namespace phigros::io {
 // Each slot owns an independent ma_decoder (initialised from the same in-memory
 // OGG bytes) plus a ma_sound bound to that decoder.
 struct HitsoundPool {
-    static constexpr int POOL_SIZE = 6;
+    static constexpr int POOL_SIZE = 12;
 
     std::vector<uint8_t> ogg_data;
     ma_decoder decoders[POOL_SIZE]{};
     ma_sound   sounds[POOL_SIZE]{};
-    int  cursor = 0;
+    std::array<uint64_t, POOL_SIZE> last_start_us{};
+    float base_volume = 1.0f;
     bool loaded = false;
+
+    static uint64_t now_us() {
+        return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count());
+    }
+
+    int active_voice_count() const {
+        int active = 0;
+        for (int i = 0; i < POOL_SIZE; ++i) {
+            if (ma_sound_is_playing(const_cast<ma_sound*>(&sounds[i])))
+                ++active;
+        }
+        return active;
+    }
+
+    int select_slot() const {
+        for (int i = 0; i < POOL_SIZE; ++i) {
+            if (!ma_sound_is_playing(const_cast<ma_sound*>(&sounds[i])))
+                return i;
+        }
+        return static_cast<int>(std::min_element(last_start_us.begin(), last_start_us.end()) -
+                                last_start_us.begin());
+    }
+
+    float play_volume_for_density(int active_voices) const {
+        const double density_scale = 1.0 / std::sqrt(1.0 + 0.55 * std::max(0, active_voices - 1));
+        return static_cast<float>(std::clamp(static_cast<double>(base_volume) * density_scale,
+                                             0.22, static_cast<double>(base_volume)));
+    }
 
     bool load(ma_engine* engine, const std::vector<uint8_t>& data) {
         if (data.empty()) return false;
@@ -49,17 +82,23 @@ struct HitsoundPool {
 
     void play() {
         if (!loaded) return;
+        const int slot = select_slot();
+        const int active = active_voice_count();
+        ma_sound_set_volume(&sounds[slot], play_volume_for_density(active));
         // Seek both the sound and its underlying decoder to the start
-        ma_sound_seek_to_pcm_frame(&sounds[cursor], 0);
-        ma_decoder_seek_to_pcm_frame(&decoders[cursor], 0);
-        ma_sound_start(&sounds[cursor]);
-        PHLOG_TRACE(Audio, "HitsoundPool: play slot=" << cursor);
-        cursor = (cursor + 1) % POOL_SIZE;
+        ma_sound_seek_to_pcm_frame(&sounds[slot], 0);
+        ma_decoder_seek_to_pcm_frame(&decoders[slot], 0);
+        ma_sound_start(&sounds[slot]);
+        last_start_us[slot] = now_us();
+        PHLOG_TRACE(Audio, "HitsoundPool: play slot=" << slot
+            << " active=" << active
+            << " volume=" << play_volume_for_density(active));
     }
 
     void set_volume(float v) {
+        base_volume = std::max(0.0f, v);
         for (int i = 0; i < POOL_SIZE; ++i)
-            ma_sound_set_volume(&sounds[i], v);
+            ma_sound_set_volume(&sounds[i], base_volume);
     }
 
     void destroy() {

@@ -233,6 +233,12 @@ struct AudioMixer {
 
     // Mix hitsound into PCM buffer at specific time offset
     // pcm: interleaved int16 stereo 44100Hz buffer
+    static int16_t soft_clip_i16(double sample) {
+        const double norm = sample / 32768.0;
+        const double clipped = norm / (1.0 + std::abs(norm));
+        return static_cast<int16_t>(std::clamp(clipped * 32767.0, -32768.0, 32767.0));
+    }
+
     static void mix_hitsound(std::vector<int16_t>& pcm_buffer,
                              const std::vector<int16_t>& hitsound,
                              double time_sec, float volume = 0.5f) {
@@ -240,12 +246,9 @@ struct AudioMixer {
         if (sample_offset < 0) return;
         size_t start = static_cast<size_t>(sample_offset);
         for (size_t i = 0; i < hitsound.size() && start + i < pcm_buffer.size(); ++i) {
-            int32_t mixed = pcm_buffer[start + i] +
-                            static_cast<int32_t>(hitsound[i] * volume);
-            // Clip to int16 range
-            if (mixed > 32767) mixed = 32767;
-            if (mixed < -32768) mixed = -32768;
-            pcm_buffer[start + i] = static_cast<int16_t>(mixed);
+            const double mixed = static_cast<double>(pcm_buffer[start + i]) +
+                                 static_cast<double>(hitsound[i]) * volume;
+            pcm_buffer[start + i] = soft_clip_i16(mixed);
         }
     }
 };
@@ -806,6 +809,25 @@ public:
     }
 
 private:
+    float hitsound_mix_gain(size_t idx) const {
+        if (hitsound_events_.empty()) return 0.65f;
+        constexpr double kBurstWindowSec = 0.03;
+        size_t burst = 1;
+        const double t = hitsound_events_[idx].time_sec;
+
+        for (size_t i = idx; i > 0; --i) {
+            if (t - hitsound_events_[i - 1].time_sec > kBurstWindowSec) break;
+            ++burst;
+        }
+        for (size_t i = idx + 1; i < hitsound_events_.size(); ++i) {
+            if (hitsound_events_[i].time_sec - t > kBurstWindowSec) break;
+            ++burst;
+        }
+
+        const double gain = 0.65 / std::sqrt(static_cast<double>(burst));
+        return static_cast<float>(std::clamp(gain, 0.22, 0.65));
+    }
+
     static std::vector<int16_t> time_scale_pcm_s16(const std::vector<int16_t>& input,
                                                    int channels,
                                                    double speed) {
@@ -872,12 +894,14 @@ private:
                 AudioMixer::decode_ogg_memory_s16(cfg_.hitsound_ogg[k], hitsound_pcm[k]);
         }
 
-        for (const auto& ev : hitsound_events_) {
+        for (size_t idx = 0; idx < hitsound_events_.size(); ++idx) {
+            const auto& ev = hitsound_events_[idx];
             int kind = ev.kind;
             if (kind == 3 && hitsound_pcm[3].empty()) kind = 1;
             if (kind < 1 || kind > 4 || hitsound_pcm[kind].empty()) continue;
             AudioMixer::mix_hitsound(mixed_pcm, hitsound_pcm[kind],
-                                     ev.time_sec - base_chart_time, 0.65f);
+                                     ev.time_sec - base_chart_time,
+                                     hitsound_mix_gain(idx));
         }
         return AudioMixer::write_wav_s16(output_wav, mixed_pcm);
     }
