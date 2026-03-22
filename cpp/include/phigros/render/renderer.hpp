@@ -157,12 +157,11 @@ inline FrameSnapshot build_frame(
         const auto& ns   = states[i];
 
         if (ns.judged && note.kind != 3) return;
-        // Skip finalized holds (both successfully-completed and missed).
-        // With hold_logic.hpp fixes, missed holds are finalized at miss_window
-        // time, and successful holds are finalized at t_end.  Either way the
-        // hold has scrolled off-screen or should no longer render.
-        if (note.kind == 3 && ns.hold_finalized) return;
-        if (ns.miss) return;
+        // Successful holds disappear once finalized. Missed holds remain
+        // renderable so HoldRenderer can darken them until normal time culling
+        // removes them near t_end.
+        if (note.kind == 3 && ns.hold_finalized && !ns.miss) return;
+        if (note.kind != 3 && ns.miss) return;
         if (note.line_id < 0 || note.line_id >= static_cast<int>(n_lines)) return;
 
         // visible_time: note is hidden until (t_hit - visible_time) seconds before hit
@@ -190,11 +189,14 @@ inline FrameSnapshot build_frame(
         float ctrl_pos   = eval_ctrl(ln.pos_ctrl,   scroll_dist_rpe, 1.0f);
         float ctrl_y     = eval_ctrl(ln.y_ctrl,     scroll_dist_rpe, 0.0f);
 
+        const bool hold_head_past_line =
+            (note.kind == 3 && ls.scroll >= note.scroll_hit);
+
         auto head = engine::note_world_pos_cs(
             ls.x, ls.y, ls.cos_rot, ls.sin_rot, ls.scroll, note,
             note.scroll_hit, false, flow_mul,
             cfg.note_speed_mul_affects_travel,
-            note.kind == 3 && ns.holding);
+            hold_head_past_line);
 
         // posControl: pos is a multiplier for positionX — shift head along the line tangent
         if (ctrl_pos != 1.0f) {

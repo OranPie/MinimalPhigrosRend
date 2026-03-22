@@ -171,6 +171,95 @@ static void test_kinematics() {
         CHECK(std::abs(pos1.x - pos2.x) < 1e-9, "note_world_pos_cs: x matches");
         CHECK(std::abs(pos1.y - pos2.y) < 1e-9, "note_world_pos_cs: y matches");
     }
+
+    // --- Hold head stays on the line after hit even when not actively holding ---
+    {
+        ChartData chart;
+        Line ln;
+        ln.lid = 0;
+        ln.pos_x = [](double) { return 400.0; };
+        ln.pos_y = [](double) { return 300.0; };
+        ln.rot   = [](double) { return 0.0; };
+        ln.alpha = [](double) { return 1.0; };
+        ln.scroll_fn = [](double t) { return t * 100.0; };
+        chart.lines.push_back(std::move(ln));
+
+        Note note{};
+        note.nid = 1;
+        note.line_id = 0;
+        note.kind = 3;
+        note.above = true;
+        note.t_hit = 1.0;
+        note.t_end = 3.0;
+        note.alpha01 = 1.0;
+        note.size_px = 1.0;
+        note.scroll_hit = 100.0;
+        note.scroll_end = 300.0;
+        chart.notes.push_back(note);
+
+        std::vector<NoteState> states(1);
+        states[0].note = &chart.notes[0];
+
+        engine::Judge judge;
+        config::RenderConfig cfg;
+        cfg.window_w = 800;
+        cfg.window_h = 600;
+        cfg.no_cull = true;
+
+        auto frame = render::build_frame(1.5, chart, states, judge, cfg);
+        CHECK(frame.notes.size() == 1, "Hold regression: note emitted after hit");
+        if (!frame.notes.empty()) {
+            CHECK(std::abs(frame.notes[0].wy - 300.0) < 1e-9,
+                  "Hold regression: head remains pinned to line after hit");
+            CHECK(frame.notes[0].wy_tail > frame.notes[0].wy,
+                  "Hold regression: tail remains ahead of pinned head");
+        }
+    }
+
+    // --- Missed holds remain visible so renderer can dim them ---
+    {
+        ChartData chart;
+        Line ln;
+        ln.lid = 0;
+        ln.pos_x = [](double) { return 400.0; };
+        ln.pos_y = [](double) { return 300.0; };
+        ln.rot   = [](double) { return 0.0; };
+        ln.alpha = [](double) { return 1.0; };
+        ln.scroll_fn = [](double t) { return t * 100.0; };
+        chart.lines.push_back(std::move(ln));
+
+        Note note{};
+        note.nid = 2;
+        note.line_id = 0;
+        note.kind = 3;
+        note.above = true;
+        note.t_hit = 1.0;
+        note.t_end = 3.0;
+        note.alpha01 = 1.0;
+        note.size_px = 1.0;
+        note.scroll_hit = 100.0;
+        note.scroll_end = 300.0;
+        chart.notes.push_back(note);
+
+        std::vector<NoteState> states(1);
+        states[0].note = &chart.notes[0];
+        states[0].miss = true;
+        states[0].judged = true;
+        states[0].hold_finalized = true;
+
+        engine::Judge judge;
+        config::RenderConfig cfg;
+        cfg.window_w = 800;
+        cfg.window_h = 600;
+        cfg.no_cull = true;
+
+        auto frame = render::build_frame(1.5, chart, states, judge, cfg);
+        CHECK(frame.notes.size() == 1, "Hold miss regression: missed hold still emitted");
+        if (!frame.notes.empty()) {
+            CHECK(frame.notes[0].is_hold, "Hold miss regression: emitted note is hold");
+            CHECK(frame.notes[0].miss, "Hold miss regression: emitted hold keeps miss flag");
+        }
+    }
 }
 
 // ---- 6A3: Judge boundary tests ----
