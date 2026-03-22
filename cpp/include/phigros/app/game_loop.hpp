@@ -823,8 +823,11 @@ private:
     }
 
     math::RGB resolve_hitfx_color(const Note& note, const std::string& grade) const {
+        const std::string resolved_grade = grade.rfind("hold_start:", 0) == 0
+            ? grade.substr(std::strlen("hold_start:"))
+            : grade;
         if (note.tint_hitfx_rgb) return *note.tint_hitfx_rgb;
-        if (grade == "GOOD" || grade == "BAD") return ctx.respack.cfg.color_good;
+        if (resolved_grade == "GOOD" || resolved_grade == "BAD") return ctx.respack.cfg.color_good;
         return ctx.respack.cfg.color_perfect;
     }
 
@@ -1616,7 +1619,11 @@ private:
 
                 double hold_dur = note->t_end - note->t_hit;
                 if (hold_dur <= 0.0) continue;
-                double prog = std::clamp((fr.t - note->t_hit) / hold_dur, 0.0, 1.0);
+                double progress_t = fr.t;
+                if (ns_state->released_early) progress_t = ns_state->release_t;
+                else if (ns_state->hold_finalized) progress_t = note->t_end;
+                else if (ns_state->hit) progress_t = std::max(fr.t, ns_state->judge_t);
+                double prog = std::clamp((progress_t - note->t_hit) / hold_dur, 0.0, 1.0);
 
                 // Draw progress bar above note
                 double bar_w = 40.0, bar_h = 4.0;

@@ -485,6 +485,32 @@ static void test_scriptplay() {
     CHECK(threw, "ScriptPlay validation: invalid grade/dt combination throws");
 }
 
+static void test_hold_bad_breaks_combo() {
+    std::cout << "\n=== Hold BAD combo test ===\n";
+
+    Note note;
+    note.kind = 3;
+    note.t_hit = 1.0;
+    note.t_end = 2.0;
+
+    NoteState ns;
+    ns.note = &note;
+
+    engine::Judge judge;
+    judge.combo = 5;
+    judge.max_combo = 5;
+
+    auto grade = judge.start_hold(ns, note.t_hit + engine::Judge::GOOD + 0.001);
+    CHECK(grade.has_value() && *grade == "BAD", "Hold start: BAD grade accepted");
+
+    judge.finalize_hold(ns);
+
+    CHECK(ns.judge_grade == "BAD", "Hold finalize preserves BAD grade");
+    CHECK(judge.combo == 0, "Hold BAD breaks combo");
+    CHECK(judge.max_combo == 5, "Hold BAD does not extend max combo");
+    CHECK(judge.judged_cnt == 1, "Hold BAD counts as judged");
+}
+
 // ---- 6A4: Replay round-trip test ----
 static void test_replay_roundtrip() {
     std::cout << "\n=== Replay round-trip test ===\n";
@@ -1335,6 +1361,7 @@ int main(int argc, char* argv[]) {
     test_mods();
     test_kinematics();
     test_scriptplay();
+    test_hold_bad_breaks_combo();
     test_judge_boundaries();
     test_replay_roundtrip();
     test_edge_cases();

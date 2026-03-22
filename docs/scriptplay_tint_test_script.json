@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "meta": {
+    "name": "scriptplay-tint-test",
+    "index_mode": "playable",
+    "require_playable_notes": 5
+  },
+  "entries": [
+    {
+      "filter": {
+        "noteIndexes": [0]
+      },
+      "judge": {
+        "grade": "PERFECT",
+        "dt_ms": 0
+      }
+    },
+    {
+      "filter": {
+        "noteIndexes": [1]
+      },
+      "judge": {
+        "grade": "GOOD",
+        "dt_ms": 60
+      }
+    },
+    {
+      "filter": {
+        "noteIndexes": [2]
+      },
+      "judge": {
+        "grade": "BAD",
+        "dt_ms": 120
+      }
+    },
+    {
+      "filter": {
+        "noteIndexes": [3]
+      },
+      "judge": {
+        "grade": "GOOD",
+        "dt_ms": 60
+      },
+      "hold": {
+        "percent": 1.0
+      }
+    },
+    {
+      "filter": {
+        "noteIndexes": [4]
+      },
+      "judge": {
+        "grade": "GOOD",
+        "dt_ms": 60
+      },
+      "hold": {
+        "percent": 0.5
+      }
+    }
+  ]
+}

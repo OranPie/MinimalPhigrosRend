@@ -132,7 +132,8 @@ public:
             ns.judge_grade = ns.hold_grade;
             acc_sum += judge_weight(ns.hold_grade);
             ++judged_cnt;
-            bump();
+            if (ns.hold_grade == "BAD") break_combo();
+            else bump();
         } else {
             ns.miss = true;
             ns.judge_grade = "MISS";
