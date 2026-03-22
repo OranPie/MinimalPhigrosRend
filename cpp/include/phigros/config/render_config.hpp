@@ -19,7 +19,7 @@ struct RenderConfig {
     struct SimulatePlayConfig {
         bool enabled = false;
         std::string mode = "aggressive";
-        int max_pointers = 2;
+        int max_pointers = 4;
         double jitter_ms = 12.0;
         bool render_pointer = true;
         bool render_trail = true;

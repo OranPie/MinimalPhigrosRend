@@ -125,19 +125,19 @@ int find_window_start(const std::vector<NoteState>& states, double t) {
 void step_engine(const PreparedChart& prepared,
                  std::vector<NoteState>& states,
                  engine::Judge& judge,
-                 engine::SimulatePlayer& autoplay,
+                 double prev_t,
                  double t,
                  const config::RenderConfig& cfg,
                  std::vector<engine::SimHitEvent>* hit_events = nullptr) {
-    autoplay.step(t,
-                  prepared.chart.notes,
-                  states,
-                  prepared.chart.lines,
-                  judge,
-                  cfg.window_w,
-                  cfg.window_h,
-                  nullptr,
-                  hit_events);
+    engine::exact_autoplay_step(prev_t,
+                                t,
+                                prepared.chart.notes,
+                                states,
+                                prepared.chart.lines,
+                                judge,
+                                cfg.window_w,
+                                cfg.window_h,
+                                hit_events);
     const int idx = find_window_start(states, t);
     engine::detect_misses(states, idx, t, engine::Judge::BAD, judge);
     engine::hold_maintenance(states, idx, t, cfg.hold_tail_tol, judge);
@@ -163,14 +163,12 @@ FrameEvaluator::FrameEvaluator(const PreparedChart& prepared,
     , mode_(mode)
     , max_pointers_(std::max(1, max_pointers))
     , states_(make_states(prepared))
-    , autoplay_(parse_sim_mode(mode), max_pointers_)
     , sim_t_(prepared.chart.offset)
 {}
 
 void FrameEvaluator::reset_impl() {
     states_ = make_states(*prepared_);
     judge_  = engine::Judge{};
-    autoplay_ = engine::SimulatePlayer(parse_sim_mode(mode_), max_pointers_);
     sim_t_  = prepared_->chart.offset;
 }
 
@@ -181,7 +179,7 @@ void FrameEvaluator::reset() {
 void FrameEvaluator::step(double t,
                           const config::RenderConfig& cfg,
                           std::vector<engine::SimHitEvent>* events) {
-    step_engine(*prepared_, states_, judge_, autoplay_, t, cfg, events);
+    step_engine(*prepared_, states_, judge_, sim_t_ - SIM_DT, t, cfg, events);
 }
 
 void FrameEvaluator::advance_to(double t, const config::RenderConfig& cfg) {
@@ -278,13 +276,15 @@ AutoplayResult simulate_autoplay(const PreparedChart& prepared,
 
     auto states   = make_states(prepared);
     engine::Judge judge;
-    engine::SimulatePlayer autoplay(parse_sim_mode(mode), max_pointers);
-
     AutoplayResult result;
     result.playable_count = prepared.scoring_notes;
 
+    (void)mode;
+    (void)max_pointers;
+    double prev_t = prepared.chart.offset - sim_dt;
     for (double t = prepared.chart.offset; t <= end_t + 1e-9; t += sim_dt) {
-        step_engine(prepared, states, judge, autoplay, t, prepared.config, &result.hit_events);
+        step_engine(prepared, states, judge, prev_t, t, prepared.config, &result.hit_events);
+        prev_t = t;
     }
 
     result.score       = engine::compute_score(judge.acc_sum, judge.max_combo, prepared.scoring_notes);

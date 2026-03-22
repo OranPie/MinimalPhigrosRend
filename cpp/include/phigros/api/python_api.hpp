@@ -4,9 +4,9 @@
 #include "phigros/chart/compiled_chart.hpp"
 #include "phigros/chart/phbc_io.hpp"
 #include "phigros/config/render_config.hpp"
+#include "phigros/engine/exact_autoplay.hpp"
 #include "phigros/engine/hold_logic.hpp"
 #include "phigros/engine/judge.hpp"
-#include "phigros/engine/simulateplay.hpp"
 #include "phigros/engine/visibility.hpp"
 #include "phigros/render/renderer.hpp"
 #include <optional>
@@ -69,7 +69,6 @@ private:
 
     std::vector<NoteState>      states_;
     engine::Judge               judge_;
-    engine::SimulatePlayer      autoplay_;
     double                      sim_t_;
 
     static constexpr double SIM_DT = 1.0 / 240.0;

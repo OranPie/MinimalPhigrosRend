@@ -120,7 +120,7 @@ Hold 与打击特效：
 
 - `enabled`：默认 `false`
 - `mode`：默认 `aggressive`
-- `max_pointers`：默认 `2`，截断到 `[1, 8]`
+- `max_pointers`：默认 `4`，截断到 `[1, 8]`
 - `jitter_ms`：默认 `12.0`，截断到 `[0.0, 80.0]`
 - `render_pointer`：默认 `true`
 - `render_trail`：默认 `true`

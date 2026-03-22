@@ -14,6 +14,7 @@
 #include "phigros/engine/judge.hpp"
 #include "phigros/engine/note_manager.hpp"
 #include "phigros/engine/hold_logic.hpp"
+#include "phigros/engine/exact_autoplay.hpp"
 #include "phigros/engine/simulateplay.hpp"
 #include "phigros/engine/scriptplay.hpp"
 #include "phigros/core/mods.hpp"
@@ -36,6 +37,12 @@ using json = nlohmann::json;
 namespace fs = std::filesystem;
 
 // ── Chart loading helpers ────────────────────────────────────────────────────
+
+static phigros::engine::SimMode parse_sim_mode_local(const std::string& mode) {
+    if (mode == "conservative") return phigros::engine::SimMode::Conservative;
+    if (mode == "extreme") return phigros::engine::SimMode::Extreme;
+    return phigros::engine::SimMode::Aggressive;
+}
 
 static std::string detect_format(const std::string& path) {
     std::ifstream f(path);
@@ -620,7 +627,6 @@ int main(int argc, char* argv[]) {
             std::vector<NoteState> st(chart.notes.size());
             for (size_t i = 0; i < st.size(); ++i) st[i].note = &chart.notes[i];
             engine::Judge j;
-            engine::SimulatePlayer ap(engine::SimMode::Conservative);
             engine::ScriptPlayPlayer sp;
             if (use_scriptplay)
                 sp.load(cfg.judge_script_path, chart, HOLD_TOL);
@@ -631,13 +637,15 @@ int main(int argc, char* argv[]) {
                 return lo;
             };
             int inx = 0;
+            double prev_tc = chart.offset - SIM_DT;
             for (double tc = chart.offset; tc <= simulation_end; tc += SIM_DT) {
                 if (use_scriptplay) sp.tick(tc, chart.notes, st, j);
-                else ap.step(tc, chart.notes, st, chart.lines, j, W, H);
+                else engine::exact_autoplay_step(prev_tc, tc, chart.notes, st, chart.lines, j, W, H);
                 inx = fnext(tc);
                 engine::detect_misses(st, inx, tc, engine::Judge::BAD, j);
                 engine::hold_maintenance(st, inx, tc, HOLD_TOL, j);
                 engine::hold_finalize(st, inx, tc, HOLD_TOL, engine::Judge::BAD, j);
+                prev_tc = tc;
             }
             return engine::compute_score(j.acc_sum, j.max_combo, scoring_notes);
         };
@@ -672,7 +680,6 @@ int main(int argc, char* argv[]) {
             << " notes=" << chart.notes.size());
         for (size_t i = 0; i < st.size(); ++i) st[i].note = &chart.notes[i];
         engine::Judge j;
-        engine::SimulatePlayer ap(engine::SimMode::Conservative);
         engine::ScriptPlayPlayer sp;
         if (use_scriptplay) {
             try {
@@ -689,13 +696,15 @@ int main(int argc, char* argv[]) {
             return lo;
         };
         int inx = 0;
+        double prev_tc = chart.offset - SIM_DT;
         for (double tc = chart.offset; tc <= simulation_end; tc += SIM_DT) {
             if (use_scriptplay) sp.tick(tc, chart.notes, st, j);
-            else ap.step(tc, chart.notes, st, chart.lines, j, W, H);
+            else engine::exact_autoplay_step(prev_tc, tc, chart.notes, st, chart.lines, j, W, H);
             inx = fnext(tc);
             engine::detect_misses(st, inx, tc, engine::Judge::BAD, j);
             engine::hold_maintenance(st, inx, tc, HOLD_TOL, j);
             engine::hold_finalize(st, inx, tc, HOLD_TOL, engine::Judge::BAD, j);
+            prev_tc = tc;
         }
         auto sr = engine::compute_score(j.acc_sum, j.max_combo, scoring_notes);
         // Print score as plain output (purpose of --score-only)

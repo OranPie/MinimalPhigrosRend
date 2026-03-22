@@ -14,6 +14,7 @@
 #include "phigros/engine/judge.hpp"
 #include "phigros/engine/note_manager.hpp"
 #include "phigros/engine/hold_logic.hpp"
+#include "phigros/engine/exact_autoplay.hpp"
 #include "phigros/engine/simulateplay.hpp"
 #include "phigros/engine/scriptplay.hpp"
 #include "phigros/engine/effects.hpp"
@@ -83,6 +84,7 @@ struct GameLoop {
     double  result_t     = 0.0;
     int     idx_next     = 0;
     int     headless_sub = 0;
+    double  prev_exact_autoplay_t = -1e9;
 
     // ── Recording ────────────────────────────────────────────────────────────
     io::RecordingSession    recorder;
@@ -398,6 +400,7 @@ struct GameLoop {
             << " audio_offset_sec=" << audio_offset_sec);
 
         last_time = Window::get_time_sec();
+        prev_exact_autoplay_t = chart.offset - sim_dt;
 
         // Load replay if requested
         if (!args.play_replay_path.empty()) {
@@ -603,12 +606,12 @@ struct GameLoop {
                 }
             }
         } else {
-            static std::vector<int> s_hit_notes;
             static std::vector<engine::SimHitEvent> s_hit_events;
-            s_hit_notes.clear();
             s_hit_events.clear();
-            autoplay.step(t, chart.notes, states, chart.lines, judge, W, H,
-                          &s_hit_notes, &s_hit_events);
+            engine::exact_autoplay_step(prev_exact_autoplay_t, t,
+                                        chart.notes, states, chart.lines, judge, W, H,
+                                        &s_hit_events);
+            prev_exact_autoplay_t = t;
             // Emit hit effects and hitsounds for each note judged this step
             if (t >= 0.0) {
                 for (const auto& ev : s_hit_events) {
@@ -1984,6 +1987,7 @@ private:
                              cfg.simulateplay.enabled && cfg.simulateplay.render_trail,
                              cfg.simulateplay.trail_seconds,
                              cfg.simulateplay.cursor_radius_px);
+        prev_exact_autoplay_t = chart.offset - sim_dt;
         replay_player.cursor = 0;
         recent_judges.clear();
         ctx.reload_audio(chart.offset);

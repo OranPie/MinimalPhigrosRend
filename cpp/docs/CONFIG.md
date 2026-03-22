@@ -120,7 +120,7 @@ Nested `simulateplay` object:
 
 - `enabled`: default `false`
 - `mode`: default `aggressive`
-- `max_pointers`: default `2`, clamped to `[1, 8]`
+- `max_pointers`: default `4`, clamped to `[1, 8]`
 - `jitter_ms`: default `12.0`, clamped to `[0.0, 80.0]`
 - `render_pointer`: default `true`
 - `render_trail`: default `true`
