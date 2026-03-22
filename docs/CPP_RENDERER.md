@@ -28,6 +28,7 @@ Common tasks:
 ```bash
 ./cpp/build/phigros_render charts/MyChart/IN.json --score-only
 ./cpp/build/phigros_render charts/MyChart/IN.json --play
+./cpp/build/phigros_render charts/MyChart/IN.json --mode scriptplay --scriptplay docs/scriptplay_template.json
 ./cpp/build/phigros_render charts/MyChart/IN.json --record out.mp4
 ./cpp/build/phigros_render charts/MyChart/IN.json --benchmark --benchmark-iterations 20
 ./cpp/build/phigros_render charts/MyChart/IN.json --config config/config.jsonc
@@ -46,7 +47,9 @@ For format internals, see [../cpp/docs/FORMAT.md](../cpp/docs/FORMAT.md) and [..
 
 Playback:
 
+- `--mode <autoplay|manual|scriptplay>`
 - `--play`
+- `--scriptplay <file.json>`
 - `--score-only`
 - `--duration <sec>`
 - `--truncate-at-duration`
@@ -82,6 +85,7 @@ Compile and script workflow:
 - `--encrypt [aes-gcm|aes-cbc|chacha20|xor]`
 - `--password <passphrase>`
 - `--script <file.chartscript.json>`
+- `--scriptplay <file.json>`
 - `--mod <file.mod.json>`
 
 Utility and logging:
@@ -111,5 +115,6 @@ Read these next:
 - C++ quickstart: [../cpp/README.md](../cpp/README.md)
 - Python bindings: [PYTHON_BINDINGS.md](PYTHON_BINDINGS.md)
 - ChartScript: [CHARTSCRIPT.md](CHARTSCRIPT.md)
+- ScriptPlay DSL: [SCRIPTPLAY.md](SCRIPTPLAY.md)
 - Internal render pipeline: [../cpp/docs/RENDER.md](../cpp/docs/RENDER.md)
 - Internal architecture: [../cpp/docs/ARCHITECTURE.md](../cpp/docs/ARCHITECTURE.md)

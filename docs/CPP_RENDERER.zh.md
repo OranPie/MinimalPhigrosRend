@@ -28,6 +28,7 @@ cmake --build cpp/build --parallel
 ```bash
 ./cpp/build/phigros_render charts/MyChart/IN.json --score-only
 ./cpp/build/phigros_render charts/MyChart/IN.json --play
+./cpp/build/phigros_render charts/MyChart/IN.json --mode scriptplay --scriptplay docs/scriptplay_template.json
 ./cpp/build/phigros_render charts/MyChart/IN.json --record out.mp4
 ./cpp/build/phigros_render charts/MyChart/IN.json --benchmark --benchmark-iterations 20
 ./cpp/build/phigros_render charts/MyChart/IN.json --config config/config.jsonc
@@ -46,7 +47,9 @@ cmake --build cpp/build --parallel
 
 播放控制：
 
+- `--mode <autoplay|manual|scriptplay>`
 - `--play`
+- `--scriptplay <file.json>`
 - `--score-only`
 - `--duration <sec>`
 - `--truncate-at-duration`
@@ -82,6 +85,7 @@ cmake --build cpp/build --parallel
 - `--encrypt [aes-gcm|aes-cbc|chacha20|xor]`
 - `--password <passphrase>`
 - `--script <file.chartscript.json>`
+- `--scriptplay <file.json>`
 - `--mod <file.mod.json>`
 
 工具与日志：
@@ -111,5 +115,6 @@ cmake --build cpp/build --parallel
 - C++ 快速入口：[../cpp/README.zh.md](../cpp/README.zh.md)
 - Python 绑定：[PYTHON_BINDINGS.zh.md](PYTHON_BINDINGS.zh.md)
 - ChartScript：[CHARTSCRIPT.zh.md](CHARTSCRIPT.zh.md)
+- ScriptPlay DSL：[SCRIPTPLAY.zh.md](SCRIPTPLAY.zh.md)
 - 内部渲染管线：[../cpp/docs/RENDER.zh.md](../cpp/docs/RENDER.zh.md)
 - 内部架构：[../cpp/docs/ARCHITECTURE.zh.md](../cpp/docs/ARCHITECTURE.zh.md)

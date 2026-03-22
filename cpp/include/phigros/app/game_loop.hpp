@@ -15,6 +15,7 @@
 #include "phigros/engine/note_manager.hpp"
 #include "phigros/engine/hold_logic.hpp"
 #include "phigros/engine/simulateplay.hpp"
+#include "phigros/engine/scriptplay.hpp"
 #include "phigros/engine/effects.hpp"
 #include "phigros/engine/manual_judge.hpp"
 #include "phigros/render/renderer.hpp"
@@ -56,6 +57,7 @@ struct GameLoop {
     const double                       chart_end;
     const double                       progress_end;
     const bool                         is_play_mode;
+    const bool                         is_scriptplay_mode;
     const double                       audio_offset_sec;  // cfg.audio_offset_ms/1000
     const bool                         mute_live_audio;
 
@@ -64,6 +66,7 @@ struct GameLoop {
     engine::Judge                      judge;
     engine::EffectManager              effects;
     engine::SimulatePlayer             autoplay{engine::SimMode::Conservative};
+    engine::ScriptPlayPlayer           scriptplay;
     engine::ManualJudge                manual_judge;
     io::ReplayWriter                   replay_writer;
     io::ReplayPlayer                   replay_player;
@@ -331,7 +334,9 @@ struct GameLoop {
         , W(cfg_.window_w), H(cfg_.window_h)
         , playable_notes(playable_notes_), chart_end(chart_end_)
         , progress_end((args_.duration > 0.0) ? std::min(chart_end_, args_.duration) : chart_end_)
-        , is_play_mode(args_.play_mode || !args_.play_replay_path.empty())
+        , is_play_mode(args_.play_mode || !args_.play_replay_path.empty() ||
+                       cfg_.gameplay_mode == "manual" || cfg_.gameplay_mode == "scriptplay")
+        , is_scriptplay_mode(cfg_.gameplay_mode == "scriptplay")
         , audio_offset_sec(cfg_.audio_offset_ms / 1000.0)
         , mute_live_audio(!args_.record_output.empty())
     {
@@ -368,6 +373,8 @@ struct GameLoop {
                              cfg.simulateplay.enabled && cfg.simulateplay.render_trail,
                              cfg.simulateplay.trail_seconds,
                              cfg.simulateplay.cursor_radius_px);
+        if (is_scriptplay_mode)
+            scriptplay.load(cfg.judge_script_path, chart, cfg.hold_tail_tol);
 
         // Timing constants
         const double effective_sim_fps = (args.sim_fps > 0.0) ? args.sim_fps : args.record_fps;
@@ -377,7 +384,9 @@ struct GameLoop {
         sim_steps_per_render = std::max(1, static_cast<int>(
             std::round(render_dt / sim_dt)));
         PHLOG_INFO(Engine, "GameLoop init: mode="
-            << (is_play_mode ? (replay_player.enabled() ? "replay" : "play") : "autoplay")
+            << (replay_player.enabled() ? "replay"
+                : (is_scriptplay_mode ? "scriptplay"
+                   : (is_play_mode ? "play" : "autoplay")))
             << " notes=" << chart.notes.size()
             << " playable=" << playable_notes
             << " chart_end=" << chart_end
@@ -471,7 +480,7 @@ struct GameLoop {
                         auto sc = PHIGROS_KEY_SCANCODE(e);
                         if (sc == SDL_SCANCODE_SPACE) {
                             paused = !paused;
-                            PHLOG_DEBUG(Engine, paused ? "Paused" : "Resumed");
+                            PHLOG_DEBUG(Engine, (paused ? "Paused" : "Resumed"));
                         }
                         if (sc == SDL_SCANCODE_R)     do_restart();
                     }
@@ -542,6 +551,29 @@ struct GameLoop {
                             const auto& note = chart.notes[nidx];
                             if (!mute_live_audio) ctx.audio.play_hitsound(note.kind);
                             if (is_recording) recorder.record_hitsound(note.kind, ft);
+                            math::RGB col = resolve_hitfx_color(note, g);
+                            for (const auto& ns : render::build_frame(
+                                     ft, chart, states, judge, cfg).notes) {
+                                if (ns.nid == nidx) {
+                                    effects.add_hitfx(ns.wx, ns.wy, ft, col);
+                                    effects.add_particle_burst(ns.wx, ns.wy,
+                                        ft * 1000.0, 500.0, col);
+                                    break;
+                                }
+                            }
+                        });
+                } else if (is_scriptplay_mode) {
+                    scriptplay.tick(t, chart.notes, states, judge,
+                        [&](int nidx, float ft, const std::string& g) {
+                            if (nidx < 0 || nidx >= static_cast<int>(chart.notes.size())) return;
+                            if (!args.save_replay_path.empty())
+                                replay_writer.record(ft, static_cast<uint32_t>(nidx), g);
+                            const auto& note = chart.notes[nidx];
+                            if (g != "hold_release") {
+                                if (!mute_live_audio) ctx.audio.play_hitsound(note.kind);
+                                if (is_recording) recorder.record_hitsound(note.kind, ft);
+                            }
+                            if (g == "hold_release") return;
                             math::RGB col = resolve_hitfx_color(note, g);
                             for (const auto& ns : render::build_frame(
                                      ft, chart, states, judge, cfg).notes) {
@@ -813,6 +845,72 @@ private:
         }
     }
 
+    static math::RGB debug_grade_color(const std::string& grade) {
+        if (grade == "PERFECT") return {255, 240, 150};
+        if (grade == "GOOD")    return {140, 255, 170};
+        if (grade == "BAD")     return {255, 190, 120};
+        if (grade == "MISS")    return {255, 120, 120};
+        return {220, 220, 255};
+    }
+
+    void draw_planned_judge_info(const render::NoteSnapshot& ns,
+                                 const Note& note,
+                                 double x, double y) {
+        if (!has_debug(DebugFlag::PLANNED_JUDGE_INFO)) return;
+        if (args.play_mode) return;
+        if (replay_player.enabled()) return;
+        if (ns.judged || ns.miss) return;
+        if (!(is_scriptplay_mode || !is_play_mode)) return;
+
+        std::string label;
+        std::string detail;
+        math::RGB color{180, 220, 255};
+
+        if (is_scriptplay_mode &&
+            ns.nid >= 0 &&
+            ns.nid < static_cast<int>(scriptplay.plan.note_plans.size())) {
+            const auto& plan = scriptplay.plan.note_plans[ns.nid];
+            const bool full_hold = note.kind == 3 && !plan.hold_percent && !plan.hold_ms;
+            color = debug_grade_color(plan.grade);
+            char buf[128];
+            std::snprintf(buf, sizeof(buf), "SP %s %+.0fms",
+                          plan.grade.c_str(), plan.dt_ms);
+            label = buf;
+            if (note.kind == 3) {
+                if (plan.grade == "MISS") {
+                    detail = "skip hold";
+                } else if (plan.hold_percent) {
+                    char hold_buf[64];
+                    std::snprintf(hold_buf, sizeof(hold_buf), "hold %.0f%%",
+                                  std::clamp(*plan.hold_percent, 0.0, 1.0) * 100.0);
+                    detail = hold_buf;
+                } else if (plan.hold_ms) {
+                    char hold_buf[64];
+                    std::snprintf(hold_buf, sizeof(hold_buf), "hold %.0fms",
+                                  std::max(0.0, *plan.hold_ms));
+                    detail = hold_buf;
+                } else if (full_hold) {
+                    detail = "hold full";
+                }
+            }
+        } else {
+            label = "AP PERFECT +0ms";
+            if (note.kind == 3) detail = "hold full";
+            color = debug_grade_color("PERFECT");
+        }
+
+        const double tw = ctx.hud_ren.text_width(ctx.hud_ren.font_small, label);
+        const double panel_w = tw + 10.0;
+        const double panel_h = detail.empty() ? 18.0 : 32.0;
+        const double px = x - panel_w * 0.5;
+        const double py = y - 38.0;
+        ctx.batch.draw_rect(px, py, panel_w, panel_h, 0, 0, 0, 110);
+        ctx.batch.draw_line(px, py, px + panel_w, py, 2.0, color.r, color.g, color.b, 220);
+        debug_text(px + 5.0, py + 3.0, label, color.r, color.g, color.b, 235);
+        if (!detail.empty())
+            debug_text(px + 5.0, py + 16.0, detail, 220, 230, 255, 215);
+    }
+
     bool note_uses_mh_texture(const render::NoteSnapshot& ns) const {
         if (!ns.mh) return false;
         switch (ns.kind) {
@@ -948,7 +1046,7 @@ private:
             std::snprintf(l2, sizeof(l2), "render_dt=%.2fms  sim_dt=%.2fms  sim/render=%d",
                           render_dt * 1000.0, sim_dt * 1000.0, sim_steps_per_render);
             std::snprintf(l3, sizeof(l3), "mode=%s  paused=%s  result=%s",
-                          is_recording ? "record" : (is_play_mode ? "play" : "autoplay"),
+                          is_recording ? "record" : (replay_player.enabled() ? "replay" : (is_scriptplay_mode ? "scriptplay" : (is_play_mode ? "play" : "autoplay"))),
                           paused ? "yes" : "no",
                           result_shown ? "yes" : "no");
             double tw = std::max({ctx.hud_ren.text_width(ctx.hud_ren.font_small, l1),
@@ -1343,6 +1441,10 @@ private:
 
             if (has_debug(DebugFlag::NOTE_LINE_NUMBER)) {
                 debug_text(x + 8.0, y + 8.0, std::to_string(ns.nid), 255, 255, 160, 235);
+            }
+
+            if (note != nullptr) {
+                draw_planned_judge_info(ns, *note, x, y);
             }
 
             if (has_debug(DebugFlag::NOTE_JUDGE_WINDOW) && note != nullptr) {

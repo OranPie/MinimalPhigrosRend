@@ -93,6 +93,8 @@ struct RenderConfig {
 
     // Gameplay
     bool autoplay = true;
+    std::string gameplay_mode = "autoplay";
+    std::string judge_script_path;
     double hold_tail_tol = 0.8;
     int hold_fx_interval_ms = 200;
     double audio_offset_ms = 0.0; // positive = advance notes relative to audio
@@ -210,6 +212,8 @@ inline RenderConfig load_config_json(const nlohmann::json& j) {
     if (j.contains("gameplay")) {
         auto& g = j["gameplay"];
         if (g.contains("autoplay") && !g["autoplay"].is_null()) cfg.autoplay = g["autoplay"].get<bool>();
+        if (g.contains("mode") && !g["mode"].is_null()) cfg.gameplay_mode = g["mode"].get<std::string>();
+        if (g.contains("judge_script") && !g["judge_script"].is_null()) cfg.judge_script_path = g["judge_script"].get<std::string>();
         if (g.contains("hold_tail_tol") && !g["hold_tail_tol"].is_null()) cfg.hold_tail_tol = g["hold_tail_tol"].get<double>();
         if (g.contains("hold_fx_interval_ms") && !g["hold_fx_interval_ms"].is_null()) cfg.hold_fx_interval_ms = g["hold_fx_interval_ms"].get<int>();
         if (g.contains("audio_offset_ms") && !g["audio_offset_ms"].is_null()) cfg.audio_offset_ms = g["audio_offset_ms"].get<double>();
@@ -312,6 +316,8 @@ inline nlohmann::json config_to_json(const RenderConfig& cfg) {
     j["assets"]["bg_dim"]   = cfg.bg_dim;
 
     j["gameplay"]["autoplay"]          = cfg.autoplay;
+    j["gameplay"]["mode"]              = cfg.gameplay_mode;
+    j["gameplay"]["judge_script"]      = cfg.judge_script_path.empty() ? nlohmann::json(nullptr) : nlohmann::json(cfg.judge_script_path);
     j["gameplay"]["hold_tail_tol"]     = cfg.hold_tail_tol;
     j["gameplay"]["hold_fx_interval_ms"] = cfg.hold_fx_interval_ms;
     j["gameplay"]["audio_offset_ms"]   = cfg.audio_offset_ms;

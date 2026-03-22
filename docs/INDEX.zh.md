@@ -9,6 +9,7 @@
 - [CPP_RENDERER.zh.md](CPP_RENDERER.zh.md)：构建、运行、CLI、回放、录制、基准测试
 - [CONFIG_USAGE.zh.md](CONFIG_USAGE.zh.md)：配置文件、CLI 覆盖与 ChartScript 覆盖之间的关系
 - [CHARTSCRIPT.zh.md](CHARTSCRIPT.zh.md)：播放列表 / 脚本 DSL
+- [SCRIPTPLAY.zh.md](SCRIPTPLAY.zh.md)：用于 autoplay 类运行的确定性判定脚本 DSL
 
 ### Python 绑定使用者
 

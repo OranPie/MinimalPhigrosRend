@@ -15,6 +15,7 @@
 #include "phigros/engine/note_manager.hpp"
 #include "phigros/engine/hold_logic.hpp"
 #include "phigros/engine/simulateplay.hpp"
+#include "phigros/engine/scriptplay.hpp"
 #include "phigros/core/mods.hpp"
 #include "phigros/core/mod_loader.hpp"
 #include "phigros/engine/chartscript.hpp"
@@ -128,9 +129,13 @@ static phigros::ChartData load_chart(const std::string& path,
     return phigros::chart::parse_pec(path, cfg.window_w, cfg.window_h);
 }
 
-// ── main ─────────────────────────────────────────────────────────────────────
+// ── main / SDL_main ──────────────────────────────────────────────────────────
 
+#if defined(PHIGROS_IOS)
+extern "C" int SDL_main(int argc, char* argv[]) {
+#else
 int main(int argc, char* argv[]) {
+#endif
     using namespace phigros;
     using namespace phigros::app;
 
@@ -139,6 +144,7 @@ int main(int argc, char* argv[]) {
     PHLOG_DEBUG(General, "CLI parsed: argc=" << argc
         << " chart=" << (args.chart_path.empty() ? "<none>" : args.chart_path)
         << " script=" << (args.script_path.empty() ? "<none>" : args.script_path)
+        << " scriptplay=" << (args.scriptplay_path.empty() ? "<none>" : args.scriptplay_path)
         << " config=" << (args.config_path.empty() ? "<default>" : args.config_path)
         << " headless=" << args.headless
         << " play=" << args.play_mode
@@ -184,6 +190,9 @@ int main(int argc, char* argv[]) {
         cfg = config::load_config(args.config_path);
     }
     if (!args.backend.empty()) cfg.backend = args.backend;
+    if (!args.mode_override.empty()) cfg.gameplay_mode = args.mode_override;
+    if (!args.scriptplay_path.empty()) cfg.judge_script_path = args.scriptplay_path;
+    if (args.play_mode) cfg.gameplay_mode = "manual";
     if (args.audio_offset_ms != 0.0) cfg.audio_offset_ms = args.audio_offset_ms;
     if (args.window_w > 0) cfg.window_w = args.window_w;
     if (args.window_h > 0) cfg.window_h = args.window_h;
@@ -204,6 +213,8 @@ int main(int argc, char* argv[]) {
     PHLOG_DEBUG(General, "Effective config: backend=" << cfg.backend
         << " window=" << W << "x" << H
         << " audio_offset_ms=" << cfg.audio_offset_ms
+        << " gameplay_mode=" << cfg.gameplay_mode
+        << " judge_script=" << (cfg.judge_script_path.empty() ? "<none>" : cfg.judge_script_path)
         << " approach=" << cfg.approach
         << " chart_speed=" << cfg.chart_speed
         << " expand=" << cfg.expand_factor
@@ -211,6 +222,10 @@ int main(int argc, char* argv[]) {
         << " note_alpha=" << cfg.note_alpha
         << " font_size=" << cfg.font_size
         << " overlay_transparent=" << cfg.overlay_transparent);
+    if (cfg.gameplay_mode == "scriptplay" && cfg.judge_script_path.empty()) {
+        PHLOG_FATAL(Engine, "scriptplay mode requires gameplay.judge_script or --scriptplay");
+        return 1;
+    }
 
     // ── Info mode (no full parse) ─────────────────────────────────────────────
     if (args.info_mode) {
@@ -309,19 +324,25 @@ int main(int argc, char* argv[]) {
                           /*no_vsync=*/!item_args.record_output.empty(),
                           /*meta_bg_path=*/item_chart.meta_bg_path);
 
-            GameLoop gl(item_ctx, item_args, item_cfg, item_chart,
-                        item_chart.playable_count, seg_end);
+            engine::ScoreResult sr{};
+            try {
+                GameLoop gl(item_ctx, item_args, item_cfg, item_chart,
+                            item_chart.playable_count, seg_end);
 
 #ifdef PHIGROS_WASM
-            emscripten_set_main_loop_arg(GameLoop::wasm_tick, &gl, 0, 1);
-            quit_out = true;
-            return {};
+                emscripten_set_main_loop_arg(GameLoop::wasm_tick, &gl, 0, 1);
+                quit_out = true;
+                return {};
 #else
-            while (gl.run_frame()) {}
+                while (gl.run_frame()) {}
 #endif
-            auto sr = gl.final_score();
-            quit_out = item_ctx.window.quit_requested;
-            gl.finish();
+                sr = gl.final_score();
+                quit_out = item_ctx.window.quit_requested;
+                gl.finish();
+            } catch (const std::exception& e) {
+                item_ctx.destroy();
+                throw;
+            }
             item_ctx.destroy();
             return sr;
         };
@@ -592,13 +613,17 @@ int main(int argc, char* argv[]) {
     // ── SCORE-ONLY / BENCHMARK ────────────────────────────────────────────────
     if (args.score_only) {
         constexpr double SIM_DT   = 1.0 / 240.0;
-        constexpr double HOLD_TOL = 0.30;
+        const double HOLD_TOL = cfg.hold_tail_tol;
+        const bool use_scriptplay = (cfg.gameplay_mode == "scriptplay");
 
         auto run_engine = [&]() -> engine::ScoreResult {
             std::vector<NoteState> st(chart.notes.size());
             for (size_t i = 0; i < st.size(); ++i) st[i].note = &chart.notes[i];
             engine::Judge j;
             engine::SimulatePlayer ap(engine::SimMode::Conservative);
+            engine::ScriptPlayPlayer sp;
+            if (use_scriptplay)
+                sp.load(cfg.judge_script_path, chart, HOLD_TOL);
             auto fnext = [&](double tc) {
                 int lo = 0, hi = (int)st.size();
                 while (lo < hi) { int m = (lo+hi)/2;
@@ -607,7 +632,8 @@ int main(int argc, char* argv[]) {
             };
             int inx = 0;
             for (double tc = chart.offset; tc <= simulation_end; tc += SIM_DT) {
-                ap.step(tc, chart.notes, st, chart.lines, j, W, H);
+                if (use_scriptplay) sp.tick(tc, chart.notes, st, j);
+                else ap.step(tc, chart.notes, st, chart.lines, j, W, H);
                 inx = fnext(tc);
                 engine::detect_misses(st, inx, tc, engine::Judge::BAD, j);
                 engine::hold_maintenance(st, inx, tc, HOLD_TOL, j);
@@ -645,7 +671,17 @@ int main(int argc, char* argv[]) {
             << " start=" << chart.offset << " end=" << simulation_end
             << " notes=" << chart.notes.size());
         for (size_t i = 0; i < st.size(); ++i) st[i].note = &chart.notes[i];
-        engine::Judge j; engine::SimulatePlayer ap(engine::SimMode::Conservative);
+        engine::Judge j;
+        engine::SimulatePlayer ap(engine::SimMode::Conservative);
+        engine::ScriptPlayPlayer sp;
+        if (use_scriptplay) {
+            try {
+                sp.load(cfg.judge_script_path, chart, HOLD_TOL);
+            } catch (const std::exception& e) {
+                PHLOG_FATAL(Engine, e.what());
+                return 1;
+            }
+        }
         auto fnext = [&](double tc) {
             int lo=0, hi=(int)st.size();
             while (lo<hi) { int m=(lo+hi)/2;
@@ -654,11 +690,12 @@ int main(int argc, char* argv[]) {
         };
         int inx = 0;
         for (double tc = chart.offset; tc <= simulation_end; tc += SIM_DT) {
-            ap.step(tc, chart.notes, st, chart.lines, j, W, H);
+            if (use_scriptplay) sp.tick(tc, chart.notes, st, j);
+            else ap.step(tc, chart.notes, st, chart.lines, j, W, H);
             inx = fnext(tc);
             engine::detect_misses(st, inx, tc, engine::Judge::BAD, j);
-            engine::hold_maintenance(st, inx, tc, 0.30, j);
-            engine::hold_finalize(st, inx, tc, 0.30, engine::Judge::BAD, j);
+            engine::hold_maintenance(st, inx, tc, HOLD_TOL, j);
+            engine::hold_finalize(st, inx, tc, HOLD_TOL, engine::Judge::BAD, j);
         }
         auto sr = engine::compute_score(j.acc_sum, j.max_combo, scoring_notes);
         // Print score as plain output (purpose of --score-only)
@@ -680,31 +717,38 @@ int main(int argc, char* argv[]) {
              /*no_vsync=*/!args.record_output.empty(),
              /*meta_bg_path=*/chart.meta_bg_path);
 
-    GameLoop gl(ctx, args, cfg, chart, scoring_notes, chart_end);
+    try {
+        GameLoop gl(ctx, args, cfg, chart, scoring_notes, chart_end);
 
 #ifdef PHIGROS_WASM
-    emscripten_set_main_loop_arg(GameLoop::wasm_tick, &gl, 0, 1);
+        emscripten_set_main_loop_arg(GameLoop::wasm_tick, &gl, 0, 1);
 #else
-    while (gl.run_frame()) {}
+        while (gl.run_frame()) {}
 #endif
 
-    PHLOG_INFO(Engine, "Main loop finished: quit_requested=" << ctx.window.quit_requested);
+        PHLOG_INFO(Engine, "Main loop finished: quit_requested=" << ctx.window.quit_requested);
 
-    // Final results
-    auto sr = gl.final_score();
-    const char* tag = gl.is_play_mode
-        ? (gl.replay_player.enabled() ? "Replay Complete" : "Play Complete")
-        : "Render Complete";
-    // Print final score as plain output (always visible regardless of log level)
-    printf("\n=== %s ===\nScore: %d\nAccuracy: %.4f%%\nMaxCombo: %d/%d\nJudged: %d/%d\n",
-           tag, sr.score, sr.acc_ratio * 100.0,
-           gl.judge.max_combo, scoring_notes,
-           gl.judge.judged_cnt, scoring_notes);
-    PHLOG_DEBUG(Engine, "acc_sum=" << gl.judge.acc_sum
-        << " judged=" << gl.judge.judged_cnt << "/" << scoring_notes
-        << " max_combo=" << gl.judge.max_combo);
+        // Final results
+        auto sr = gl.final_score();
+        const char* tag = gl.is_play_mode
+            ? (gl.replay_player.enabled() ? "Replay Complete"
+               : (gl.is_scriptplay_mode ? "ScriptPlay Complete" : "Play Complete"))
+            : "Render Complete";
+        // Print final score as plain output (always visible regardless of log level)
+        printf("\n=== %s ===\nScore: %d\nAccuracy: %.4f%%\nMaxCombo: %d/%d\nJudged: %d/%d\n",
+               tag, sr.score, sr.acc_ratio * 100.0,
+               gl.judge.max_combo, scoring_notes,
+               gl.judge.judged_cnt, scoring_notes);
+        PHLOG_DEBUG(Engine, "acc_sum=" << gl.judge.acc_sum
+            << " judged=" << gl.judge.judged_cnt << "/" << scoring_notes
+            << " max_combo=" << gl.judge.max_combo);
 
-    gl.finish();
-    ctx.destroy();
-    return (sr.score == 1000000) ? 0 : 1;
+        gl.finish();
+        ctx.destroy();
+        return (sr.score == 1000000) ? 0 : 1;
+    } catch (const std::exception& e) {
+        PHLOG_FATAL(Engine, e.what());
+        ctx.destroy();
+        return 1;
+    }
 }

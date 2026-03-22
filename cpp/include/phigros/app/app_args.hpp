@@ -26,6 +26,8 @@ struct AppArgs {
     bool        benchmark           = false;
     int         benchmark_iterations = 10;
     bool        play_mode           = false;
+    std::string mode_override;             // --mode autoplay|manual|scriptplay
+    std::string scriptplay_path;           // --scriptplay / --judge-script
     bool        profile             = false;  // --profile: print per-phase frame timings
     bool        record_profile      = false;  // --record-profile: print record-mode bottleneck stats
     std::string save_replay_path;
@@ -129,7 +131,12 @@ inline AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--benchmark-iterations" && i+1 < argc) args.benchmark_iterations = std::atoi(argv[++i]);
         else if (a == "--profile")     args.profile = true;
         else if (a == "--record-profile") args.record_profile = true;
-        else if (a == "--play")        args.play_mode = true;
+        else if (a == "--play")        { args.play_mode = true; args.mode_override = "manual"; }
+        else if (a == "--mode"         && i+1 < argc) args.mode_override = argv[++i];
+        else if ((a == "--scriptplay" || a == "--judge-script") && i+1 < argc) {
+            args.scriptplay_path = argv[++i];
+            args.mode_override = "scriptplay";
+        }
         else if (a == "--save-replay"  && i+1 < argc) args.save_replay_path = argv[++i];
         else if (a == "--play-replay"  && i+1 < argc) args.play_replay_path = argv[++i];
         else if (a == "--backend"      && i+1 < argc) args.backend    = argv[++i];
@@ -202,7 +209,9 @@ inline void print_usage(const char* prog) {
         "  .phbc          Pre-compiled binary chart (fastest load)\n"
         "\n"
         "PLAYBACK\n"
+        "  --mode <name>             autoplay | manual | scriptplay\n"
         "  --play                    Interactive mode (mouse/touch input)\n"
+        "  --scriptplay <file.json>  Run scripted judgments from a scriptplay DSL file\n"
         "  --score-only              Headless engine scoring (fastest)\n"
         "  --duration <sec>          Auto-quit after N seconds\n"
         "  --truncate-at-duration    Score denominator uses notes fully inside --duration\n"

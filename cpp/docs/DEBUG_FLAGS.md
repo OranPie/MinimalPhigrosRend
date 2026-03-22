@@ -62,6 +62,7 @@ Rules:
 | `NOTE_LINE_NUMBER` | Draws the note id beside each visible note. |
 | `NOTE_INFO` | Draws detailed note text near each note: note id, parent line id, kind, hit time, world position, alpha, size, and hold progress for holds. |
 | `NOTE_JUDGE_WINDOW` | Draws per-note `dt` text showing time-to-hit in milliseconds and the note kind, color-coded by judgment window proximity. |
+| `PLANNED_JUDGE_INFO` | In autoplay or scriptplay modes, draws a compact pre-judgment label above visible notes showing the planned grade / dt, plus extra hold sustain text when relevant. It does not render in manual play or replay mode. |
 | `NOTE_HITBOX` | Draws a box outline around each visible note. For holds it also draws a line from head to tail. |
 | `NOTE_TRAIL` | Draws a short historical trail for each visible note using remembered positions from recent frames. |
 | `NOTE_APPROACH_GUIDE` | Draws a guide line from each unjudged note to its parent judge line. |

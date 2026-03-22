@@ -62,6 +62,7 @@
 | `NOTE_LINE_NUMBER` | 在每个可见音符旁绘制音符 id。 |
 | `NOTE_INFO` | 在音符附近绘制详细信息：音符 id、所属判定线 id、种类、命中时间、世界坐标、alpha、尺寸，以及 Hold 的进度。 |
 | `NOTE_JUDGE_WINDOW` | 在每个音符旁绘制 `dt` 文本，显示距离命中的毫秒数和音符类型，并按判定窗接近程度着色。 |
+| `PLANNED_JUDGE_INFO` | 在 autoplay 或 scriptplay 模式下，于可见音符上方绘制紧凑的“预判定”标签，显示计划中的 grade / dt；对 Hold 还会补充 sustain 信息。手打模式与 replay 模式不会绘制。 |
 | `NOTE_HITBOX` | 为每个可见音符绘制包围框；对 Hold 还会额外绘制头尾连线。 |
 | `NOTE_TRAIL` | 使用最近几帧记忆的位置，为每个可见音符绘制短拖尾轨迹。 |
 | `NOTE_APPROACH_GUIDE` | 为未判定音符绘制一条到其所属判定线的引导线。 |

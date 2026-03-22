@@ -110,6 +110,8 @@ Hold 与打击特效：
 ### `gameplay`
 
 - `autoplay`：默认 `true`
+- `mode`：`autoplay` | `manual` | `scriptplay`，默认 `autoplay`
+- `judge_script`：默认空字符串，在 `mode == "scriptplay"` 时使用
 - `hold_tail_tol`：默认 `0.8`
 - `hold_fx_interval_ms`：默认 `200`
 - `audio_offset_ms`：默认 `0.0`

@@ -57,6 +57,7 @@
   },
   "gameplay": {
     "autoplay": true,
+    "mode": "autoplay",
     "simulateplay": {
       "enabled": false,
       "mode": "aggressive",

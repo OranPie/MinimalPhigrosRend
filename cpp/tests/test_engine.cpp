@@ -17,6 +17,7 @@
 #include "phigros/engine/note_manager.hpp"
 #include "phigros/engine/hold_logic.hpp"
 #include "phigros/engine/simulateplay.hpp"
+#include "phigros/engine/scriptplay.hpp"
 #include "phigros/engine/effects.hpp"
 #include "phigros/core/mods.hpp"
 #include "phigros/config/render_config.hpp"
@@ -352,6 +353,136 @@ static void test_judge_boundaries() {
         // score = round(900000 * 0.6 + 100000 * 1.0) = 640000
         CHECK(sr.score == 640000, "Score formula: 1 GOOD = 640000");
     }
+}
+
+// ---- 6A4: ScriptPlay parser + scoring tests ----
+static void test_scriptplay() {
+    std::cout << "\n=== ScriptPlay tests ===\n";
+
+    ChartData chart;
+    Line ln;
+    ln.lid = 0;
+    ln.pos_x = [](double) { return 400.0; };
+    ln.pos_y = [](double) { return 300.0; };
+    ln.rot   = [](double) { return 0.0; };
+    ln.alpha = [](double) { return 1.0; };
+    ln.scroll_fn = [](double t) { return t * 100.0; };
+    chart.lines.push_back(std::move(ln));
+
+    Note tap0{};
+    tap0.nid = 0;
+    tap0.line_id = 0;
+    tap0.kind = 1;
+    tap0.t_hit = 1.0;
+    tap0.t_end = 1.0;
+    tap0.above = true;
+    tap0.alpha01 = 1.0;
+    tap0.scroll_hit = 100.0;
+    tap0.scroll_end = 100.0;
+    chart.notes.push_back(tap0);
+
+    Note hold1{};
+    hold1.nid = 1;
+    hold1.line_id = 0;
+    hold1.kind = 3;
+    hold1.t_hit = 2.0;
+    hold1.t_end = 3.0;
+    hold1.above = true;
+    hold1.alpha01 = 1.0;
+    hold1.scroll_hit = 200.0;
+    hold1.scroll_end = 300.0;
+    chart.notes.push_back(hold1);
+
+    Note tap2{};
+    tap2.nid = 2;
+    tap2.line_id = 0;
+    tap2.kind = 1;
+    tap2.t_hit = 4.0;
+    tap2.t_end = 4.0;
+    tap2.above = true;
+    tap2.alpha01 = 1.0;
+    tap2.scroll_hit = 400.0;
+    tap2.scroll_end = 400.0;
+    chart.notes.push_back(tap2);
+
+    chart.finalize();
+
+    const std::string script_text = R"json(
+{
+  "version": 1,
+  "meta": {
+    "name": "unit-test",
+    "index_mode": "playable",
+    "require_playable_notes": 3
+  },
+  "entries": [
+    {
+      "filter": { "noteIndexes": [1] },
+      "judge": { "grade": "GOOD", "dt_ms": 60 },
+      "hold": { "percent": 1.0 }
+    },
+    {
+      "filter": { "noteIndexes": [2] },
+      "judge": { "grade": "MISS" }
+    }
+  ]
+}
+)json";
+
+    auto script = engine::load_scriptplay_text(script_text);
+    CHECK(script.entries.size() == 2, "ScriptPlay parser: loads two entries");
+
+    auto plan = engine::compile_scriptplay(script, chart, 0.8);
+    CHECK(plan.note_plans.size() == 3, "ScriptPlay compiler: plan sized to notes");
+    CHECK(plan.note_plans[1].grade == "GOOD", "ScriptPlay compiler: hold grade override parsed");
+    CHECK(plan.note_plans[2].grade == "MISS", "ScriptPlay compiler: miss override parsed");
+
+    std::vector<NoteState> states(chart.notes.size());
+    for (size_t i = 0; i < states.size(); ++i) states[i].note = &chart.notes[i];
+
+    engine::Judge judge;
+    engine::ScriptPlayPlayer player;
+    player.load(script, chart, 0.8);
+
+    auto fnext = [&](double tc) {
+        int lo = 0, hi = static_cast<int>(states.size());
+        while (lo < hi) {
+            int m = (lo + hi) / 2;
+            if (states[m].judged || states[m].note->t_hit < tc - 0.5) lo = m + 1;
+            else hi = m;
+        }
+        return lo;
+    };
+
+    int idx_next = 0;
+    constexpr double SIM_DT = 1.0 / 240.0;
+    for (double tc = 0.0; tc <= 4.5; tc += SIM_DT) {
+        player.tick(tc, chart.notes, states, judge);
+        idx_next = fnext(tc);
+        engine::detect_misses(states, idx_next, tc, engine::Judge::BAD, judge);
+        engine::hold_maintenance(states, idx_next, tc, 0.8, judge);
+        engine::hold_finalize(states, idx_next, tc, 0.8, engine::Judge::BAD, judge);
+    }
+
+    auto sr = engine::compute_score(judge.acc_sum, judge.max_combo, chart.playable_count);
+    CHECK(judge.judged_cnt == 3, "ScriptPlay scoring: all notes judged");
+    CHECK(judge.max_combo == 2, "ScriptPlay scoring: combo reflects trailing miss");
+    CHECK(sr.score == 546666, "ScriptPlay scoring: expected mixed-result score");
+
+    bool threw = false;
+    try {
+        auto bad_script = engine::load_scriptplay_text(R"json(
+{
+  "entries": [
+    { "filter": { "noteIndexes": [0] }, "judge": { "grade": "PERFECT", "dt_ms": 80 } }
+  ]
+}
+)json");
+        (void)engine::compile_scriptplay(bad_script, chart, 0.8);
+    } catch (...) {
+        threw = true;
+    }
+    CHECK(threw, "ScriptPlay validation: invalid grade/dt combination throws");
 }
 
 // ---- 6A4: Replay round-trip test ----
@@ -1203,6 +1334,7 @@ int main(int argc, char* argv[]) {
     test_effects();
     test_mods();
     test_kinematics();
+    test_scriptplay();
     test_judge_boundaries();
     test_replay_roundtrip();
     test_edge_cases();

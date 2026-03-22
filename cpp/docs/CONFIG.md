@@ -110,6 +110,8 @@ Backend alias:
 ### `gameplay`
 
 - `autoplay`: default `true`
+- `mode`: `autoplay` | `manual` | `scriptplay`, default `autoplay`
+- `judge_script`: default empty string, used when `mode == "scriptplay"`
 - `hold_tail_tol`: default `0.8`
 - `hold_fx_interval_ms`: default `200`
 - `audio_offset_ms`: default `0.0`

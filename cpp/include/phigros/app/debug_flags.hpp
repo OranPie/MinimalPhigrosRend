@@ -51,6 +51,7 @@ enum class DebugFlag : uint64_t {
     RECORDING_STATUS         = 1ull << 36,
     LINE_ACTIVITY_PANEL      = 1ull << 37,
     MH_TEXTURE_STATUS        = 1ull << 38,
+    PLANNED_JUDGE_INFO       = 1ull << 39,
 };
 
 inline DebugFlag operator|(DebugFlag a, DebugFlag b) {
@@ -121,6 +122,7 @@ inline const std::vector<std::pair<const char*, DebugFlag>>& debug_flag_table() 
         {"RECORDING_STATUS", DebugFlag::RECORDING_STATUS},
         {"LINE_ACTIVITY_PANEL", DebugFlag::LINE_ACTIVITY_PANEL},
         {"MH_TEXTURE_STATUS", DebugFlag::MH_TEXTURE_STATUS},
+        {"PLANNED_JUDGE_INFO", DebugFlag::PLANNED_JUDGE_INFO},
     };
     return kFlags;
 }

@@ -9,6 +9,7 @@
 - [CPP_RENDERER.md](CPP_RENDERER.md): build, run, CLI, replay, recording, benchmark workflow
 - [CONFIG_USAGE.md](CONFIG_USAGE.md): how config files, CLI overrides, and ChartScript overrides fit together
 - [CHARTSCRIPT.md](CHARTSCRIPT.md): playlist/script DSL
+- [SCRIPTPLAY.md](SCRIPTPLAY.md): deterministic note-judgment scripting for autoplay-like runs
 
 ### Using Python bindings
 
