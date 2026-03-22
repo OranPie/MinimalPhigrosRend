@@ -4,12 +4,17 @@
 #include "phigros/api/python_api.hpp"
 #include "phigros/config/render_config.hpp"
 #include "phigros/hud/hud.hpp"
+#include <sstream>
+#include <string>
 
 namespace py = pybind11;
+using namespace pybind11::literals;
 
 using namespace phigros;
 
 namespace {
+
+// ── to_dict helpers ───────────────────────────────────────────────────────────
 
 py::dict chart_assets_to_dict(const chart::ChartAssets& assets) {
     py::dict d;
@@ -143,11 +148,58 @@ api::PreparedChart compiled_to_prepared(const chart::CompiledChartData& compiled
     api::PreparedChart prepared;
     prepared.chart = compiled.to_chart_data();
     prepared.chart.finalize();
+    prepared.chart.build_early_notes_index();
     prepared.chart.build_notes_by_enter_index();
     prepared.config = cfg;
     prepared.scoring_notes = prepared.chart.playable_count;
     prepared.simulation_end = prepared.chart.chart_end_t;
     return prepared;
+}
+
+// Grade string for a completed autoplay (phi/v/fc/at/a/b/c/f).
+// phi  = 1 000 000 (all-perfect)
+// v    = full combo + not all-perfect  (max_combo == total)
+// fc   = full combo, score < 960 000
+// at   = score >= 960 000 (no full combo)
+// a    = score >= 920 000
+// b    = score >= 880 000
+// c    = score >= 820 000
+// f    = below c
+std::string autoplay_grade(const api::AutoplayResult& r) {
+    if (r.score.score >= 1000000) return "phi";
+    if (r.max_combo == r.playable_count) {
+        return (r.score.score >= 960000) ? "v" : "fc";
+    }
+    if (r.score.score >= 960000) return "at";
+    if (r.score.score >= 920000) return "a";
+    if (r.score.score >= 880000) return "b";
+    if (r.score.score >= 820000) return "c";
+    return "f";
+}
+
+// Full note metadata dict from a ChartData note (all public fields).
+py::dict raw_note_to_dict(const Note& n) {
+    py::dict d;
+    d["nid"]          = n.nid;
+    d["line_id"]      = n.line_id;
+    d["kind"]         = n.kind;
+    d["above"]        = n.above;
+    d["fake"]         = n.fake;
+    d["mh"]           = n.mh;
+    d["t_hit"]        = n.t_hit;
+    d["t_end"]        = n.t_end;
+    d["t_enter"]      = n.t_enter;
+    d["x_local_px"]   = n.x_local_px;
+    d["y_offset_px"]  = n.y_offset_px;
+    d["speed_mul"]    = n.speed_mul;
+    d["size_px"]      = n.size_px;
+    d["alpha01"]      = n.alpha01;
+    d["scroll_hit"]   = n.scroll_hit;
+    d["scroll_end"]   = n.scroll_end;
+    d["tint_rgb"]     = py::make_tuple(n.tint_rgb.r, n.tint_rgb.g, n.tint_rgb.b);
+    d["visible_time"] = n.visible_time;
+    d["hitsound_path"] = n.hitsound_path;
+    return d;
 }
 
 } // namespace

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <stdexcept>
 
 #include <nlohmann/json.hpp>
@@ -17,6 +18,8 @@ namespace fs = std::filesystem;
 namespace phigros::api {
 
 namespace {
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
 
 std::string detect_format(const std::string& path) {
     std::ifstream f(path);
@@ -52,37 +55,47 @@ ChartData load_chart_from_path(const std::string& path,
     if (chart::is_zip_path(path)) {
         auto parts = chart::split_zip_path(path);
         auto bytes = chart::extract_zip_file(parts.first, parts.second);
-        if (bytes.empty()) throw std::runtime_error("Failed to extract chart from zip: " + path);
+        if (bytes.empty())
+            throw std::runtime_error("Failed to extract chart from zip: " + path);
         std::string text(bytes.begin(), bytes.end());
-        auto j = json::parse(text);
-        if (j.contains("META") || j.contains("BPMList")) {
-            return chart::parse_rpe(j, cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
+        try {
+            auto j = json::parse(text);
+            if (j.contains("META") || j.contains("BPMList"))
+                return chart::parse_rpe(j, cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
+            return chart::parse_official(j, cfg.window_w, cfg.window_h);
+        } catch (const json::exception& e) {
+            throw std::runtime_error("JSON parse error in zip entry '" + path + "': " +
+                                     std::string(e.what()));
         }
-        return chart::parse_official(j, cfg.window_w, cfg.window_h);
     }
 
     if (fs::is_directory(path)) {
         auto entries = chart::load_folder_chart(path);
-        if (entries.empty()) throw std::runtime_error("No charts found in folder: " + path);
+        if (entries.empty())
+            throw std::runtime_error("No recognised chart files found in folder: " + path);
         const chart::ChartEntry* chosen = &entries.front();
         for (const auto& entry : entries) {
-            if (entry.difficulty == "IN") {
-                chosen = &entry;
-                break;
-            }
+            if (entry.difficulty == "IN") { chosen = &entry; break; }
         }
         return load_chart_from_path(chosen->chart_path, cfg, password);
     }
+
+    if (!fs::exists(path))
+        throw std::runtime_error("Chart file not found: " + path);
 
     const std::string fmt = detect_format(path);
     if (fmt == "rpe" || fmt == "official") {
         std::ifstream f(path);
         if (!f) throw std::runtime_error("Cannot open chart file: " + path);
-        auto j = json::parse(f);
-        if (fmt == "rpe") {
-            return chart::parse_rpe(j, cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
+        try {
+            auto j = json::parse(f);
+            if (fmt == "rpe")
+                return chart::parse_rpe(j, cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
+            return chart::parse_official(j, cfg.window_w, cfg.window_h);
+        } catch (const json::exception& e) {
+            throw std::runtime_error("JSON parse error in '" + path + "': " +
+                                     std::string(e.what()));
         }
-        return chart::parse_official(j, cfg.window_w, cfg.window_h);
     }
 
     return chart::parse_pec(path, cfg.window_w, cfg.window_h);
@@ -90,27 +103,17 @@ ChartData load_chart_from_path(const std::string& path,
 
 engine::SimMode parse_sim_mode(const std::string& mode) {
     if (mode == "conservative") return engine::SimMode::Conservative;
-    if (mode == "extreme") return engine::SimMode::Extreme;
-    return engine::SimMode::Aggressive;
+    if (mode == "extreme")      return engine::SimMode::Extreme;
+    if (mode == "aggressive")   return engine::SimMode::Aggressive;
+    throw std::invalid_argument(
+        "Unknown simulation mode '" + mode + "'. "
+        "Valid values: \"conservative\", \"aggressive\", \"extreme\".");
 }
 
-struct SimulationState {
-    std::vector<NoteState> states;
-    engine::Judge judge;
-    engine::SimulatePlayer autoplay;
-
-    SimulationState(const PreparedChart& prepared,
-                    const std::string& mode,
-                    int max_pointers)
-        : states(prepared.chart.notes.size()),
-          autoplay(parse_sim_mode(mode), max_pointers) {
-        for (size_t i = 0; i < states.size(); ++i) states[i].note = &prepared.chart.notes[i];
-    }
-};
-
-int find_next_index(const std::vector<NoteState>& states, double t) {
-    int lo = 0;
-    int hi = static_cast<int>(states.size());
+// Finds the first non-judged note whose t_hit >= t - 0.5s.
+// Used to bound the detect_misses / hold range scan.
+int find_window_start(const std::vector<NoteState>& states, double t) {
+    int lo = 0, hi = static_cast<int>(states.size());
     while (lo < hi) {
         const int mid = (lo + hi) / 2;
         if (states[mid].judged || states[mid].note->t_hit < t - 0.5) lo = mid + 1;
@@ -120,41 +123,125 @@ int find_next_index(const std::vector<NoteState>& states, double t) {
 }
 
 void step_engine(const PreparedChart& prepared,
-                 SimulationState& sim,
+                 std::vector<NoteState>& states,
+                 engine::Judge& judge,
+                 engine::SimulatePlayer& autoplay,
                  double t,
-                 const config::RenderConfig& runtime_cfg,
+                 const config::RenderConfig& cfg,
                  std::vector<engine::SimHitEvent>* hit_events = nullptr) {
-    sim.autoplay.step(t,
-                      prepared.chart.notes,
-                      sim.states,
-                      prepared.chart.lines,
-                      sim.judge,
-                      runtime_cfg.window_w,
-                      runtime_cfg.window_h,
-                      nullptr,
-                      hit_events);
-    const int idx = find_next_index(sim.states, t);
-    engine::detect_misses(sim.states, idx, t, engine::Judge::BAD, sim.judge);
-    engine::hold_maintenance(sim.states, idx, t, runtime_cfg.hold_tail_tol, sim.judge);
-    engine::hold_finalize(sim.states, idx, t, runtime_cfg.hold_tail_tol, engine::Judge::BAD, sim.judge);
+    autoplay.step(t,
+                  prepared.chart.notes,
+                  states,
+                  prepared.chart.lines,
+                  judge,
+                  cfg.window_w,
+                  cfg.window_h,
+                  nullptr,
+                  hit_events);
+    const int idx = find_window_start(states, t);
+    engine::detect_misses(states, idx, t, engine::Judge::BAD, judge);
+    engine::hold_maintenance(states, idx, t, cfg.hold_tail_tol, judge);
+    engine::hold_finalize(states, idx, t, cfg.hold_tail_tol, engine::Judge::BAD, judge);
+}
+
+// Initialises a flat NoteState vector with note pointers from prepared.chart.
+std::vector<NoteState> make_states(const PreparedChart& prepared) {
+    std::vector<NoteState> states(prepared.chart.notes.size());
+    for (size_t i = 0; i < states.size(); ++i)
+        states[i].note = &prepared.chart.notes[i];
+    return states;
 }
 
 } // namespace
+
+// ── FrameEvaluator ────────────────────────────────────────────────────────────
+
+FrameEvaluator::FrameEvaluator(const PreparedChart& prepared,
+                               const std::string& mode,
+                               int max_pointers)
+    : prepared_(&prepared)
+    , mode_(mode)
+    , max_pointers_(std::max(1, max_pointers))
+    , states_(make_states(prepared))
+    , autoplay_(parse_sim_mode(mode), max_pointers_)
+    , sim_t_(prepared.chart.offset)
+{}
+
+void FrameEvaluator::reset_impl() {
+    states_ = make_states(*prepared_);
+    judge_  = engine::Judge{};
+    autoplay_ = engine::SimulatePlayer(parse_sim_mode(mode_), max_pointers_);
+    sim_t_  = prepared_->chart.offset;
+}
+
+void FrameEvaluator::reset() {
+    reset_impl();
+}
+
+void FrameEvaluator::step(double t,
+                          const config::RenderConfig& cfg,
+                          std::vector<engine::SimHitEvent>* events) {
+    step_engine(*prepared_, states_, judge_, autoplay_, t, cfg, events);
+}
+
+void FrameEvaluator::advance_to(double t, const config::RenderConfig& cfg) {
+    if (t < sim_t_ - 1e-9) {
+        // Backwards seek: reset then replay forward. Costly but correct.
+        reset_impl();
+    }
+    while (sim_t_ + 1e-9 < t) {
+        step(sim_t_, cfg);
+        sim_t_ += SIM_DT;
+    }
+    step(t, cfg);
+    sim_t_ = std::max(sim_t_, t + SIM_DT);
+}
+
+render::FrameSnapshot FrameEvaluator::build_frame(
+    double t, std::optional<config::RenderConfig> cfg_override) {
+    const config::RenderConfig& cfg = cfg_override ? *cfg_override : prepared_->config;
+    advance_to(t, cfg);
+    return render::build_frame(t, prepared_->chart, states_, judge_, cfg);
+}
+
+std::vector<render::FrameSnapshot> FrameEvaluator::build_frames(
+    const std::vector<double>& times,
+    std::optional<config::RenderConfig> cfg_override) {
+    if (times.empty()) return {};
+    const config::RenderConfig& cfg = cfg_override ? *cfg_override : prepared_->config;
+
+    // Sort by time to maximise cache reuse, then write results back in original order.
+    std::vector<std::pair<size_t, double>> order;
+    order.reserve(times.size());
+    for (size_t i = 0; i < times.size(); ++i) order.push_back({i, times[i]});
+    std::sort(order.begin(), order.end(),
+              [](const auto& a, const auto& b) { return a.second < b.second; });
+
+    std::vector<render::FrameSnapshot> out(times.size());
+    for (const auto& [idx, t] : order) {
+        advance_to(t, cfg);
+        out[idx] = render::build_frame(t, prepared_->chart, states_, judge_, cfg);
+    }
+    return out;
+}
+
+// ── Free functions ────────────────────────────────────────────────────────────
 
 PreparedChart load_prepared_chart(const std::string& path,
                                   const config::RenderConfig& cfg,
                                   const std::string& password) {
     PreparedChart prepared;
     prepared.config = cfg;
-    prepared.chart = load_chart_from_path(path, cfg, password);
+    prepared.chart  = load_chart_from_path(path, cfg, password);
     prepared.chart.finalize();
     if (!prepared.chart.is_compiled) {
         engine::precompute_t_enter(prepared.chart.lines, prepared.chart.notes,
                                    cfg.window_w, cfg.window_h,
                                    cfg.expand_factor, cfg.note_scale_x, cfg.note_scale_y);
+        prepared.chart.build_early_notes_index();
     }
     prepared.chart.build_notes_by_enter_index();
-    prepared.scoring_notes = prepared.chart.playable_count;
+    prepared.scoring_notes  = prepared.chart.playable_count;
     prepared.simulation_end = prepared.chart.chart_end_t;
     return prepared;
 }
@@ -163,45 +250,15 @@ std::vector<render::FrameSnapshot> build_autoplay_frames(
     const PreparedChart& prepared,
     const std::vector<double>& times,
     std::optional<config::RenderConfig> cfg_override) {
-    if (times.empty()) return {};
-
-    const config::RenderConfig& frame_cfg = cfg_override ? *cfg_override : prepared.config;
-    std::vector<std::pair<size_t, double>> sorted_times;
-    sorted_times.reserve(times.size());
-    for (size_t i = 0; i < times.size(); ++i) sorted_times.push_back({i, times[i]});
-    std::sort(sorted_times.begin(), sorted_times.end(),
-              [](const auto& a, const auto& b) { return a.second < b.second; });
-    SimulationState sim(prepared, "aggressive", 2);
-    std::vector<render::FrameSnapshot> frames(times.size());
-
-    constexpr double SIM_DT = 1.0 / 240.0;
-    double sim_t = prepared.chart.offset;
-
-    for (const auto& item : sorted_times) {
-        const size_t out_idx = item.first;
-        const double target_t = item.second;
-        if (target_t < prepared.chart.offset) {
-            frames[out_idx] = render::build_frame(target_t, prepared.chart, sim.states, sim.judge, frame_cfg);
-            continue;
-        }
-        while (sim_t + 1e-9 < target_t) {
-            step_engine(prepared, sim, sim_t, frame_cfg);
-            sim_t += SIM_DT;
-        }
-        step_engine(prepared, sim, target_t, frame_cfg);
-        sim_t = std::max(sim_t, target_t + SIM_DT);
-        frames[out_idx] = render::build_frame(target_t, prepared.chart, sim.states, sim.judge, frame_cfg);
-    }
-
-    return frames;
+    FrameEvaluator ev(prepared, "aggressive", 2);
+    return ev.build_frames(times, std::move(cfg_override));
 }
 
 render::FrameSnapshot build_autoplay_frame(const PreparedChart& prepared,
                                            double t,
                                            std::optional<config::RenderConfig> cfg_override) {
-    auto frames = build_autoplay_frames(prepared, std::vector<double>{t}, std::move(cfg_override));
-    if (frames.empty()) throw std::runtime_error("Failed to build frame");
-    return std::move(frames.front());
+    FrameEvaluator ev(prepared, "aggressive", 2);
+    return ev.build_frame(t, std::move(cfg_override));
 }
 
 AutoplayResult simulate_autoplay(const PreparedChart& prepared,
@@ -209,30 +266,44 @@ AutoplayResult simulate_autoplay(const PreparedChart& prepared,
                                  const std::string& mode,
                                  int max_pointers,
                                  std::optional<double> duration) {
-    const double sim_dt = 1.0 / std::max(1.0, fps);
-    const double end_t = duration ? std::min(*duration, prepared.simulation_end) : prepared.simulation_end;
+    if (fps < 1.0)
+        throw std::invalid_argument("fps must be >= 1.0 (got " + std::to_string(fps) + ")");
+    if (max_pointers < 1 || max_pointers > 10)
+        throw std::invalid_argument("max_pointers must be 1..10");
 
-    SimulationState sim(prepared, mode, max_pointers);
+    const double sim_dt = 1.0 / fps;
+    const double end_t  = duration
+        ? std::min(*duration, prepared.simulation_end)
+        : prepared.simulation_end;
+
+    auto states   = make_states(prepared);
+    engine::Judge judge;
+    engine::SimulatePlayer autoplay(parse_sim_mode(mode), max_pointers);
+
     AutoplayResult result;
     result.playable_count = prepared.scoring_notes;
 
     for (double t = prepared.chart.offset; t <= end_t + 1e-9; t += sim_dt) {
-        step_engine(prepared, sim, t, prepared.config, &result.hit_events);
+        step_engine(prepared, states, judge, autoplay, t, prepared.config, &result.hit_events);
     }
 
-    result.score = engine::compute_score(sim.judge.acc_sum, sim.judge.max_combo, prepared.scoring_notes);
-    result.judged_count = sim.judge.judged_cnt;
-    result.max_combo = sim.judge.max_combo;
+    result.score       = engine::compute_score(judge.acc_sum, judge.max_combo, prepared.scoring_notes);
+    result.judged_count = judge.judged_cnt;
+    result.max_combo   = judge.max_combo;
     return result;
 }
 
 chart::CompiledChartData compile_prepared_chart(const PreparedChart& prepared,
                                                 float sample_rate) {
+    if (sample_rate < 1.0f || sample_rate > 10000.0f)
+        throw std::invalid_argument("sample_rate must be in [1, 10000]");
     return chart::compile_chart(prepared.chart, sample_rate);
 }
 
 chart::CompiledChartData read_phbc_file(const std::string& path,
                                         const std::string& password) {
+    if (!fs::exists(path))
+        throw std::runtime_error("PHBC file not found: " + path);
     std::ifstream f(path, std::ios::binary);
     if (!f) throw std::runtime_error("Cannot open .phbc file: " + path);
     return chart::read_phbc(f, password);

@@ -2,246 +2,167 @@
 
 > 🌐 [English](CONFIG.md)
 
-所有选项从 JSONC 文件（支持 `//` 和 `#` 行注释的 JSON）中加载。
+本页记录 `include/phigros/config/render_config.hpp` 中当前 `RenderConfig` 的实现语义。
 
-命令行调试覆盖层标记请参见 [DEBUG_FLAGS.zh.md](DEBUG_FLAGS.zh.md)。
+面向使用者的工作流与优先级示例请看 [../../docs/CONFIG_USAGE.zh.md](../../docs/CONFIG_USAGE.zh.md)。
 
-```bash
-./phigros_render chart.json --config config.jsonc
-```
+## 输入格式
 
----
+加载路径为：
+
+- `load_config(path)`
+- `load_config_text(text)`
+- `load_config_json(json)`
+
+当前行为更准确的描述是：在解析前先去掉 `//` 行注释的 JSON。不要把它当作完整 JSONC 规范实现，应该以代码行为为准。
 
 ## 顶层结构
 
-```jsonc
+```json
 {
-  "window":   { ... },
-  "render":   { ... },
-  "assets":   { ... },
+  "backend": "...",
+  "window": { "w": 1280, "h": 720 },
+  "render": { ... },
+  "assets": { ... },
   "gameplay": { ... },
-  "rpe":      { ... },
-  "debug":    { ... }
+  "rpe": { ... },
+  "debug": { ... }
 }
 ```
 
----
+`render.backend` 也会被读取为别名，但如果顶层 `backend` 同时存在，则以顶层为准。
 
-## `window`
+## 从 JSON 加载的字段
 
-| 键 | 类型 | 默认值 | 描述 |
-|----|------|--------|------|
-| `w` | int | `1280` | 窗口 / 输出宽度（像素） |
-| `h` | int | `720`  | 窗口 / 输出高度（像素） |
+### `window`
 
----
+- `w`：默认 `1280`
+- `h`：默认 `720`
 
-## `render`
+### `render`
 
-### 核心视觉
+核心视觉与布局：
 
-| 键 | 类型 | 默认值 | 描述 |
-|----|------|--------|------|
-| `approach` | float | `3.0` | 音符进场时间窗口（秒），范围限制 `[0.1, 30]`。 |
-| `chart_speed` | float | `1.0` | 回放速度倍率，范围限制 `[0.1, 20]`。 |
-| `expand` | float | `1.0` | 摄像机缩放 / 游戏区域扩展系数。 |
-| `overrender` | float | `1.0` | 屏外裁剪边距的超渲染倍率。 |
-| `no_cull` | bool | `false` | 禁用所有音符裁剪（每帧渲染全部音符）。 |
-| `no_cull_screen` | bool | `false` | 仅禁用屏幕边界裁剪（保留进入时刻裁剪）。 |
-| `no_cull_enter_time` | bool | `true` | 设为 `false` 时，跳过尚未到达 `t_enter` 时刻的音符（优化高密度谱面）。默认 `true` 保留所有已进入判定窗口的音符，无论其屏幕位置如何。 |
-| `note_scale_x` | float | `2.5` | 音符水平尺寸倍率。 |
-| `note_scale_y` | float | `1.0` | 音符垂直尺寸倍率。 |
-| `note_flow_speed_multiplier` | float | `1.0` | 单个音符滚动速度倍率。 |
-| `note_speed_mul_affects_travel` | bool | `false` | RPE：单音符 `speed_mul` 影响进场距离。 |
-| `note_alpha` | float | `1.0` | 全局音符不透明度倍率，范围限制 `[0, 1]`。 |
-| `font_align` | bool | `true` | 对 HUD 数字使用对齐字宽，减少分数/准确率/连击因字符宽度不同产生的抖动。 |
-| `note_outline` | bool | `false` | 在音符前以 1.08× 音符大小绘制深色轮廓。 |
+- `approach`：默认 `3.0`，截断到 `[0.1, 30.0]`
+- `chart_speed`：默认 `1.0`，截断到 `[0.1, 20.0]`
+- `expand`：映射到 `expand_factor`，默认 `1.0`
+- `note_scale_x`：默认 `2.5`
+- `note_scale_y`：默认 `1.0`
+- `note_flow_speed_multiplier`：默认 `1.0`
+- `note_alpha`：默认 `1.0`，截断到 `[0.0, 1.0]`
+- `font_size`：默认 `1.0`，截断到 `[0.5, 3.0]`
+- `font_align`：默认 `true`
+- `overlay_transparent`：默认 `false`
+- `overrender`：默认 `1.0`
+- `note_outline`：默认 `false`
 
-### 判定线 alpha → 音符 alpha
+可见性与路径行为：
 
-| 键 | 类型 | 默认值 | 描述 |
-|----|------|--------|------|
-| `line_alpha_affects_notes` | string | `"negative_only"` | 判定线 alpha 调制可见音符 alpha 的方式。 |
+- `no_cull`：默认 `false`
+- `no_cull_screen`：默认 `false`
+- `no_cull_enter_time`：默认 `true`
 
-`line_alpha_affects_notes` 的可选值：
+判定线 alpha 模式：
 
-| 值 | 行为                                      |
-|----|-----------------------------------------|
-| `"off"` | 音符不受判定线 alpha 影响                        |
-| `"negative_only"` | 判定线 alpha < 0 时音符消失（默认 RPE<br/> 行为）     |
-| `"always"` | 始终使音符 alpha = `note.alpha * line.alpha` |
+- `line_alpha_affects_notes`：`off`、`negative_only` 或 `always`
+- 当前 `negative_only` 语义以运行时代码为准，只有在原始判定线 alpha 为负时才会应用判定线 alpha 调制
 
-### 打击特效
+Hold 与打击特效：
 
-| 键 | 类型 | 默认值 | 描述 |
-|----|------|--------|------|
-| `show_hitfx` | bool | `true` | 在音符判定时渲染打击特效精灵 / 光圈。 |
-| `show_particles` | bool | `true` | 在音符判定时渲染粒子爆发效果。 |
-| `particle_count` | int | `8` | 每次打击的粒子数量，范围限制 `[0, 64]`。 |
-| `hitfx_intensity` | float | `1.0` | 所有打击特效的 alpha 倍率，范围限制 `[0, 2]`。 |
-| `hitfx_effect_apply` | bool | `true` | 打击特效是否参与拖影/运动模糊通道。`false` 时会在合成后单独绘制（更清晰、不拖尾）。 |
+- `hold_body_glow_alpha`：默认 `0.35`，截断到 `[0.0, 1.0]`
+- `show_hitfx`：默认 `true`
+- `show_particles`：默认 `true`
+- `particle_count`：默认 `8`，截断到 `[0, 64]`
+- `hitfx_intensity`：默认 `1.0`，截断到 `[0.0, 2.0]`
+- `hitfx_effect_apply`：默认 `true`
 
-### 拖影效果
+拖影选项，全部为可选字段：
 
-| 键 | 类型 | 默认值 | 描述 |
-|----|------|--------|------|
-| `trail_alpha` | float | *（禁用）* | 拖影槽的基础 alpha，设置后启用拖影。 |
-| `trail_frames` | int | `6` | 拖影缓冲槽数量。 |
-| `trail_decay` | float | `0.75` | 每槽 alpha 衰减系数（第 N 槽 = `trail_alpha × decay^N`）。 |
-| `trail_blur` | int | `0` | 每槽模糊的下采样系数（0 = 不模糊）。 |
-| `trail_dim` | int | `0` | 每个历史槽的变暗叠加强度（0–255）。 |
-| `trail_blur_ramp` | bool | `false` | 对越旧的槽增加模糊量。 |
-| `trail_blend` | string | `"blend"` | 合成模式：`"blend"` 或 `"add"`。 |
+- `trail_alpha`
+- `trail_frames`
+- `trail_decay`
+- `trail_blur`
+- `trail_dim`
+- `trail_blur_ramp`
+- `trail_blend`
+- `trail_blur_quality`
+- `trail_chromatic`
+- `trail_decay_curve`
+- `trail_glow`
 
-### 运动模糊
+运动模糊选项，全部为可选字段：
 
-| 键 | 类型 | 默认值 | 描述 |
-|----|------|--------|------|
-| `motion_blur_samples` | int | *（禁用）* | 子帧采样数，设置后启用运动模糊。 |
-| `motion_blur_shutter` | float | `0.5` | 快门角度比例 `[0, 1]`。 |
+- `motion_blur_samples`
+- `motion_blur_shutter`
+- `motion_blur_curve`
 
----
+后端别名：
 
-## `assets`
+- `backend`：若出现在 `render` 下，则写入 `cfg.backend`
 
-| 键 | 类型 | 默认值 | 描述 |
-|----|------|--------|------|
-| `respack` | string | `"./respack.zip"` | 资源包 ZIP 文件路径。 |
-| `bg` | string | *（无）* | 背景图片路径（PNG/JPG）。 |
-| `bg_blur` | int | `10` | 背景模糊下采样系数（0 = 不模糊）。 |
-| `bg_dim` | int | `120` | 背景变暗叠加层不透明度（0–255）。 |
+### `assets`
 
----
+- `respack`：映射到 `respack_path`，默认 `./respack.zip`
+- `bg`：默认空字符串
+- `bg_blur`：默认 `10`
+- `bg_dim`：默认 `120`
 
-## `gameplay`
+### `gameplay`
 
-| 键 | 类型 | 默认值 | 描述 |
-|----|------|--------|------|
-| `autoplay` | bool | `true` | 自动以全 Perfect 判定所有音符。 |
-| `hold_tail_tol` | float | `0.8` | 长按尾部释放容差（占长按时长的比例）。 |
-| `hold_fx_interval_ms` | int | `200` | 长按 tick 打击特效的最小间隔（毫秒）。 |
-| `audio_offset_ms` | float | `0.0` | 音频延迟补偿，正值表示音符提前触发。 |
+- `autoplay`：默认 `true`
+- `hold_tail_tol`：默认 `0.8`
+- `hold_fx_interval_ms`：默认 `200`
+- `audio_offset_ms`：默认 `0.0`
 
----
+嵌套 `simulateplay` 对象：
 
-## `rpe`
+- `enabled`：默认 `false`
+- `mode`：默认 `aggressive`
+- `max_pointers`：默认 `2`，截断到 `[1, 8]`
+- `jitter_ms`：默认 `12.0`，截断到 `[0.0, 80.0]`
+- `render_pointer`：默认 `true`
+- `render_trail`：默认 `true`
+- `trail_seconds`：默认 `0.16`，截断到 `[0.02, 1.0]`
+- `cursor_radius_px`：默认 `20.0`，截断到 `[4.0, 80.0]`
 
-| 键 | 类型 | 默认值 | 描述 |
-|----|------|--------|------|
-| `rpe_easing_shift` | int | `0` | RPE 缓动索引偏移，用于兼容非标准导出。 |
+### `rpe`
 
----
+- `rpe_easing_shift`：默认 `0`
 
-## `debug`
+### `debug`
 
-| 键 | 类型 | 默认值 | 描述 |
-|----|------|--------|------|
-| `basic_debug` | bool | `false` | 在屏幕上叠加显示 FPS 和可见音符数量。 |
+- `basic_debug`：默认 `false`
 
----
+### 顶层 `backend`
 
-## 强制判定线 alpha 覆盖
+- `backend`：默认 `sdl3_bgfx`
+- 如果顶层存在该字段，它会覆盖 `render.backend`
 
-以下选项通过 C++ API 或程序方式设置：
+## 仅程序设置或尚未完全接线的字段
 
-- `force_line_alpha01` — 将所有判定线强制设为同一 alpha 值 `[0, 1]`
-- `force_line_alpha01_by_lid` — `{line_id: alpha}` 映射，用于逐线覆盖
+以下字段存在于 `RenderConfig` 中，但当前不会由 `load_config_json()` 从 JSON 加载：
 
----
+- `force_line_alpha01`
+- `force_line_alpha01_by_lid`
+- `note_speed_mul_affects_travel`
 
-## 完整示例
+在加载器扩展之前，应把它们视为代码层覆盖项。
 
-```jsonc
-// MinimalPhigrosRend C++ 配置
-{
-  "window": {
-    "w": 1920,
-    "h": 1080
-  },
+## 序列化
 
-  "render": {
-    "approach": 3.0,
-    "chart_speed": 1.0,
-    "expand": 1.0,
-    "note_scale_x": 2.5,
-    "note_scale_y": 1.0,
-    "note_alpha": 1.0,
-    "note_outline": false,
-    "line_alpha_affects_notes": "negative_only",
+`config_to_json()` 与 `save_config()` 会把配置重新序列化为 JSON。
 
-    "show_hitfx": true,
-    "show_particles": true,
-    "particle_count": 8,
-    "hitfx_intensity": 1.0,
-    "hitfx_effect_apply": true,
+当前序列化行为：
 
-    // 拖影：取消注释以启用
-    // "trail_alpha": 0.4,
-    // "trail_frames": 6,
-    // "trail_decay": 0.7,
+- 写出上面展示的规范分区结构
+- 总是写出 `gameplay.simulateplay` 嵌套块
+- 写出顶层 `backend`
+- `assets.bg` 为空时省略
+- 拖影 / 运动模糊可选字段在 optional 未设置时省略
+- 一些 optional 字段使用简单 truthy 判断写出，因此当前实现下 false 类值也可能被省略
 
-    // 运动模糊：取消注释以启用
-    // "motion_blur_samples": 4,
-    // "motion_blur_shutter": 0.5
-  },
+## 相关文档
 
-  "assets": {
-    "respack": "./respack.zip",
-    "bg_blur": 10,
-    "bg_dim": 120
-  },
-
-  "gameplay": {
-    "autoplay": true,
-    "hold_tail_tol": 0.8,
-    "hold_fx_interval_ms": 200,
-    "audio_offset_ms": 0.0
-  },
-
-  "debug": {
-    "basic_debug": false
-  }
-}
-```
-
----
-
-## CLI 与计分语义（补充）
-
-本页主要描述 JSONC 配置字段。以下运行时行为由 CLI 参数控制（不是 JSON 字段）：
-
-- `--duration <sec>`：在 `N` 秒后停止模拟/录制。
-- `--truncate-at-duration`：与 `--duration` 同时使用时，将计分分母截断到 duration 窗口内音符。
-- `--sim-fps <fps>`：内部模拟采样率（影响无头/录制循环采样），默认跟随 `--record-fps`。
-- `--record-fps <fps>`：输出视频帧率。
-
-得分公式：
-
-```text
-score = int(real_acc * 900000 + max_combo/total_notes * 100000)
-```
-
-`total_notes` 规则：
-
-- 默认：整首谱面的可判定音符（`fake=false`）。
-- 使用 `--duration N --truncate-at-duration` 时：
-  - 非 Hold 音符：`t_hit <= N` 才计入分母
-  - Hold 音符：`t_end <= N` 才计入分母
-
-Duration 进度条语义：
-
-- 录制模式下进度百分比使用有效终点时间：
-  - 设置 `--duration` 时：`min(chart_end, duration)`
-  - 未设置 `--duration` 时：`chart_end`
-- 因此 `--duration 20` 的录制应在结束时显示 `100.0%`。
-
----
-
-## 往返序列化
-
-C++ API 可将当前配置保存回 JSON：
-
-```cpp
-#include "phigros/config/render_config.hpp"
-phigros::config::save_config("out.json", cfg);
-```
+- [../../docs/CONFIG_USAGE.zh.md](../../docs/CONFIG_USAGE.zh.md)
+- [RENDER.zh.md](RENDER.zh.md)
+- [DEBUG_FLAGS.zh.md](DEBUG_FLAGS.zh.md)
