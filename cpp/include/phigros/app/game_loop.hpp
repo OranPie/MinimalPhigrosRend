@@ -556,14 +556,11 @@ struct GameLoop {
                             if (!mute_live_audio) ctx.audio.play_hitsound(note.kind);
                             if (is_recording) recorder.record_hitsound(note.kind, ft);
                             math::RGB col = resolve_hitfx_color(note, g);
-                            for (const auto& ns : render::build_frame(
-                                     ft, chart, states, judge, cfg).notes) {
-                                if (ns.nid == nidx) {
-                                    effects.add_hitfx(ns.wx, ns.wy, ft, col);
-                                    effects.add_particle_burst(ns.wx, ns.wy,
-                                        ft * 1000.0, 500.0, col);
-                                    break;
-                                }
+                            auto hit_pos = note_hitfx_pos(note, ft);
+                            if (hit_pos) {
+                                effects.add_hitfx(hit_pos->x, hit_pos->y, ft, col);
+                                effects.add_particle_burst(hit_pos->x, hit_pos->y,
+                                    ft * 1000.0, 500.0, col);
                             }
                         });
                 } else if (is_scriptplay_mode) {
@@ -579,14 +576,11 @@ struct GameLoop {
                             }
                             if (g == "hold_release") return;
                             math::RGB col = resolve_hitfx_color(note, g);
-                            for (const auto& ns : render::build_frame(
-                                     ft, chart, states, judge, cfg).notes) {
-                                if (ns.nid == nidx) {
-                                    effects.add_hitfx(ns.wx, ns.wy, ft, col);
-                                    effects.add_particle_burst(ns.wx, ns.wy,
-                                        ft * 1000.0, 500.0, col);
-                                    break;
-                                }
+                            auto hit_pos = note_hitfx_pos(note, ft);
+                            if (hit_pos) {
+                                effects.add_hitfx(hit_pos->x, hit_pos->y, ft, col);
+                                effects.add_particle_burst(hit_pos->x, hit_pos->y,
+                                    ft * 1000.0, 500.0, col);
                             }
                         });
                 } else {
@@ -1970,6 +1964,15 @@ private:
                                   220, 235, 255, a);
             ++row;
         }
+    }
+
+    std::optional<engine::Vec2> note_hitfx_pos(const Note& note, double judge_t) const {
+        if (note.line_id < 0 || note.line_id >= static_cast<int>(chart.lines.size()))
+            return std::nullopt;
+        auto ls = engine::eval_line_state(chart.lines[note.line_id], judge_t);
+        return engine::note_world_pos_cs(ls.x, ls.y, ls.cos_rot, ls.sin_rot,
+                                         ls.scroll, note, note.scroll_hit,
+                                         false, 1.0, false, false);
     }
 
     void do_restart() {
