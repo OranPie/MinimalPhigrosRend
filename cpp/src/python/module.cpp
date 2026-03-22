@@ -4,6 +4,7 @@
 #include "phigros/api/python_api.hpp"
 #include "phigros/config/render_config.hpp"
 #include "phigros/hud/hud.hpp"
+#include <nlohmann/json.hpp>
 #include <sstream>
 #include <string>
 
@@ -13,6 +14,46 @@ using namespace pybind11::literals;
 using namespace phigros;
 
 namespace {
+
+nlohmann::json py_to_json(const py::handle& obj) {
+    if (obj.is_none()) return nullptr;
+    if (py::isinstance<py::bool_>(obj)) return obj.cast<bool>();
+    if (py::isinstance<py::int_>(obj)) return obj.cast<long long>();
+    if (py::isinstance<py::float_>(obj)) return obj.cast<double>();
+    if (py::isinstance<py::str>(obj)) return obj.cast<std::string>();
+    if (py::isinstance<py::dict>(obj)) {
+        nlohmann::json out = nlohmann::json::object();
+        for (const auto& item : obj.cast<py::dict>()) {
+            out[py::cast<std::string>(item.first)] = py_to_json(item.second);
+        }
+        return out;
+    }
+    if (py::isinstance<py::list>(obj) || py::isinstance<py::tuple>(obj)) {
+        nlohmann::json out = nlohmann::json::array();
+        for (const auto& item : py::reinterpret_borrow<py::iterable>(obj))
+            out.push_back(py_to_json(item));
+        return out;
+    }
+    throw py::type_error("Unsupported value in Python->JSON conversion");
+}
+
+py::object json_to_py(const nlohmann::json& value) {
+    if (value.is_null()) return py::none();
+    if (value.is_boolean()) return py::bool_(value.get<bool>());
+    if (value.is_number_integer()) return py::int_(value.get<long long>());
+    if (value.is_number_unsigned()) return py::int_(value.get<unsigned long long>());
+    if (value.is_number_float()) return py::float_(value.get<double>());
+    if (value.is_string()) return py::str(value.get<std::string>());
+    if (value.is_array()) {
+        py::list out;
+        for (const auto& item : value) out.append(json_to_py(item));
+        return std::move(out);
+    }
+    py::dict out;
+    for (auto it = value.begin(); it != value.end(); ++it)
+        out[py::str(it.key())] = json_to_py(it.value());
+    return std::move(out);
+}
 
 // ── to_dict helpers ───────────────────────────────────────────────────────────
 
@@ -112,6 +153,27 @@ py::dict note_snapshot_to_dict(const render::NoteSnapshot& note) {
     return d;
 }
 
+py::dict raw_line_to_dict(const Line& line) {
+    py::dict d;
+    d["lid"] = line.lid;
+    d["texture_path"] = line.texture_path;
+    d["anchor"] = py::make_tuple(line.anchor.first, line.anchor.second);
+    d["is_gif"] = line.is_gif;
+    d["father"] = line.father;
+    d["rotate_with_father"] = line.rotate_with_father;
+    d["name"] = line.name;
+    d["attach_ui"] = line.attach_ui;
+    d["z_order"] = line.z_order;
+    d["is_cover"] = line.is_cover;
+    d["color_rgb"] = py::make_tuple(line.color_rgb.r, line.color_rgb.g, line.color_rgb.b);
+    d["alpha_ctrl_count"] = line.alpha_ctrl.size();
+    d["pos_ctrl_count"] = line.pos_ctrl.size();
+    d["size_ctrl_count"] = line.size_ctrl.size();
+    d["y_ctrl_count"] = line.y_ctrl.size();
+    d["skew_ctrl_count"] = line.skew_ctrl.size();
+    return d;
+}
+
 py::dict frame_snapshot_to_dict(const render::FrameSnapshot& frame) {
     py::dict d;
     py::list lines;
@@ -138,9 +200,11 @@ py::dict autoplay_result_to_dict(const api::AutoplayResult& result) {
 }
 
 config::RenderConfig config_from_python_dict(const py::dict& data) {
-    py::module_ json_mod = py::module_::import("json");
-    const std::string text = py::str(json_mod.attr("dumps")(data));
-    return config::load_config_text(text);
+    return config::load_config_json(py_to_json(data));
+}
+
+py::object config_to_python_dict(const config::RenderConfig& cfg) {
+    return json_to_py(config::config_to_json(cfg));
 }
 
 api::PreparedChart compiled_to_prepared(const chart::CompiledChartData& compiled,
@@ -245,16 +309,13 @@ PYBIND11_MODULE(_core, m) {
         .def_readwrite("line_alpha_mode", &config::RenderConfig::line_alpha_mode)
         .def_readwrite("approach", &config::RenderConfig::approach)
         .def_readwrite("chart_speed", &config::RenderConfig::chart_speed)
+        .def_readwrite("playback_speed", &config::RenderConfig::playback_speed)
         .def_readwrite("no_cull", &config::RenderConfig::no_cull)
         .def_readwrite("no_cull_screen", &config::RenderConfig::no_cull_screen)
         .def_readwrite("no_cull_enter_time", &config::RenderConfig::no_cull_enter_time)
         .def_readwrite("overrender", &config::RenderConfig::overrender)
         .def_readwrite("rpe_easing_shift", &config::RenderConfig::rpe_easing_shift)
-        .def("to_dict", [](const config::RenderConfig& cfg) {
-            py::module_ json_mod = py::module_::import("json");
-            const auto dumped = config::config_to_json(cfg).dump();
-            return json_mod.attr("loads")(dumped);
-        });
+        .def("to_dict", &config_to_python_dict);
 
     py::class_<engine::ScoreResult>(m, "ScoreResult")
         .def_readonly("score", &engine::ScoreResult::score)
@@ -367,6 +428,18 @@ PYBIND11_MODULE(_core, m) {
         .def("compile", [](const api::PreparedChart& chart_handle, float sample_rate) {
             return api::compile_prepared_chart(chart_handle, sample_rate);
         }, py::arg("sample_rate") = 240.0f)
+        .def("notes_data", [](const api::PreparedChart& chart_handle) {
+            py::list notes;
+            for (const auto& note : chart_handle.chart.notes)
+                notes.append(raw_note_to_dict(note));
+            return notes;
+        })
+        .def("lines_data", [](const api::PreparedChart& chart_handle) {
+            py::list lines;
+            for (const auto& line : chart_handle.chart.lines)
+                lines.append(raw_line_to_dict(line));
+            return lines;
+        })
         .def("to_dict", [](const api::PreparedChart& chart_handle,
                            bool include_notes, bool include_lines) {
             py::dict d;
@@ -375,34 +448,32 @@ PYBIND11_MODULE(_core, m) {
             d["playable_count"] = chart_handle.chart.playable_count;
             d["notes_count"] = chart_handle.chart.notes.size();
             d["lines_count"] = chart_handle.chart.lines.size();
-            d["config"] = py::module_::import("json").attr("loads")(config::config_to_json(chart_handle.config).dump());
+            d["config"] = config_to_python_dict(chart_handle.config);
             if (include_notes) {
                 py::list notes;
-                for (const auto& note : chart_handle.chart.notes) {
-                    py::dict item;
-                    item["nid"] = note.nid;
-                    item["line_id"] = note.line_id;
-                    item["kind"] = note.kind;
-                    item["t_hit"] = note.t_hit;
-                    item["t_end"] = note.t_end;
-                    item["t_enter"] = note.t_enter;
-                    notes.append(item);
-                }
+                for (const auto& note : chart_handle.chart.notes)
+                    notes.append(raw_note_to_dict(note));
                 d["notes"] = notes;
             }
             if (include_lines) {
                 py::list lines;
-                for (const auto& line : chart_handle.chart.lines) {
-                    py::dict item;
-                    item["lid"] = line.lid;
-                    item["name"] = line.name;
-                    item["texture_path"] = line.texture_path;
-                    lines.append(item);
-                }
+                for (const auto& line : chart_handle.chart.lines)
+                    lines.append(raw_line_to_dict(line));
                 d["lines"] = lines;
             }
             return d;
         }, py::arg("include_notes") = false, py::arg("include_lines") = false);
+
+    py::class_<api::FrameEvaluator>(m, "FrameEvaluator")
+        .def(py::init<const api::PreparedChart&, const std::string&, int>(),
+             py::arg("chart"), py::arg("mode") = "aggressive", py::arg("max_pointers") = 2,
+             py::keep_alive<1, 2>())
+        .def("build_frame", &api::FrameEvaluator::build_frame,
+             py::arg("t"), py::arg("config") = py::none())
+        .def("build_frames", &api::FrameEvaluator::build_frames,
+             py::arg("times"), py::arg("config") = py::none())
+        .def("reset", &api::FrameEvaluator::reset)
+        .def_property_readonly("sim_t", &api::FrameEvaluator::sim_t);
 
     py::class_<api::AutoplayResult>(m, "AutoplayResult")
         .def_readonly("score", &api::AutoplayResult::score)

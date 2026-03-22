@@ -4,7 +4,7 @@
 
 `phigros_cpp` exposes the C++ chart-processing pipeline to Python.
 
-It is intended for chart loading, preprocessing, frame evaluation, autoplay simulation, and PHBC compile/read/write workflows. It does not expose the SDL windowing layer or native render backend objects.
+It is intended for chart loading, preprocessing, repeated frame evaluation, autoplay simulation, data analysis, and PHBC compile/read/write workflows. It does not expose the SDL windowing layer or native render backend objects.
 
 ## Build
 
@@ -13,6 +13,12 @@ Wheel-style build from the repository root:
 ```bash
 python3 -m pip install -U pip build
 python3 -m build
+```
+
+Optional analysis extras:
+
+```bash
+python3 -m pip install ".[analysis]"
 ```
 
 Direct CMake build:
@@ -34,10 +40,12 @@ PYTHONPATH=python:cpp/build_py python3
 import phigros_cpp as pc
 
 chart = pc.load_chart("charts/MyChart/IN.json", width=1280, height=720)
-frame = chart.build_frame(12.5)
+frame = chart.frame(12.5)
 result = pc.simulate_autoplay(chart, fps=240.0, mode="aggressive")
+evaluator = chart.evaluator()
+frames = evaluator.build_frames([0.0, 0.5, 1.0])
 
-print(chart.playable_count, frame.hud.score, result.score.score)
+print(chart.playable_count, frame.hud.score, result.score.score, len(frames))
 ```
 
 ## Main API Surface
@@ -52,14 +60,23 @@ Top-level helpers:
 - `compile_chart()`
 - `read_phbc()` / `write_phbc()`
 - `simulate_autoplay()`
+- `rows_to_numpy()` / `rows_to_pandas()`
 
 Primary objects:
 
-- `ChartHandle`
+- `Chart`
+- `FrameEvaluator`
+- `AutoplayRun`
 - `RenderConfig`
 - `FrameSnapshot`
 - `CompiledChart`
 - `PhbcWriteOptions`
+
+Common analysis helpers:
+
+- `chart.notes_data()` / `chart.lines_data()`
+- `chart.notes_numpy()` / `chart.notes_pandas()`
+- `result.hit_events_data()` / `result.hit_events_numpy()` / `result.hit_events_pandas()`
 
 ## Scope Boundaries
 
