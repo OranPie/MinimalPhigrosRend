@@ -201,6 +201,7 @@ int main(int argc, char* argv[]) {
     if (!args.scriptplay_path.empty()) cfg.judge_script_path = args.scriptplay_path;
     if (args.play_mode) cfg.gameplay_mode = "manual";
     if (args.audio_offset_ms != 0.0) cfg.audio_offset_ms = args.audio_offset_ms;
+    if (args.playback_speed >= 0.0) cfg.playback_speed = args.playback_speed;
     if (args.window_w > 0) cfg.window_w = args.window_w;
     if (args.window_h > 0) cfg.window_h = args.window_h;
     if (!args.record_output.empty()) {
@@ -220,6 +221,7 @@ int main(int argc, char* argv[]) {
     PHLOG_DEBUG(General, "Effective config: backend=" << cfg.backend
         << " window=" << W << "x" << H
         << " audio_offset_ms=" << cfg.audio_offset_ms
+        << " playback_speed=" << (cfg.playback_speed.has_value() ? std::to_string(*cfg.playback_speed) : std::string("<chart_speed>"))
         << " gameplay_mode=" << cfg.gameplay_mode
         << " judge_script=" << (cfg.judge_script_path.empty() ? "<none>" : cfg.judge_script_path)
         << " approach=" << cfg.approach

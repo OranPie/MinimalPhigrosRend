@@ -431,6 +431,7 @@ struct GameLoop {
             rc.audio_path = args.audio_path;
             rc.chart_offset = chart.offset;
             rc.audio_offset_sec = audio_offset_sec;
+            rc.playback_speed = AppContext::effective_playback_speed(cfg);
             if (rc.audio_path.empty())
                 rc.audio_path = find_chart_audio(
                     std::filesystem::path(args.chart_path).parent_path().string());
@@ -511,9 +512,9 @@ struct GameLoop {
         if (!mute_live_audio && ctx.has_audio && ctx.started_audio) {
             t = ctx.audio.get_playback_time() + audio_offset_sec;
         } else if (args.headless) {
-            t += sim_dt;
+            t += sim_dt * cfg.chart_speed;
         } else {
-            t += dt_frame;
+            t += dt_frame * cfg.chart_speed;
         }
 
         if (!mute_live_audio && ctx.has_audio && !ctx.started_audio && t >= 0.0) {
@@ -1991,6 +1992,7 @@ private:
         replay_player.cursor = 0;
         recent_judges.clear();
         ctx.reload_audio(chart.offset);
+        ctx.audio.set_playback_speed(AppContext::effective_playback_speed(cfg));
     }
 
     static engine::SimMode parse_sim_mode(const std::string& mode) {

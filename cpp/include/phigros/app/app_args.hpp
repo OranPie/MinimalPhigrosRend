@@ -34,6 +34,7 @@ struct AppArgs {
     std::string play_replay_path;
     std::string backend;
     double      audio_offset_ms     = 0.0;
+    double      playback_speed      = -1.0;  // --playback-speed <mul>
     // Recording
     std::string record_output;
     std::string record_preset       = "balanced";
@@ -104,6 +105,7 @@ inline AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--duration"  && i+1 < argc) args.duration      = std::atof(argv[++i]);
         else if (a == "--truncate-at-duration") args.truncate_at_duration = true;
         else if (a == "--audio-offset" && i+1 < argc) args.audio_offset_ms = std::atof(argv[++i]);
+        else if (a == "--playback-speed" && i+1 < argc) args.playback_speed = std::atof(argv[++i]);
         else if (a == "--width"     && i+1 < argc) args.window_w      = std::atoi(argv[++i]);
         else if (a == "--height"    && i+1 < argc) args.window_h      = std::atoi(argv[++i]);
         else if (a == "--approach"      && i+1 < argc) args.approach      = std::atof(argv[++i]);
@@ -216,6 +218,7 @@ inline void print_usage(const char* prog) {
         "  --duration <sec>          Auto-quit after N seconds\n"
         "  --truncate-at-duration    Score denominator uses notes fully inside --duration\n"
         "  --audio-offset <ms>       Audio latency compensation\n"
+        "  --playback-speed <mul>    Optional audio playback speed override (default: chart-speed)\n"
         "  --width <px>              Window width  (overrides config)\n"
         "  --height <px>             Window height (overrides config)\n"
         "\n"

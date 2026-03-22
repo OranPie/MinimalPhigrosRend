@@ -81,6 +81,7 @@ struct AudioSystem {
     bool bgm_loaded = false;
     bool analysis_loaded = false;
     double offset_sec = 0.0;
+    double playback_speed = 1.0;
     ma_uint32 analysis_sample_rate = 44100;
     ma_uint32 analysis_channels = 2;
     mutable std::mutex analysis_mu;
@@ -125,6 +126,7 @@ struct AudioSystem {
         } else {
             PHLOG_WARN(Audio, "Failed to init analysis decoder for PCM taps: " << path);
         }
+        ma_sound_set_pitch(&bgm, static_cast<float>(std::max(0.01, playback_speed)));
         bgm_loaded = true;
         PHLOG_INFO(Audio, "BGM loaded: " << path << " offset=" << offset << "s");
         return true;
@@ -162,6 +164,7 @@ struct AudioSystem {
     void play() {
         if (bgm_loaded) {
             PHLOG_DEBUG(Audio, "Starting BGM playback");
+            ma_sound_set_pitch(&bgm, static_cast<float>(std::max(0.01, playback_speed)));
             ma_sound_start(&bgm);
         }
     }
@@ -180,6 +183,13 @@ struct AudioSystem {
         PHLOG_TRACE(Audio, "Seeking BGM to t=" << t_sec << "s frame=" << frame
             << " sample_rate=" << sample_rate);
         ma_sound_seek_to_pcm_frame(&bgm, frame);
+    }
+
+    void set_playback_speed(double speed) {
+        playback_speed = std::max(0.01, speed);
+        if (bgm_loaded)
+            ma_sound_set_pitch(&bgm, static_cast<float>(playback_speed));
+        PHLOG_DEBUG(Audio, "Playback speed set to " << playback_speed << "x");
     }
 
     double get_playback_time() const {

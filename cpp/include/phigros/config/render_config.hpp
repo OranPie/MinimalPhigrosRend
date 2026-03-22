@@ -50,6 +50,7 @@ struct RenderConfig {
     // Rendering
     double approach = 3.0;
     double chart_speed = 1.0;
+    std::optional<double> playback_speed;
     bool no_cull = false;
     bool no_cull_screen = false;
     bool no_cull_enter_time = true;
@@ -148,6 +149,7 @@ inline RenderConfig load_config_json(const nlohmann::json& j) {
 
         get_d("approach", cfg.approach);
         get_d("chart_speed", cfg.chart_speed);
+        if (r.contains("playback_speed") && !r["playback_speed"].is_null()) cfg.playback_speed = r["playback_speed"].get<double>();
         get_b("no_cull", cfg.no_cull);
         get_b("no_cull_screen", cfg.no_cull_screen);
         get_b("no_cull_enter_time", cfg.no_cull_enter_time);
@@ -179,6 +181,8 @@ inline RenderConfig load_config_json(const nlohmann::json& j) {
         // Clamp to sane ranges
         cfg.approach              = std::max(0.1, std::min(30.0, cfg.approach));
         cfg.chart_speed           = std::max(0.1, std::min(20.0, cfg.chart_speed));
+        if (cfg.playback_speed.has_value())
+            cfg.playback_speed = std::max(0.1, std::min(20.0, *cfg.playback_speed));
         cfg.note_alpha            = std::max(0.0, std::min(1.0,  cfg.note_alpha));
         cfg.font_size             = std::max(0.5, std::min(3.0,  cfg.font_size));
         cfg.hold_body_glow_alpha  = std::max(0.0, std::min(1.0,  cfg.hold_body_glow_alpha));
@@ -272,6 +276,7 @@ inline nlohmann::json config_to_json(const RenderConfig& cfg) {
     auto& r = j["render"];
     r["approach"]                   = cfg.approach;
     r["chart_speed"]                = cfg.chart_speed;
+    r["playback_speed"]             = cfg.playback_speed.has_value() ? nlohmann::json(*cfg.playback_speed) : nlohmann::json(nullptr);
     r["expand"]                     = cfg.expand_factor;
     r["note_scale_x"]               = cfg.note_scale_x;
     r["note_scale_y"]               = cfg.note_scale_y;

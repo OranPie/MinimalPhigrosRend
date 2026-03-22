@@ -74,6 +74,10 @@ struct AppContext {
     bool        started_audio = false;
     std::string audio_path;
 
+    static double effective_playback_speed(const config::RenderConfig& cfg) {
+        return cfg.playback_speed.has_value() ? *cfg.playback_speed : cfg.chart_speed;
+    }
+
     // Zip-aware texture cache for RPE line textures (texture_path field).
     // Key: path as it appears in the chart JSON (relative to chart root).
     std::unordered_map<std::string, render::Texture> line_tex_cache;
@@ -232,6 +236,7 @@ struct AppContext {
         if (!audio_path.empty()) {
             if (audio.init()) {
                 has_audio = audio.load_bgm(audio_path, chart_offset);
+                audio.set_playback_speed(effective_playback_speed(cfg));
                 if (has_audio)
                     PHLOG_INFO(Audio, "Loaded BGM: " << audio_path);
                 else
@@ -264,6 +269,7 @@ struct AppContext {
         has_audio = false;
         if (!audio_path.empty())
             has_audio = audio.load_bgm(audio_path, chart_offset);
+        audio.set_playback_speed(1.0);
         for (int k = 1; k <= 4; ++k) {
             if (!respack.hitsound_ogg[k].empty())
                 audio.load_hitsound(k, respack.hitsound_ogg[k]);

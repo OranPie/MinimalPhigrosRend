@@ -153,12 +153,18 @@ struct AudioMixer {
     // Extract BGM to raw PCM WAV using FFmpeg
     static bool extract_audio_wav(const std::string& input,
                                   const std::string& output_wav) {
+#if defined(PHIGROS_IOS)
+        (void)input;
+        (void)output_wav;
+        return false;
+#else
         std::string cmd = "ffmpeg -hide_banner -loglevel error -y "
                           "-i \"" + input + "\" "
                           "-acodec pcm_s16le -ar 44100 -ac 2 "
                           "\"" + output_wav + "\" 2>&1";
         int ret = std::system(cmd.c_str());
         return ret == 0;
+#endif
     }
 
     static bool load_wav_s16(const std::string& path, std::vector<int16_t>& pcm_out) {
@@ -275,6 +281,9 @@ public:
     static bool codec_usable(const std::string& codec) {
         if (codec.empty()) return false;
         PHLOG_TRACE(Record, "Probing codec usability: " << codec);
+#if defined(PHIGROS_IOS)
+        return false;
+#else
         // Some hardware encoders (notably NVENC) reject tiny probe frames (e.g. 16x16).
         // Use a conservative probe size that works across SW/HW encoders.
         constexpr int probe_w = 128;
@@ -288,6 +297,7 @@ public:
         PHLOG_TRACE(Record, "Codec usability " << codec << "=" << ok
             << " ret=" << ret);
         return ok;
+#endif
     }
 
     bool open(const std::string& output_path, int input_w, int input_h,
@@ -380,6 +390,12 @@ public:
         PHLOG_INFO(Record, "Mux audio: video=" << video_path
             << " audio=" << audio_path
             << " output=" << output_path);
+#if defined(PHIGROS_IOS)
+        (void)video_path;
+        (void)audio_path;
+        (void)output_path;
+        return false;
+#else
         std::string cmd = "ffmpeg -hide_banner -loglevel error -y "
                           "-i \"" + video_path + "\" "
                           "-i \"" + audio_path + "\" "
@@ -388,6 +404,7 @@ public:
         int ret = std::system(cmd.c_str());
         PHLOG_DEBUG(Record, "Mux audio ret=" << ret);
         return ret == 0;
+#endif
     }
 
 private:
@@ -490,6 +507,7 @@ struct RecordConfig {
     std::string audio_path;               // BGM for muxing
     double chart_offset = 0.0;
     double audio_offset_sec = 0.0;
+    double playback_speed = 1.0;
     bool no_hitsound = false;
     std::vector<uint8_t> hitsound_ogg[5];
 };
@@ -788,6 +806,35 @@ public:
     }
 
 private:
+    static std::vector<int16_t> time_scale_pcm_s16(const std::vector<int16_t>& input,
+                                                   int channels,
+                                                   double speed) {
+        if (input.empty() || channels <= 0) return input;
+        speed = std::max(0.01, speed);
+        if (std::abs(speed - 1.0) < 1e-6) return input;
+
+        const size_t in_frames = input.size() / static_cast<size_t>(channels);
+        if (in_frames == 0) return {};
+        const size_t out_frames = std::max<size_t>(1,
+            static_cast<size_t>(std::llround(static_cast<double>(in_frames) / speed)));
+        std::vector<int16_t> out(out_frames * static_cast<size_t>(channels), 0);
+
+        for (size_t of = 0; of < out_frames; ++of) {
+            const double src_frame = static_cast<double>(of) * speed;
+            const size_t i0 = static_cast<size_t>(std::min<double>(in_frames - 1, std::floor(src_frame)));
+            const size_t i1 = std::min(in_frames - 1, i0 + 1);
+            const double frac = std::clamp(src_frame - static_cast<double>(i0), 0.0, 1.0);
+            for (int ch = 0; ch < channels; ++ch) {
+                const double s0 = static_cast<double>(input[i0 * static_cast<size_t>(channels) + static_cast<size_t>(ch)]);
+                const double s1 = static_cast<double>(input[i1 * static_cast<size_t>(channels) + static_cast<size_t>(ch)]);
+                const double sample = s0 + (s1 - s0) * frac;
+                out[of * static_cast<size_t>(channels) + static_cast<size_t>(ch)] =
+                    static_cast<int16_t>(std::clamp(sample, -32768.0, 32767.0));
+            }
+        }
+        return out;
+    }
+
     bool build_processed_audio_track(const std::string& output_wav) {
         const std::string bgm_tmp = output_wav + ".bgm.wav";
         if (!AudioMixer::extract_audio_wav(cfg_.audio_path, bgm_tmp)) return false;
@@ -816,6 +863,8 @@ private:
             const size_t pad = static_cast<size_t>(-source_start_samples);
             mixed_pcm.insert(mixed_pcm.begin(), pad, 0);
         }
+
+        mixed_pcm = time_scale_pcm_s16(mixed_pcm, kChannels, cfg_.playback_speed);
 
         std::vector<int16_t> hitsound_pcm[5];
         for (int k = 1; k <= 4; ++k) {

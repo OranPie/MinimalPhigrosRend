@@ -781,6 +781,7 @@ inline void apply_config_overrides(config::RenderConfig& cfg, const nlohmann::js
         if (ov.contains(k) && !ov[k].is_null()) v = ov[k].get<std::string>(); };
 
     get_d("chart_speed",             cfg.chart_speed);
+    opt_d("playback_speed",          cfg.playback_speed);
     get_d("approach",                cfg.approach);
     get_d("expand",                  cfg.expand_factor);
     get_d("note_scale_x",            cfg.note_scale_x);
