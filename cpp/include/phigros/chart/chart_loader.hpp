@@ -37,6 +37,11 @@ std::vector<ChartEntry> load_zip_chart(const std::filesystem::path& zip_path);
 // Load a single JSON chart with asset autofill
 ChartEntry load_json_chart(const std::filesystem::path& json_path);
 
+// Resolve a folder/zip input to the chart entry the CLI should load by default.
+// Prefers the requested difficulty (default "IN"), otherwise falls back to the first entry.
+std::optional<ChartEntry> resolve_chart_entry(const std::string& path,
+                                              const std::string& preferred_difficulty = "IN");
+
 // ── Asset resolution ─────────────────────────────────────────────────────────
 
 // Find music file in directory (searches for .ogg, .mp3, .wav)
@@ -53,6 +58,9 @@ std::string extract_base_name(const std::string& filename);
 // Extract a file from a zip archive to memory
 // Returns empty vector on failure
 std::vector<uint8_t> extract_zip_file(const std::string& zip_path, const std::string& file_in_zip);
+
+// Check if a path is a supported chart archive (.zip / .pez)
+bool is_zip_archive(const std::filesystem::path& path);
 
 // Check if a path is a zip file reference (format: "path.zip:file.json")
 bool is_zip_path(const std::string& path);

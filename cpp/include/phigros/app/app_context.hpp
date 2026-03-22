@@ -85,6 +85,20 @@ struct AppContext {
     bool        chart_is_zip  = false;
     std::string chart_zip_file; // zip archive path when chart_is_zip
 
+    bool load_audio_source(double chart_offset) {
+        if (audio_path.empty()) return false;
+        if (chart::is_zip_path(audio_path)) {
+            auto [zip_file, file_in_zip] = chart::split_zip_path(audio_path);
+            auto data = chart::extract_zip_file(zip_file, file_in_zip);
+            if (data.empty()) {
+                PHLOG_WARN(Audio, "Failed to extract BGM from archive: " << audio_path);
+                return false;
+            }
+            return audio.load_bgm_memory(audio_path, data, chart_offset);
+        }
+        return audio.load_bgm(audio_path, chart_offset);
+    }
+
     // Init all objects. chart_offset is passed to audio for seeking.
     void init(const std::string& chart_path,
               double             chart_offset,
@@ -113,13 +127,30 @@ struct AppContext {
         draw_list.reserve(2048);
 
         // Resolve chart base for texture lookup
+        chart_dir.clear();
+        chart_is_zip = false;
+        chart_zip_file.clear();
+        std::string resolved_audio_path;
+        std::string resolved_bg_path;
+        std::string resolved_chart_path = chart_path;
         if (chart::is_zip_path(chart_path)) {
-            chart_is_zip  = true;
+            chart_is_zip = true;
             chart_zip_file = chart::split_zip_path(chart_path).first;
+        } else if (auto resolved = chart::resolve_chart_entry(chart_path)) {
+            resolved_chart_path = resolved->chart_path;
+            resolved_audio_path = resolved->assets.music_path;
+            resolved_bg_path = resolved->assets.illustration_path;
+            if (chart::is_zip_path(resolved_chart_path)) {
+                chart_is_zip = true;
+                chart_zip_file = chart::split_zip_path(resolved_chart_path).first;
+            } else {
+                chart_dir = fs::path(resolved_chart_path).parent_path().string();
+            }
         } else {
             chart_dir = fs::path(chart_path).parent_path().string();
         }
         PHLOG_DEBUG(Chart, "AppContext chart base: path=" << chart_path
+            << " resolved=" << resolved_chart_path
             << " dir=" << (chart_dir.empty() ? "<none>" : chart_dir)
             << " zip=" << (chart_is_zip ? chart_zip_file : "<none>"));
 
@@ -142,6 +173,11 @@ struct AppContext {
             else if (!chart_dir.empty())
                 bgp = (fs::path(chart_dir) / meta_bg_path).string();
             PHLOG_TRACE(Render, "Background from chart metadata: " << bgp);
+        }
+
+        if (bgp.empty() && !resolved_bg_path.empty()) {
+            bgp = resolved_bg_path;
+            PHLOG_TRACE(Render, "Background from chart package: " << bgp);
         }
 
         // Auto-discover illustration from chart directory (png/jpg/jpeg/webp)
@@ -229,13 +265,15 @@ struct AppContext {
         // Audio
         audio_path = audio_override;
         if (audio_path.empty())
-            audio_path = find_chart_audio(fs::path(chart_path).parent_path().string());
+            audio_path = resolved_audio_path;
+        if (audio_path.empty() && !chart_dir.empty())
+            audio_path = find_chart_audio(chart_dir);
         PHLOG_DEBUG(Audio, "Audio resolution: override="
             << (audio_override.empty() ? "<none>" : audio_override)
             << " resolved=" << (audio_path.empty() ? "<none>" : audio_path));
         if (!audio_path.empty()) {
             if (audio.init()) {
-                has_audio = audio.load_bgm(audio_path, chart_offset);
+                has_audio = load_audio_source(chart_offset);
                 audio.set_playback_speed(effective_playback_speed(cfg));
                 if (has_audio)
                     PHLOG_INFO(Audio, "Loaded BGM: " << audio_path);
@@ -268,7 +306,7 @@ struct AppContext {
         if (!audio.init()) return;
         has_audio = false;
         if (!audio_path.empty())
-            has_audio = audio.load_bgm(audio_path, chart_offset);
+            has_audio = load_audio_source(chart_offset);
         audio.set_playback_speed(1.0);
         for (int k = 1; k <= 4; ++k) {
             if (!respack.hitsound_ogg[k].empty())

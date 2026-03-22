@@ -23,6 +23,7 @@
 #include <nlohmann/json.hpp>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -44,31 +45,85 @@ static phigros::engine::SimMode parse_sim_mode_local(const std::string& mode) {
     return phigros::engine::SimMode::Aggressive;
 }
 
+static std::string detect_format_text(const std::string& text) {
+    size_t pos = text.find_first_not_of(" \t\r\n");
+    if (pos == std::string::npos) return "";
+    char c = text[pos];
+    if (c == 'b' || c == 'c' || c == 'n' || c == '#' || (c >= '0' && c <= '9'))
+        return "pec";
+
+    try {
+        json j = json::parse(text);
+        if (j.contains("META") || j.contains("BPMList"))
+            return "rpe";
+        return "official";
+    } catch (...) {
+        return "pec";
+    }
+}
+
+static phigros::ChartData load_chart_from_zip_reference(
+    const std::string& path,
+    const phigros::config::RenderConfig& cfg,
+    const std::string& password) {
+    auto [zip_path, file_in_zip] = phigros::chart::split_zip_path(path);
+    PHLOG_INFO(Chart, "Loading chart from zip: " << zip_path << ":" << file_in_zip);
+    auto data = phigros::chart::extract_zip_file(zip_path, file_in_zip);
+    if (data.empty()) throw std::runtime_error("Failed to extract from zip: " + path);
+
+    std::string ext = fs::path(file_in_zip).extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    if (ext == ".phbc") {
+        std::string blob(data.begin(), data.end());
+        std::istringstream in(blob, std::ios::in | std::ios::binary);
+        return phigros::chart::read_phbc(in, password).to_chart_data();
+    }
+
+    std::string text(data.begin(), data.end());
+    const std::string fmt = (ext == ".pec") ? "pec" : detect_format_text(text);
+    if (fmt == "rpe") {
+        PHLOG_DEBUG(Chart, "Zip chart detected as RPE");
+        return phigros::chart::parse_rpe(json::parse(text), cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
+    }
+    if (fmt == "official") {
+        PHLOG_DEBUG(Chart, "Zip chart detected as official");
+        return phigros::chart::parse_official(json::parse(text), cfg.window_w, cfg.window_h);
+    }
+    PHLOG_DEBUG(Chart, "Zip chart detected as PEC");
+    return phigros::chart::load_pec_text(text, cfg.window_w, cfg.window_h);
+}
+
 static std::string detect_format(const std::string& path) {
-    std::ifstream f(path);
+    if (auto resolved = phigros::chart::resolve_chart_entry(path))
+        return detect_format(resolved->chart_path);
+
+    if (phigros::chart::is_zip_path(path)) {
+        auto [zip_path, file_in_zip] = phigros::chart::split_zip_path(path);
+        auto data = phigros::chart::extract_zip_file(zip_path, file_in_zip);
+        if (data.empty()) {
+            PHLOG_TRACE(Chart, "detect_format: failed to extract " << path);
+            return "";
+        }
+        std::string ext = fs::path(file_in_zip).extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        if (ext == ".phbc") return "phbc";
+        std::string text(data.begin(), data.end());
+        return detect_format_text(text);
+    }
+
+    std::string ext = fs::path(path).extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    if (ext == ".phbc") return "phbc";
+
+    std::ifstream f(path, std::ios::binary);
     if (!f) {
         PHLOG_TRACE(Chart, "detect_format: failed to open " << path);
         return "";
     }
-    std::string first;
-    std::getline(f, first);
-    if (!first.empty() && (first[0] == 'b' || first[0] == 'c' || first[0] == 'n' ||
-        first[0] == '#' || (first[0] >= '0' && first[0] <= '9'))) {
-        PHLOG_DEBUG(Chart, "detect_format: " << path << " -> pec");
-        return "pec";
-    }
-    f.seekg(0);
-    try {
-        json j = json::parse(f);
-        if (j.contains("META")) {
-            PHLOG_DEBUG(Chart, "detect_format: " << path << " -> rpe");
-            return "rpe";
-        }
-        PHLOG_DEBUG(Chart, "detect_format: " << path << " -> official");
-        return "official";
-    } catch (...) {}
-    PHLOG_DEBUG(Chart, "detect_format: " << path << " -> pec (fallback)");
-    return "pec";
+    std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    auto fmt = detect_format_text(text);
+    PHLOG_DEBUG(Chart, "detect_format: " << path << " -> " << (fmt.empty() ? "<unknown>" : fmt));
+    return fmt;
 }
 
 static phigros::ChartData load_chart(const std::string& path,
@@ -77,7 +132,6 @@ static phigros::ChartData load_chart(const std::string& path,
     PHLOG_DEBUG(Chart, "load_chart: path=" << path
         << " window=" << cfg.window_w << "x" << cfg.window_h
         << " easing_shift=" << cfg.rpe_easing_shift);
-    // Binary compiled chart
     if (path.size() >= 5 && path.substr(path.size() - 5) == ".phbc") {
         PHLOG_INFO(Chart, "Loading compiled chart: " << path);
         std::ifstream f(path, std::ios::binary);
@@ -90,36 +144,14 @@ static phigros::ChartData load_chart(const std::string& path,
         return compiled.to_chart_data();
     }
 
-    // Zip chart reference (format: "path.zip:file.json")
-    if (phigros::chart::is_zip_path(path)) {
-        auto [zip_path, file_in_zip] = phigros::chart::split_zip_path(path);
-        PHLOG_INFO(Chart, "Loading chart from zip: " << zip_path << ":" << file_in_zip);
-        auto data = phigros::chart::extract_zip_file(zip_path, file_in_zip);
-        if (data.empty()) throw std::runtime_error("Failed to extract from zip: " + path);
-        std::string json_str(data.begin(), data.end());
-        json j = json::parse(json_str);
-        if (j.contains("META")) {
-            PHLOG_DEBUG(Chart, "Zip chart detected as RPE");
-            return phigros::chart::parse_rpe(j, cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
-        }
-        PHLOG_DEBUG(Chart, "Zip chart detected as official");
-        return phigros::chart::parse_official(j, cfg.window_w, cfg.window_h);
+    if (auto resolved = phigros::chart::resolve_chart_entry(path)) {
+        PHLOG_INFO(Chart, "Resolved chart input: " << path << " -> " << resolved->chart_path
+            << " diff=" << (resolved->difficulty.empty() ? "<none>" : resolved->difficulty));
+        return load_chart(resolved->chart_path, cfg, password);
     }
 
-    // Folder: pick first chart entry found
-    if (fs::is_directory(path)) {
-        PHLOG_INFO(Chart, "Loading chart folder: " << path);
-        auto entries = phigros::chart::load_folder_chart(path);
-        if (entries.empty()) throw std::runtime_error("No charts found in folder: " + path);
-        // Default to IN, fallback to first
-        const phigros::chart::ChartEntry* chosen = &entries[0];
-        for (const auto& e : entries) {
-            if (e.difficulty == "IN") { chosen = &e; break; }
-        }
-        PHLOG_INFO(Chart, "Folder chart selection: " << chosen->chart_path
-            << " diff=" << (chosen->difficulty.empty() ? "<none>" : chosen->difficulty));
-        return load_chart(chosen->chart_path, cfg, password);
-    }
+    if (phigros::chart::is_zip_path(path))
+        return load_chart_from_zip_reference(path, cfg, password);
 
     std::string fmt = detect_format(path);
     if (fmt == "rpe" || fmt == "official") {

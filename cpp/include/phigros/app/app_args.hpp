@@ -208,6 +208,7 @@ inline void print_usage(const char* prog) {
         "CHART FORMATS\n"
         "  .json          Official / RPE chart\n"
         "  .pec           PEC legacy chart\n"
+        "  .zip / .pez    All-in-one chart package (chart + music + illustration)\n"
         "  .phbc          Pre-compiled binary chart (fastest load)\n"
         "\n"
         "PLAYBACK\n"

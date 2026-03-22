@@ -6,6 +6,7 @@
 #include <set>
 #include <iostream>
 #include <miniz.h>
+#include <map>
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
@@ -22,6 +23,42 @@ static bool has_extension(const fs::path& p, const std::set<std::string>& exts) 
     return exts.count(ext) > 0;
 }
 
+static std::string trim_copy(std::string s) {
+    while (!s.empty() && (s.front() == ' ' || s.front() == '\t' || s.front() == '\r' || s.front() == '\n'))
+        s.erase(s.begin());
+    while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\r' || s.back() == '\n'))
+        s.pop_back();
+    return s;
+}
+
+static std::string unquote_copy(std::string s) {
+    s = trim_copy(std::move(s));
+    if (s.size() >= 2 && ((s.front() == "\""[0] && s.back() == "\""[0]) || (s.front() == '\'' && s.back() == '\'')))
+        return s.substr(1, s.size() - 2);
+    return s;
+}
+
+static std::map<std::string, std::string> parse_simple_key_value(const std::string& text,
+                                                                 bool strip_hash_comments) {
+    std::map<std::string, std::string> out;
+    std::istringstream iss(text);
+    std::string line;
+    while (std::getline(iss, line)) {
+        if (strip_hash_comments) {
+            auto hash = line.find('#');
+            if (hash != std::string::npos) line = line.substr(0, hash);
+        }
+        line = trim_copy(std::move(line));
+        if (line.empty()) continue;
+        auto colon = line.find(':');
+        if (colon == std::string::npos) continue;
+        std::string key = trim_copy(line.substr(0, colon));
+        std::string val = unquote_copy(line.substr(colon + 1));
+        if (!key.empty()) out[key] = val;
+    }
+    return out;
+}
+
 static bool is_music_file(const fs::path& p) {
     return has_extension(p, {".ogg", ".mp3", ".wav"});
 }
@@ -34,6 +71,10 @@ static bool is_chart_file(const fs::path& p) {
     return has_extension(p, {".json", ".pec", ".phbc"});
 }
 
+bool is_zip_archive(const fs::path& p) {
+    return has_extension(p, {".zip", ".pez"});
+}
+
 static bool is_difficulty_name(const std::string& stem) {
     static const std::set<std::string> diffs = {"EZ", "HD", "IN", "AT", "SP", "EX"};
     std::string upper = stem;
@@ -41,14 +82,18 @@ static bool is_difficulty_name(const std::string& stem) {
     return diffs.count(upper) > 0;
 }
 
+static std::string parse_level_prefix(const std::string& value) {
+    std::string token = trim_copy(value);
+    auto space = token.find_first_of(" 	");
+    if (space != std::string::npos) token = token.substr(0, space);
+    std::transform(token.begin(), token.end(), token.begin(), ::toupper);
+    return is_difficulty_name(token) ? token : std::string{};
+}
+
 std::string extract_base_name(const std::string& filename) {
-    // Remove extension
     size_t dot = filename.find_last_of('.');
     std::string base = (dot != std::string::npos) ? filename.substr(0, dot) : filename;
-
-    // If it's a difficulty name, return empty (no base name)
     if (is_difficulty_name(base)) return "";
-
     return base;
 }
 
@@ -154,7 +199,6 @@ std::vector<ChartEntry> load_zip_chart(const fs::path& zip_path) {
     PHLOG_DEBUG(Chart, "ChartLoader: opened zip: " << zip_path.string()
         << " files=" << file_count);
 
-    // Collect all filenames
     std::vector<std::string> all_files;
     all_files.reserve(file_count);
     for (int i = 0; i < file_count; ++i) {
@@ -163,7 +207,6 @@ std::vector<ChartEntry> load_zip_chart(const fs::path& zip_path) {
             all_files.push_back(st.m_filename);
     }
 
-    // Helper: extract a file from the open zip to string
     auto extract_str = [&](const std::string& name) -> std::string {
         int idx = mz_zip_reader_locate_file(&zip, name.c_str(), nullptr, 0);
         if (idx < 0) return {};
@@ -174,7 +217,6 @@ std::vector<ChartEntry> load_zip_chart(const fs::path& zip_path) {
         return buf;
     };
 
-    // Helper: find first file matching extension(s)
     auto find_ext = [&](const std::set<std::string>& exts) -> std::string {
         for (const auto& f : all_files) {
             fs::path p(f);
@@ -187,81 +229,107 @@ std::vector<ChartEntry> load_zip_chart(const fs::path& zip_path) {
 
     std::string zip_str = zip_path.string();
     std::string song_name = zip_path.stem().string();
+    std::string fallback_music = find_ext({".ogg", ".mp3", ".wav", ".flac"});
+    std::string fallback_image = find_ext({".png", ".jpg", ".jpeg", ".webp"});
 
-    // Fallback asset discovery
-    std::string fallback_music = find_ext({".ogg", ".mp3", ".wav"});
-    std::string fallback_image = find_ext({".png", ".jpg", ".jpeg"});
+    auto make_entry = [&](const std::string& chart_file, const std::string& diff,
+                          const std::string& music_file, const std::string& image_file) {
+        ChartEntry e;
+        e.name = song_name;
+        e.difficulty = diff;
+        std::transform(e.difficulty.begin(), e.difficulty.end(), e.difficulty.begin(), ::toupper);
+        if (!is_difficulty_name(e.difficulty)) e.difficulty.clear();
+        e.chart_path = zip_str + ":" + chart_file;
+        e.source_type = "zip";
+        if (!music_file.empty()) e.assets.music_path = zip_str + ":" + music_file;
+        if (!image_file.empty()) e.assets.illustration_path = zip_str + ":" + image_file;
+        return e;
+    };
 
-    // Try to read info.json
-    std::string info_raw = extract_str("info.json");
-    if (info_raw.empty()) {
-        // Some zips use info.yml — skip for now, fall back to scan
-        PHLOG_TRACE(Chart, "ChartLoader: zip has no info.json, scanning entries: " << zip_path.string());
-    }
-
-    if (!info_raw.empty()) {
+    std::string info_json = extract_str("info.json");
+    if (!info_json.empty()) {
         try {
-            json info = json::parse(info_raw);
-
-            // Override name from metadata
+            json info = json::parse(info_json);
             if (info.contains("name") && info["name"].is_string())
                 song_name = info["name"].get<std::string>();
 
-            // Resolve music/illustration from info
             std::string music_file = info.value("music", fallback_music);
             std::string image_file = info.value("illustration", fallback_image);
             if (image_file.empty()) image_file = info.value("background", fallback_image);
 
-            auto make_entry = [&](const std::string& chart_file, const std::string& diff) {
-                ChartEntry e;
-                e.name = song_name;
-                e.difficulty = diff;
-                e.chart_path = zip_str + ":" + chart_file;
-                e.source_type = "zip";
-                if (!music_file.empty()) e.assets.music_path = zip_str + ":" + music_file;
-                if (!image_file.empty()) e.assets.illustration_path = zip_str + ":" + image_file;
-                return e;
-            };
-
-            // Multi-difficulty: "charts" array
             if (info.contains("charts") && info["charts"].is_array()) {
                 for (const auto& c : info["charts"]) {
                     std::string path = c.value("path", "");
                     std::string type = c.value("type", "");
                     if (!path.empty())
-                        entries.push_back(make_entry(path, type));
+                        entries.push_back(make_entry(path, type, music_file, image_file));
                 }
-            }
-            // Single chart: "chart" field
-            else if (info.contains("chart") && info["chart"].is_string()) {
-                std::string chart_file = info["chart"].get<std::string>();
-                entries.push_back(make_entry(chart_file, ""));
+            } else if (info.contains("chart") && info["chart"].is_string()) {
+                entries.push_back(make_entry(info["chart"].get<std::string>(), "", music_file, image_file));
             }
         } catch (...) {
-            // info.json parse failed — fall through to scan
             PHLOG_WARN(Chart, "ChartLoader: failed to parse info.json, falling back to scan: "
                 << zip_path.string());
         }
+    } else {
+        auto info_yml = extract_str("info.yml");
+        if (!info_yml.empty()) {
+            auto meta = parse_simple_key_value(info_yml, true);
+            if (auto it = meta.find("name"); it != meta.end() && !it->second.empty())
+                song_name = it->second;
+
+            std::string music_file = fallback_music;
+            if (auto it = meta.find("music"); it != meta.end() && !it->second.empty())
+                music_file = it->second;
+
+            std::string image_file = fallback_image;
+            if (auto it = meta.find("illustration"); it != meta.end() && !it->second.empty())
+                image_file = it->second;
+            if (image_file.empty()) {
+                if (auto it = meta.find("background"); it != meta.end() && !it->second.empty())
+                    image_file = it->second;
+            }
+
+            std::string diff;
+            if (auto it = meta.find("level"); it != meta.end())
+                diff = parse_level_prefix(it->second);
+
+            if (auto it = meta.find("chart"); it != meta.end() && !it->second.empty())
+                entries.push_back(make_entry(it->second, diff, music_file, image_file));
+        }
+
+        if (entries.empty()) {
+            auto info_txt = extract_str("info.txt");
+            if (!info_txt.empty()) {
+                auto meta = parse_simple_key_value(info_txt, false);
+                if (auto it = meta.find("Name"); it != meta.end() && !it->second.empty())
+                    song_name = it->second;
+                std::string music_file = meta.count("Song") ? meta["Song"] : fallback_music;
+                std::string image_file = meta.count("Picture") ? meta["Picture"] : fallback_image;
+                std::string diff = meta.count("Level") ? parse_level_prefix(meta["Level"]) : std::string{};
+                if (auto it = meta.find("Chart"); it != meta.end() && !it->second.empty())
+                    entries.push_back(make_entry(it->second, diff, music_file, image_file));
+            }
+        }
     }
 
-    // Fallback: scan for first .json file
     if (entries.empty()) {
-        std::string chart_file;
+        std::vector<std::string> chart_files;
         for (const auto& f : all_files) {
             fs::path p(f);
-            auto ext = p.extension().string();
-            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-            if (ext == ".json") { chart_file = f; break; }
+            auto name = p.filename().string();
+            std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+            if (!is_chart_file(p)) continue;
+            if (name == "info.json" || name == "meta.json") continue;
+            chart_files.push_back(f);
         }
-        if (!chart_file.empty()) {
-            ChartEntry e;
-            e.name = song_name;
-            e.difficulty = "";
-            e.chart_path = zip_str + ":" + chart_file;
-            e.source_type = "zip";
-            if (!fallback_music.empty()) e.assets.music_path = zip_str + ":" + fallback_music;
-            if (!fallback_image.empty()) e.assets.illustration_path = zip_str + ":" + fallback_image;
-            entries.push_back(e);
+        std::sort(chart_files.begin(), chart_files.end());
+        for (const auto& chart_file : chart_files) {
+            std::string diff;
+            auto stem = fs::path(chart_file).stem().string();
+            std::transform(stem.begin(), stem.end(), stem.begin(), ::toupper);
+            if (is_difficulty_name(stem)) diff = stem;
+            entries.push_back(make_entry(chart_file, diff, fallback_music, fallback_image));
         }
     }
 
@@ -310,6 +378,30 @@ ChartEntry load_json_chart(const fs::path& json_path) {
     return entry;
 }
 
+std::optional<ChartEntry> resolve_chart_entry(const std::string& path,
+                                                    const std::string& preferred_difficulty) {
+    std::vector<ChartEntry> entries;
+    fs::path input(path);
+
+    if (fs::is_directory(input)) {
+        entries = load_folder_chart(input);
+    } else if (fs::is_regular_file(input) && is_zip_archive(input)) {
+        entries = load_zip_chart(input);
+    } else {
+        return std::nullopt;
+    }
+
+    if (entries.empty()) return std::nullopt;
+
+    std::string preferred = preferred_difficulty;
+    std::transform(preferred.begin(), preferred.end(), preferred.begin(), ::toupper);
+    for (const auto& entry : entries) {
+        if (!preferred.empty() && entry.difficulty == preferred)
+            return entry;
+    }
+    return entries.front();
+}
+
 // ── Directory scanner ────────────────────────────────────────────────────────
 
 std::vector<ChartEntry> scan_charts_directory(const std::string& dir_path) {
@@ -332,7 +424,7 @@ std::vector<ChartEntry> scan_charts_directory(const std::string& dir_path) {
             auto ext = entry.path().extension().string();
             std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
-            if (ext == ".zip") {
+            if (is_zip_archive(entry.path())) {
                 // Zip chart
                 auto zip_entries = load_zip_chart(entry.path());
                 all_entries.insert(all_entries.end(),
@@ -371,12 +463,20 @@ std::vector<ChartEntry> scan_charts_directory(const std::string& dir_path) {
 // ── Zip utilities ────────────────────────────────────────────────────────────
 
 bool is_zip_path(const std::string& path) {
-    return path.find(':') != std::string::npos && path.find(".zip:") != std::string::npos;
+    std::string lower = path;
+    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+    return lower.find(".zip:") != std::string::npos || lower.find(".pez:") != std::string::npos;
 }
 
 std::pair<std::string, std::string> split_zip_path(const std::string& path) {
-    size_t colon = path.find(':');
-    if (colon == std::string::npos) return {path, ""};
+    std::string lower = path;
+    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+    size_t marker = lower.find(".zip:");
+    if (marker == std::string::npos)
+        marker = lower.find(".pez:");
+    if (marker == std::string::npos) return {path, ""};
+
+    size_t colon = marker + 4;
     return {path.substr(0, colon), path.substr(colon + 1)};
 }
 

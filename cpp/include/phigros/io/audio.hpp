@@ -115,15 +115,18 @@ struct HitsoundPool {
 struct AudioSystem {
     ma_engine engine{};
     ma_sound  bgm{};
+    ma_decoder bgm_decoder{};
     ma_decoder analysis_decoder{};
     bool engine_ok  = false;
     bool bgm_loaded = false;
+    bool bgm_decoder_loaded = false;
     bool analysis_loaded = false;
     double offset_sec = 0.0;
     double playback_speed = 1.0;
     ma_uint32 analysis_sample_rate = 44100;
     ma_uint32 analysis_channels = 2;
     mutable std::mutex analysis_mu;
+    std::vector<uint8_t> bgm_data;
 
     // Hitsound pools indexed by note kind (1=tap, 2=drag, 3=hold, 4=flick).
     // Index 0 unused; holds fall back to tap sound if no dedicated pool loaded.
@@ -141,11 +144,30 @@ struct AudioSystem {
         return true;
     }
 
+    void unload_bgm() {
+        if (bgm_loaded) {
+            ma_sound_uninit(&bgm);
+            bgm_loaded = false;
+        }
+        if (bgm_decoder_loaded) {
+            ma_decoder_uninit(&bgm_decoder);
+            bgm_decoder_loaded = false;
+        }
+        if (analysis_loaded) {
+            ma_decoder_uninit(&analysis_decoder);
+            analysis_loaded = false;
+        }
+        bgm_data.clear();
+        analysis_sample_rate = 44100;
+        analysis_channels = 2;
+    }
+
     bool load_bgm(const std::string& path, double offset = 0.0) {
         if (!engine_ok) {
             PHLOG_WARN(Audio, "load_bgm called before audio engine init");
             return false;
         }
+        unload_bgm();
         offset_sec = offset;
         if (ma_sound_init_from_file(&engine, path.c_str(), 0, nullptr, nullptr, &bgm) != MA_SUCCESS) {
             PHLOG_ERROR(Audio, "Failed to load BGM: " << path);
@@ -168,6 +190,60 @@ struct AudioSystem {
         ma_sound_set_pitch(&bgm, static_cast<float>(std::max(0.01, playback_speed)));
         bgm_loaded = true;
         PHLOG_INFO(Audio, "BGM loaded: " << path << " offset=" << offset << "s");
+        return true;
+    }
+
+    bool load_bgm_memory(const std::string& label,
+                         const std::vector<uint8_t>& data,
+                         double offset = 0.0) {
+        if (!engine_ok) {
+            PHLOG_WARN(Audio, "load_bgm_memory called before audio engine init");
+            return false;
+        }
+        if (data.empty()) {
+            PHLOG_WARN(Audio, "Refusing to load empty in-memory BGM: " << label);
+            return false;
+        }
+
+        unload_bgm();
+        offset_sec = offset;
+        bgm_data = data;
+
+        ma_decoder_config playback_cfg = ma_decoder_config_init_default();
+        if (ma_decoder_init_memory(bgm_data.data(), bgm_data.size(), &playback_cfg, &bgm_decoder) != MA_SUCCESS) {
+            PHLOG_ERROR(Audio, "Failed to init BGM decoder from memory: " << label);
+            bgm_data.clear();
+            return false;
+        }
+        bgm_decoder_loaded = true;
+
+        if (ma_sound_init_from_data_source(&engine, &bgm_decoder, 0, nullptr, &bgm) != MA_SUCCESS) {
+            PHLOG_ERROR(Audio, "Failed to create BGM sound from memory: " << label);
+            ma_decoder_uninit(&bgm_decoder);
+            bgm_decoder_loaded = false;
+            bgm_data.clear();
+            return false;
+        }
+
+        ma_decoder_config analysis_cfg = ma_decoder_config_init(ma_format_f32, 2, 44100);
+        if (ma_decoder_init_memory(bgm_data.data(), bgm_data.size(), &analysis_cfg, &analysis_decoder) == MA_SUCCESS) {
+            ma_format fmt = ma_format_unknown;
+            ma_uint32 channel_count = 0;
+            ma_uint32 sample_rate = 0;
+            if (ma_data_source_get_data_format(&analysis_decoder, &fmt, &channel_count,
+                                               &sample_rate, nullptr, 0) == MA_SUCCESS) {
+                analysis_channels = std::max<ma_uint32>(1, channel_count);
+                analysis_sample_rate = std::max<ma_uint32>(1, sample_rate);
+            }
+            analysis_loaded = true;
+        } else {
+            PHLOG_WARN(Audio, "Failed to init analysis decoder for PCM taps from memory: " << label);
+        }
+
+        bgm_loaded = true;
+        PHLOG_INFO(Audio, "BGM loaded from memory: " << label
+            << " bytes=" << bgm_data.size()
+            << " offset=" << offset << "s");
         return true;
     }
 
@@ -290,11 +366,7 @@ struct AudioSystem {
     void destroy() {
         PHLOG_DEBUG(Audio, "AudioSystem destroy: bgm_loaded=" << bgm_loaded
             << " engine_ok=" << engine_ok);
-        if (bgm_loaded) { ma_sound_uninit(&bgm); bgm_loaded = false; }
-        if (analysis_loaded) {
-            ma_decoder_uninit(&analysis_decoder);
-            analysis_loaded = false;
-        }
+        unload_bgm();
         for (int k = 1; k <= 4; ++k) hitsounds[k].destroy();
         if (engine_ok) { ma_engine_uninit(&engine); engine_ok = false; }
     }
