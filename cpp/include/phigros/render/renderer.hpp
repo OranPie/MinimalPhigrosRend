@@ -157,9 +157,7 @@ inline FrameSnapshot build_frame(
         const auto& ns   = states[i];
 
         if (ns.judged && note.kind != 3) return;
-        // Successful holds disappear once finalized. Missed holds remain
-        // renderable so HoldRenderer can darken them until normal time culling
-        // removes them near t_end.
+        // Successful holds disappear once finalized.
         if (note.kind == 3 && ns.hold_finalized && !ns.miss) return;
         if (note.kind != 3 && ns.miss) return;
         if (note.line_id < 0 || note.line_id >= static_cast<int>(n_lines)) return;
@@ -176,6 +174,10 @@ inline FrameSnapshot build_frame(
         const auto& ls = (static_cast<size_t>(note.line_id) < ls_arr.size())
             ? ls_arr[note.line_id]
             : ls_heap[note.line_id];
+
+        // Missed holds remain darkened only until their tail crosses the judge line,
+        // after which the entire hold should disappear.
+        if (note.kind == 3 && ns.miss && ls.scroll >= note.scroll_end) return;
 
         // Evaluate control events for this note's scroll distance from the judge line.
         // The 'x' field in RPE control events is "note与判定线的纵向距离" —
@@ -267,13 +269,27 @@ inline FrameSnapshot build_frame(
         });
     };
 
-    for (size_t i = 0; i < chart.notes.size(); ++i) emit_note(i);
+    // Use the t_enter-sorted index for early exit: once t_enter > t, all remaining
+    // notes haven't appeared yet and can be skipped.  Fake notes (t_enter = -1e9)
+    // are at the front and are always included.  Fall back to full linear scan only
+    // if the index wasn't built (shouldn't happen in practice).
+    if (!chart.notes_by_enter.empty()) {
+        const bool use_enter_cull = !cfg.no_cull && !cfg.no_cull_enter_time;
+        for (size_t j = 0; j < chart.notes_by_enter.size(); ++j) {
+            const size_t idx = chart.notes_by_enter[j];
+            if (use_enter_cull && chart.notes[idx].t_enter > t) break;
+            emit_note(idx);
+        }
+    } else {
+        for (size_t i = 0; i < chart.notes.size(); ++i) emit_note(i);
+    }
 
     s_last_note_count = frame.notes.size();  // 6B5: update adaptive reserve hint
 
     // Sort by (non-hold first for z-order, then by kind) to batch same-texture notes
-    // and reduce SDL texture state thrashing in SdlExecutor
-    std::stable_sort(frame.notes.begin(), frame.notes.end(),
+    // and reduce SDL texture state thrashing in SdlExecutor.
+    // Stability not required: notes of identical (is_hold, kind) are interchangeable.
+    std::sort(frame.notes.begin(), frame.notes.end(),
         [](const NoteSnapshot& a, const NoteSnapshot& b) {
             if (a.is_hold != b.is_hold) return a.is_hold < b.is_hold;
             return a.kind < b.kind;

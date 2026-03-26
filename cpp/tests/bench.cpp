@@ -385,6 +385,7 @@ static BuildFrameBench bench_build_frame(const ChartEntry& e,
                                          double expand_factor = 1.0) {
     ChartData chart = load_source(e.path);
     engine::precompute_t_enter(chart.lines, chart.notes, 1280, 720, expand_factor);
+    chart.build_notes_by_enter_index();
 
     double t_start = chart.offset;
     double t_end   = chart.chart_end_t + 2.0;
@@ -796,6 +797,7 @@ struct RenderEffectsBench {
 static RenderEffectsBench bench_render_effects(const ChartEntry& e) {
     ChartData chart = load_source(e.path);
     engine::precompute_t_enter(chart.lines, chart.notes, 1280, 720);
+    chart.build_notes_by_enter_index();
 
     const double t_start   = chart.offset;
     const double t_end     = chart.chart_end_t + 2.0;
@@ -957,10 +959,16 @@ int main(int argc, char* argv[]) {
     for (const auto& e : entries) {
         std::cout << "  Loading: " << e.name << "…  ";
         std::cout.flush();
-        all_stats.push_back(compute_stats(e));
-        std::cout << "OK  (" << all_stats.back().notes << " notes, "
-                  << all_stats.back().lines << " lines, "
-                  << std::fixed << std::setprecision(1) << all_stats.back().duration << "s)\n";
+        try {
+            all_stats.push_back(compute_stats(e));
+            std::cout << "OK  (" << all_stats.back().notes << " notes, "
+                      << all_stats.back().lines << " lines, "
+                      << std::fixed << std::setprecision(1) << all_stats.back().duration << "s)\n";
+        } catch (const std::exception& ex) {
+            std::cout << "SKIP (" << ex.what() << ")\n";
+        } catch (...) {
+            std::cout << "SKIP (unknown error)\n";
+        }
     }
 
     {

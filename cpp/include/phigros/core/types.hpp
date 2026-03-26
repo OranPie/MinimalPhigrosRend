@@ -199,7 +199,8 @@ struct ChartData {
         notes_by_enter.clear();
         notes_by_enter.reserve(notes.size());
         for (size_t i = 0; i < notes.size(); ++i) {
-            if (notes[i].fake) continue;
+            // Include fake notes: they have t_enter = -1e9 and sort to the front,
+            // so they are always within the entered window and never trigger early break.
             notes_by_enter.push_back(i);
         }
         std::stable_sort(notes_by_enter.begin(), notes_by_enter.end(),
