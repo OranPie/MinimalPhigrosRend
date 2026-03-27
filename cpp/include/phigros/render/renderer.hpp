@@ -167,13 +167,9 @@ inline FrameSnapshot build_frame(
         if (note.visible_time < 999998.0 && t < note.t_hit - note.visible_time) return;
 
         // Optional t_enter/t_end culling for dense charts.
-        // Missed holds need to survive past t_end so the tail can cross the
-        // line and reverse-extend; screen culling will remove them naturally.
         if (!cfg.no_cull && !cfg.no_cull_enter_time) {
             if (t < note.t_enter) return;
-            const bool keep_missed_hold_after_end =
-                (note.kind == 3 && ns.miss);
-            if (!keep_missed_hold_after_end && t > note.t_end + 0.5) return;
+            if (t > note.t_end + 0.5) return;
         }
 
         const auto& ls = (static_cast<size_t>(note.line_id) < ls_arr.size())
