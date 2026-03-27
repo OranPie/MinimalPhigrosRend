@@ -59,6 +59,16 @@ struct HoldRenderer {
             double tail_screen_h = tail_h * px_per_texel;
             double body_screen_h = std::max(0.0, total_len - head_screen_h - tail_screen_h);
 
+            // When the hold shrinks to (or through) the judge line, keep the
+            // caps compressed instead of dropping the sprite for a few frames.
+            const double cap_sum = head_screen_h + tail_screen_h;
+            if (cap_sum > 1e-6 && total_len < cap_sum) {
+                const double scale = total_len / cap_sum;
+                head_screen_h *= scale;
+                tail_screen_h *= scale;
+                body_screen_h = 0.0;
+            }
+
             // Color and alpha
             uint8_t r = ns.color.r, g = ns.color.g, b = ns.color.b;
             double alpha_f = ns.alpha * 255.0;
