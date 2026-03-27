@@ -54,6 +54,7 @@ Playback:
 - `--duration <sec>`
 - `--truncate-at-duration`
 - `--audio-offset <ms>`
+- `--playback-speed <mul>`
 - `--width <px>` / `--height <px>`
 - `--headless`
 
@@ -68,6 +69,13 @@ Visual overrides:
 - `--overlay-transparent`
 - `--debug-flags <flags>`
 
+Asset overrides:
+
+- `--respack <path>`
+- `--bg <path>`
+- `--font <path>`
+- `--audio <path>`
+
 Replay and recording:
 
 - `--save-replay <file>` / `--play-replay <file>`
@@ -75,7 +83,9 @@ Replay and recording:
 - `--record-preset`, `--record-codec`, `--record-hw`
 - `--record-fps`, `--sim-fps`
 - `--record-resolution`, `--record-capture-resolution`
+- `--record-queue-depth <n>`
 - `--record-start`, `--record-end`
+- `--screenshot-dir <dir>`, `--screenshot-fps <fps>`
 
 Compile and script workflow:
 
@@ -92,8 +102,10 @@ Utility and logging:
 
 - `--info`, `--version`, `--help`
 - `--list-charts <dir>`
+- `--backend <name>`
 - `--profile`, `--record-profile`
 - `--log-level`, `--log-filter`, `--log-file`
+- `--log-no-color`, `--log-time`
 - `--trace`, `--verbose`, `--quiet`
 
 ## Config

@@ -45,6 +45,7 @@ Core visual and layout:
 
 - `approach`: default `3.0`, clamped to `[0.1, 30.0]`
 - `chart_speed`: default `1.0`, clamped to `[0.1, 20.0]`
+- `playback_speed`: optional, clamped to `[0.1, 20.0]` — scales all time (chart + audio) uniformly; unset by default
 - `expand`: maps to `expand_factor`, default `1.0`
 - `note_scale_x`: default `2.5`
 - `note_scale_y`: default `1.0`
@@ -159,8 +160,10 @@ Current serialization behavior:
 - writes the canonical section structure shown above
 - always writes the nested `gameplay.simulateplay` block
 - writes top-level `backend`
+- writes `render.playback_speed` as `null` when unset
 - omits `assets.bg` when empty
 - omits optional trail/motion-blur fields when their optionals are not set
+- `no_cull_enter_time` is loaded from JSON but not written back by `config_to_json()`
 - some optional values are emitted with simple truthy checks, so false-like values may be omitted in the current implementation
 
 ## Related Docs

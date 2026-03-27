@@ -1,5 +1,14 @@
 # Python Reference: Note Lifecycle from Parse to Render Complete
 
+> ⚠️ **This document is stale.** It describes the legacy `phic_renderer/` Python-only renderer which no longer exists in this repository. The current architecture uses a C++ core with Python bindings (`phigros_cpp`). For the current note lifecycle, see:
+>
+> - [cpp/docs/DATA_STRUCTURES.md](cpp/docs/DATA_STRUCTURES.md) — `Note`, `NoteState`, `FrameSnapshot`
+> - [cpp/docs/KINEMATICS.md](cpp/docs/KINEMATICS.md) — note world-position evaluation
+> - [cpp/docs/RENDER.md](cpp/docs/RENDER.md) — frame construction pipeline
+> - [docs/PYTHON_BINDINGS.md](docs/PYTHON_BINDINGS.md) — Python API entry points
+
+---
+
 ## Overview
 This document traces the complete lifecycle of a note object from raw chart data through rendering, covering all Python reference implementations in MinimalPhigrosRend.
 
