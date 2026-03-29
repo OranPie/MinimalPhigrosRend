@@ -63,8 +63,6 @@ struct AppArgs {
     bool        version_mode        = false; // --version
     bool        info_mode           = false; // --info  : print chart metadata and exit
     std::string list_charts_dir;             // --list-charts <dir>
-    // Frame probe
-    double      dump_frame_t        = -1.0;  // --dump-frame <t> : dump render state at time t (headless)
     // Window overrides (take precedence over config)
     int         window_w            = 0;
     int         window_h            = 0;
@@ -188,7 +186,6 @@ inline AppArgs parse_args(int argc, char* argv[]) {
         else if (a == "--mod"           && i+1 < argc) args.mod_paths.push_back(argv[++i]);
         else if (a == "--script"        && i+1 < argc) args.script_path = argv[++i];
         else if (a == "--list-charts"   && i+1 < argc) { args.list_charts_dir = argv[++i]; args.headless = true; }
-        else if (a == "--dump-frame"    && i+1 < argc) { args.dump_frame_t = std::atof(argv[++i]); args.headless = true; }
         // ── Logging flags ────────────────────────────────────────────────────
         else if (a == "--log-level"  && i+1 < argc) args.log_level  = argv[++i];
         else if (a == "--log-filter" && i+1 < argc) args.log_filter = argv[++i];

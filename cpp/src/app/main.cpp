@@ -5,6 +5,7 @@
 #include "phigros/app/app_context.hpp"
 #include "phigros/app/game_loop.hpp"
 #include "phigros/config/render_config.hpp"
+#include "phigros/chart/format_detect.hpp"
 #include "phigros/chart/parser.hpp"
 #include "phigros/chart/compiler.hpp"
 #include "phigros/chart/phbc_io.hpp"
@@ -45,23 +46,6 @@ static phigros::engine::SimMode parse_sim_mode_local(const std::string& mode) {
     return phigros::engine::SimMode::Aggressive;
 }
 
-static std::string detect_format_text(const std::string& text) {
-    size_t pos = text.find_first_not_of(" \t\r\n");
-    if (pos == std::string::npos) return "";
-    char c = text[pos];
-    if (c == 'b' || c == 'c' || c == 'n' || c == '#' || (c >= '0' && c <= '9'))
-        return "pec";
-
-    try {
-        json j = json::parse(text);
-        if (j.contains("META") || j.contains("BPMList"))
-            return "rpe";
-        return "official";
-    } catch (...) {
-        return "pec";
-    }
-}
-
 static phigros::ChartData load_chart_from_zip_reference(
     const std::string& path,
     const phigros::config::RenderConfig& cfg,
@@ -80,14 +64,14 @@ static phigros::ChartData load_chart_from_zip_reference(
     }
 
     std::string text(data.begin(), data.end());
-    const std::string fmt = (ext == ".pec") ? "pec" : detect_format_text(text);
+    const std::string fmt = (ext == ".pec") ? "pec" : phigros::chart::detect_format_text(text);
     if (fmt == "rpe") {
         PHLOG_DEBUG(Chart, "Zip chart detected as RPE");
-        return phigros::chart::parse_rpe(json::parse(text), cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
+        return phigros::chart::load_rpe(json::parse(text), cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
     }
     if (fmt == "official") {
         PHLOG_DEBUG(Chart, "Zip chart detected as official");
-        return phigros::chart::parse_official(json::parse(text), cfg.window_w, cfg.window_h);
+        return phigros::chart::load_official(json::parse(text), cfg.window_w, cfg.window_h);
     }
     PHLOG_DEBUG(Chart, "Zip chart detected as PEC");
     return phigros::chart::load_pec_text(text, cfg.window_w, cfg.window_h);
@@ -108,7 +92,7 @@ static std::string detect_format(const std::string& path) {
         std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
         if (ext == ".phbc") return "phbc";
         std::string text(data.begin(), data.end());
-        return detect_format_text(text);
+        return phigros::chart::detect_format_text(text);
     }
 
     std::string ext = fs::path(path).extension().string();
@@ -121,7 +105,7 @@ static std::string detect_format(const std::string& path) {
         return "";
     }
     std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    auto fmt = detect_format_text(text);
+    auto fmt = phigros::chart::detect_format_text(text);
     PHLOG_DEBUG(Chart, "detect_format: " << path << " -> " << (fmt.empty() ? "<unknown>" : fmt));
     return fmt;
 }
@@ -159,13 +143,13 @@ static phigros::ChartData load_chart(const std::string& path,
         json j = json::parse(f);
         if (fmt == "rpe") {
             PHLOG_INFO(Chart, "Parsing RPE chart: " << path);
-            return phigros::chart::parse_rpe(j, cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
+            return phigros::chart::load_rpe(j, cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
         }
         PHLOG_INFO(Chart, "Parsing official chart: " << path);
-        return phigros::chart::parse_official(j, cfg.window_w, cfg.window_h);
+        return phigros::chart::load_official(j, cfg.window_w, cfg.window_h);
     }
     PHLOG_INFO(Chart, "Parsing PEC chart: " << path);
-    return phigros::chart::parse_pec(path, cfg.window_w, cfg.window_h);
+    return phigros::chart::load_pec(path, cfg.window_w, cfg.window_h);
 }
 
 // ── main / SDL_main ──────────────────────────────────────────────────────────
@@ -651,113 +635,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    // ── DUMP-FRAME ────────────────────────────────────────────────────────────
-    if (args.dump_frame_t >= 0.0) {
-        const double PROBE_T  = args.dump_frame_t;
-        constexpr double SIM_DT = 1.0 / 240.0;
-        const double HOLD_TOL   = cfg.hold_tail_tol;
-
-        // Simulate autoplay up to PROBE_T
-        std::vector<NoteState> st(chart.notes.size());
-        for (size_t i = 0; i < st.size(); ++i) st[i].note = &chart.notes[i];
-        engine::Judge j;
-        double prev_tc = chart.offset - SIM_DT;
-        for (double tc = chart.offset; tc <= PROBE_T + SIM_DT; tc += SIM_DT) {
-            engine::exact_autoplay_step(prev_tc, tc, chart.notes, st, chart.lines, j, W, H);
-            int inx = 0;
-            for (size_t k = 0; k < st.size(); ++k)
-                if (st[k].judged || chart.notes[k].t_hit < tc - 0.5) inx = (int)k + 1;
-            engine::detect_misses(st, inx, tc, engine::Judge::BAD, j);
-            engine::hold_maintenance(st, inx, tc, HOLD_TOL, j);
-            engine::hold_finalize(st, inx, tc, HOLD_TOL, engine::Judge::BAD, j);
-            prev_tc = tc;
-        }
-
-        // Build render frame
-        auto frame = render::build_frame(PROBE_T, chart, st, j, cfg);
-
-        // Emit JSON to stdout
-        auto esc = [](const std::string& s) {
-            std::string r; r.reserve(s.size());
-            for (char c : s) { if (c=='"') r+="\\\""; else if (c=='\\') r+="\\\\"; else r+=c; }
-            return r;
-        };
-
-        printf("{\n");
-        printf("  \"t\": %.6f,\n", PROBE_T);
-        printf("  \"W\": %d, \"H\": %d,\n", W, H);
-
-        // Lines
-        printf("  \"lines\": [\n");
-        for (size_t li = 0; li < frame.lines.size(); ++li) {
-            const auto& ls = frame.lines[li];
-            printf("    {\"lid\":%d,\"x\":%.2f,\"y\":%.2f,\"rot\":%.4f,\"alpha\":%.3f,\"scroll\":%.2f}%s\n",
-                ls.lid, ls.x, ls.y, ls.rot, ls.alpha01, ls.scroll,
-                li+1 < frame.lines.size() ? "," : "");
-        }
-        printf("  ],\n");
-
-        // Notes (visible in this frame)
-        printf("  \"frame_notes\": [\n");
-        for (size_t ni = 0; ni < frame.notes.size(); ++ni) {
-            const auto& ns = frame.notes[ni];
-            printf("    {\"nid\":%d,\"kind\":%d,\"wx\":%.1f,\"wy\":%.1f,\"wx_tail\":%.1f,\"wy_tail\":%.1f,"
-                   "\"judged\":%s,\"miss\":%s,\"holding\":%s,\"hold_hit_failed\":%s,\"alpha\":%.3f}%s\n",
-                ns.nid, ns.kind, ns.wx, ns.wy, ns.wx_tail, ns.wy_tail,
-                ns.judged?"true":"false", ns.miss?"true":"false",
-                ns.holding?"true":"false", ns.hold_hit_failed?"true":"false",
-                ns.alpha,
-                ni+1 < frame.notes.size() ? "," : "");
-        }
-        printf("  ],\n");
-
-        // All holds in chart with full state — regardless of visibility
-        printf("  \"all_holds\": [\n");
-        bool first_hold = true;
-        for (size_t i = 0; i < chart.notes.size(); ++i) {
-            const auto& note = chart.notes[i];
-            if (note.kind != 3) continue;
-            // Include holds active or recently active in ±10s window
-            if (note.t_end < PROBE_T - 10.0 || note.t_hit > PROBE_T + 10.0) continue;
-            const auto& ns = st[i];
-            // Compute line scroll and position
-            double scroll_now = 0.0;
-            double line_x = 0.0, line_y = 0.0, line_rot = 0.0;
-            if (note.line_id >= 0 && note.line_id < (int)chart.lines.size()) {
-                auto& ln = chart.lines[note.line_id];
-                scroll_now = ln.scroll_fn ? ln.scroll_fn(PROBE_T) : ln.scroll_px.integral(PROBE_T);
-                line_x = ln.pos_x(PROBE_T);
-                line_y = ln.pos_y(PROBE_T);
-                line_rot = ln.rot(PROBE_T);
-            }
-            double dy_head = (note.scroll_hit - scroll_now) * cfg.note_flow_speed_multiplier;
-            double dy_tail = (note.scroll_end - scroll_now) * cfg.note_flow_speed_multiplier
-                             * std::max(0.0, note.speed_mul);
-            if (!first_hold) printf(",\n");
-            first_hold = false;
-            printf("    {\"nid\":%d,\"line_id\":%d,\"t_hit\":%.4f,\"t_end\":%.4f,"
-                   "\"scroll_hit\":%.1f,\"scroll_end\":%.1f,\"scroll_now\":%.1f,"
-                   "\"dy_head\":%.1f,\"dy_tail\":%.1f,\"body_px\":%.1f,"
-                   "\"speed_mul\":%.3f,\"fake\":%s,"
-                   "\"judged\":%s,\"miss\":%s,\"holding\":%s,\"hold_finalized\":%s,"
-                   "\"in_frame\":%s}",
-                note.nid, note.line_id, note.t_hit, note.t_end,
-                note.scroll_hit, note.scroll_end, scroll_now,
-                dy_head, dy_tail, dy_tail - dy_head,
-                note.speed_mul, note.fake ? "true" : "false",
-                ns.judged?"true":"false", ns.miss?"true":"false",
-                ns.holding?"true":"false", ns.hold_finalized?"true":"false",
-                [&](){
-                    for (auto& fn : frame.notes) if (fn.nid == note.nid) return true;
-                    return false;
-                }() ? "true" : "false"
-            );
-        }
-        printf("\n  ]\n}\n");
-        return 0;
-    }
-
-
+    // ── SCORE-ONLY ────────────────────────────────────────────────────────────
     if (args.score_only) {
         constexpr double SIM_DT   = 1.0 / 240.0;
         const double HOLD_TOL = cfg.hold_tail_tol;

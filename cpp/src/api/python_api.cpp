@@ -1,4 +1,5 @@
 #include "phigros/api/python_api.hpp"
+#include "phigros/chart/format_detect.hpp"
 #include "phigros/chart/compiler.hpp"
 #include "phigros/chart/parser.hpp"
 #include "phigros/engine/hold_logic.hpp"
@@ -21,26 +22,13 @@ namespace {
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
+// Detect format of a chart file at the given path.
+// Returns "rpe", "official", "pec", "phbc", or "" (unknown/unreadable).
 std::string detect_format(const std::string& path) {
-    std::ifstream f(path);
+    std::ifstream f(path, std::ios::binary);
     if (!f) return "";
-
-    std::string first;
-    std::getline(f, first);
-    if (!first.empty() && (first[0] == 'b' || first[0] == 'c' || first[0] == 'n' ||
-        first[0] == '#' || (first[0] >= '0' && first[0] <= '9'))) {
-        return "pec";
-    }
-
-    f.clear();
-    f.seekg(0);
-    try {
-        json j = json::parse(f);
-        if (j.contains("META") || j.contains("BPMList")) return "rpe";
-        return "official";
-    } catch (...) {
-        return "pec";
-    }
+    std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    return chart::detect_format_text(text);
 }
 
 ChartData load_chart_from_path(const std::string& path,
@@ -61,8 +49,8 @@ ChartData load_chart_from_path(const std::string& path,
         try {
             auto j = json::parse(text);
             if (j.contains("META") || j.contains("BPMList"))
-                return chart::parse_rpe(j, cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
-            return chart::parse_official(j, cfg.window_w, cfg.window_h);
+                return chart::load_rpe(j, cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
+            return chart::load_official(j, cfg.window_w, cfg.window_h);
         } catch (const json::exception& e) {
             throw std::runtime_error("JSON parse error in zip entry '" + path + "': " +
                                      std::string(e.what()));
@@ -90,15 +78,15 @@ ChartData load_chart_from_path(const std::string& path,
         try {
             auto j = json::parse(f);
             if (fmt == "rpe")
-                return chart::parse_rpe(j, cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
-            return chart::parse_official(j, cfg.window_w, cfg.window_h);
+                return chart::load_rpe(j, cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
+            return chart::load_official(j, cfg.window_w, cfg.window_h);
         } catch (const json::exception& e) {
             throw std::runtime_error("JSON parse error in '" + path + "': " +
                                      std::string(e.what()));
         }
     }
 
-    return chart::parse_pec(path, cfg.window_w, cfg.window_h);
+    return chart::load_pec(path, cfg.window_w, cfg.window_h);
 }
 
 engine::SimMode parse_sim_mode(const std::string& mode) {

@@ -10,6 +10,7 @@
 //   t, W, H, lines[], frame_notes[], all_holds[]
 
 #include "phigros/core/logger.hpp"
+#include "phigros/chart/format_detect.hpp"
 #include "phigros/chart/parser.hpp"
 #include "phigros/chart/chart_loader.hpp"
 #include "phigros/chart/phbc_io.hpp"
@@ -23,55 +24,37 @@
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <sstream>
-#include <iostream>
 #include <cstdio>
-#include <cstdlib>
 #include <cmath>
 #include <string>
 #include <vector>
 #include <algorithm>
 #include <filesystem>
 
-using namespace phigros;
-using namespace phigros::render;
-using namespace phigros::engine;
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
-static std::string detect_format_text(const std::string& text) {
-    size_t pos = text.find_first_not_of(" \t\r\n");
-    if (pos == std::string::npos) return "";
-    char c = text[pos];
-    if (c == 'b' || c == 'c' || c == 'n' || c == '#' || (c >= '0' && c <= '9'))
-        return "pec";
-    try {
-        auto j = json::parse(text);
-        if (j.contains("META") || j.contains("BPMList")) return "rpe";
-        return "official";
-    } catch (...) { return "pec"; }
-}
-
-static ChartData load_chart_auto(const std::string& path, int W, int H) {
+static phigros::ChartData load_chart_auto(const std::string& path, int W, int H) {
     // Zip reference: "archive.zip:file.json"
-    if (chart::is_zip_path(path)) {
-        auto [zip_path, file_in_zip] = chart::split_zip_path(path);
-        auto data = chart::extract_zip_file(zip_path, file_in_zip);
+    if (phigros::chart::is_zip_path(path)) {
+        auto [zip_path, file_in_zip] = phigros::chart::split_zip_path(path);
+        auto data = phigros::chart::extract_zip_file(zip_path, file_in_zip);
         if (data.empty()) throw std::runtime_error("Failed to extract from zip: " + path);
         std::string ext = fs::path(file_in_zip).extension().string();
         std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
         if (ext == ".phbc") {
             std::string blob(data.begin(), data.end());
             std::istringstream in(blob, std::ios::in | std::ios::binary);
-            return chart::read_phbc(in).to_chart_data();
+            return phigros::chart::read_phbc(in).to_chart_data();
         }
         std::string text(data.begin(), data.end());
-        std::string fmt = detect_format_text(text);
-        if (fmt == "rpe") return chart::parse_rpe(json::parse(text), W, H);
-        if (fmt == "official") return chart::parse_official(json::parse(text), W, H);
-        return chart::load_pec_text(text, W, H);
+        std::string fmt = phigros::chart::detect_format_text(text);
+        if (fmt == "rpe") return phigros::chart::load_rpe(json::parse(text), W, H);
+        if (fmt == "official") return phigros::chart::load_official(json::parse(text), W, H);
+        return phigros::chart::load_pec_text(text, W, H);
     }
     // Resolve chart directory entry
-    if (auto resolved = chart::resolve_chart_entry(path))
+    if (auto resolved = phigros::chart::resolve_chart_entry(path))
         return load_chart_auto(resolved->chart_path, W, H);
     // Direct file
     std::string ext = fs::path(path).extension().string();
@@ -79,15 +62,15 @@ static ChartData load_chart_auto(const std::string& path, int W, int H) {
     if (ext == ".phbc") {
         std::ifstream f(path, std::ios::binary);
         if (!f) throw std::runtime_error("Cannot open: " + path);
-        return chart::read_phbc(f).to_chart_data();
+        return phigros::chart::read_phbc(f).to_chart_data();
     }
     std::ifstream f(path);
     if (!f) throw std::runtime_error("Cannot open: " + path);
     std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    std::string fmt = detect_format_text(text);
-    if (fmt == "rpe") return chart::parse_rpe(json::parse(text), W, H);
-    if (fmt == "official") return chart::parse_official(json::parse(text), W, H);
-    return chart::parse_pec(path, W, H);
+    std::string fmt = phigros::chart::detect_format_text(text);
+    if (fmt == "rpe") return phigros::chart::load_rpe(json::parse(text), W, H);
+    if (fmt == "official") return phigros::chart::load_official(json::parse(text), W, H);
+    return phigros::chart::load_pec(path, W, H);
 }
 
 int main(int argc, char* argv[]) {
@@ -100,12 +83,12 @@ int main(int argc, char* argv[]) {
     phigros::core::Logger::get().min_level = phigros::core::LogLevel::Off;
 
     std::string chart_path = argv[1];
-    double probe_t = std::atof(argv[2]);
-    int W = (argc > 3) ? std::atoi(argv[3]) : 1280;
-    int H = (argc > 4) ? std::atoi(argv[4]) : 720;
+    double probe_t = std::stod(argv[2]);
+    int W = (argc > 3) ? std::stoi(argv[3]) : 1280;
+    int H = (argc > 4) ? std::stoi(argv[4]) : 720;
 
     // Load chart
-    ChartData chart;
+    phigros::ChartData chart;
     try {
         chart = load_chart_auto(chart_path, W, H);
     } catch (const std::exception& e) {
@@ -114,13 +97,13 @@ int main(int argc, char* argv[]) {
     }
 
     // Default config
-    config::RenderConfig cfg;
+    phigros::config::RenderConfig cfg;
     cfg.window_w = W;
     cfg.window_h = H;
 
     // Precompute t_enter
     if (!chart.is_compiled) {
-        precompute_t_enter(chart.lines, chart.notes, W, H,
+        phigros::engine::precompute_t_enter(chart.lines, chart.notes, W, H,
                            cfg.expand_factor, cfg.note_scale_x, cfg.note_scale_y);
     }
     chart.build_notes_by_enter_index();
@@ -129,26 +112,26 @@ int main(int argc, char* argv[]) {
     constexpr double SIM_DT  = 1.0 / 240.0;
     const double HOLD_TOL    = cfg.hold_tail_tol;
 
-    std::vector<NoteState> st(chart.notes.size());
+    std::vector<phigros::NoteState> st(chart.notes.size());
     for (size_t i = 0; i < st.size(); ++i) st[i].note = &chart.notes[i];
-    Judge j;
+    phigros::engine::Judge j;
 
     double prev_tc = chart.offset - SIM_DT;
     for (double tc = chart.offset; tc <= probe_t + SIM_DT * 0.5; tc += SIM_DT) {
-        exact_autoplay_step(prev_tc, tc, chart.notes, st, chart.lines, j, W, H);
+        phigros::engine::exact_autoplay_step(prev_tc, tc, chart.notes, st, chart.lines, j, W, H);
         // find next-note index (sorted by t_hit)
         int inx = 0;
         for (size_t k = 0; k < st.size(); ++k) {
             if (st[k].judged || chart.notes[k].t_hit < tc - 0.5) inx = (int)k + 1;
         }
-        detect_misses(st, inx, tc, Judge::BAD, j);
-        hold_maintenance(st, inx, tc, HOLD_TOL, j);
-        hold_finalize(st, inx, tc, HOLD_TOL, Judge::BAD, j);
+        phigros::engine::detect_misses(st, inx, tc, phigros::engine::Judge::BAD, j);
+        phigros::engine::hold_maintenance(st, inx, tc, HOLD_TOL, j);
+        phigros::engine::hold_finalize(st, inx, tc, HOLD_TOL, phigros::engine::Judge::BAD, j);
         prev_tc = tc;
     }
 
     // Build render frame at probe_t
-    FrameSnapshot frame = build_frame(probe_t, chart, st, j, cfg);
+    phigros::render::FrameSnapshot frame = phigros::render::build_frame(probe_t, chart, st, j, cfg);
 
     // ── JSON output ──────────────────────────────────────────────────────────
 

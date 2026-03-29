@@ -181,8 +181,8 @@ inline RenderConfig load_config_json(const nlohmann::json& j) {
             cfg.playback_speed = std::max(0.1, std::min(20.0, *cfg.playback_speed));
         cfg.note_alpha            = std::max(0.0, std::min(1.0,  cfg.note_alpha));
         cfg.font_size             = std::max(0.5, std::min(3.0,  cfg.font_size));
-        cfg.hitfx_intensity= std::max(0.0, std::min(2.0,  cfg.hitfx_intensity));
-        cfg.particle_count = std::max(0,   std::min(64,   cfg.particle_count));
+        cfg.hitfx_intensity       = std::max(0.0, std::min(2.0,  cfg.hitfx_intensity));
+        cfg.particle_count        = std::max(0,   std::min(64,   cfg.particle_count));
 
         if (r.contains("trail_alpha") && !r["trail_alpha"].is_null()) cfg.trail_alpha = r["trail_alpha"].get<double>();
         if (r.contains("trail_frames") && !r["trail_frames"].is_null()) cfg.trail_frames = r["trail_frames"].get<int>();
