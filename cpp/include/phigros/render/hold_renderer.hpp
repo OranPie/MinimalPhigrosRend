@@ -12,7 +12,6 @@ struct HoldRenderer {
     double base_note_w = 0.0;
     double note_scale_x = 2.5;
     double note_scale_y = 1.0;
-    double hold_body_glow_alpha = 0.35; // additive glow intensity while actively held [0,1]
 
     void init(int W, int H, double scale_x, double scale_y) {
         base_note_w = 0.06 * W;
@@ -63,7 +62,8 @@ struct HoldRenderer {
             // Color and alpha
             uint8_t r = ns.color.r, g = ns.color.g, b = ns.color.b;
             double alpha_f = ns.alpha * 255.0;
-            if (ns.miss) { alpha_f *= 0.5; r = g = b = 128; }
+            // Dim only when the head was hit but the hold was subsequently failed.
+            if (ns.hold_hit_failed) { alpha_f *= 0.5; r = g = b = 128; }
             uint8_t a = static_cast<uint8_t>(std::clamp(alpha_f, 0.0, 255.0));
             if (a == 0) continue;
 
@@ -90,23 +90,6 @@ struct HoldRenderer {
                     tex,
                     0, head_h, tex.w, body_h,
                     cx, cy, ws, body_screen_h, angle, r, g, b, a);
-            }
-
-            // Hold-glow: while this hold is actively pressed, draw a tinted
-            // additive-blend overlay along the body to indicate active input.
-            if (ns.holding && body_screen_h > 1.0) {
-                double glow_cx = tx + ux * (tail_screen_h + body_screen_h * 0.5);
-                double glow_cy = ty + uy * (tail_screen_h + body_screen_h * 0.5);
-                uint8_t ga = static_cast<uint8_t>(a * hold_body_glow_alpha);
-                if (ga > 0) {
-                    batch.set_blend_mode(SDL_BLENDMODE_ADD);
-                    batch.draw_texture_region(
-                        tex,
-                        0, head_h, tex.w, body_h,
-                        glow_cx, glow_cy, ws * 1.15, body_screen_h,
-                        angle, r, g, b, ga);
-                    batch.set_blend_mode(SDL_BLENDMODE_BLEND);
-                }
             }
 
             // 3. Head (at head end) — hidden while holding unless respack holdKeepHead=true

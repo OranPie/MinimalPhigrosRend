@@ -52,9 +52,10 @@ struct NoteSnapshot {
     bool judged;
     bool miss;
     bool mh;                 // multi-hit flag
-    bool holding = false;    // true while a hold note is actively held
-    bool draw_hold_head = true; // false when holding and respack holdKeepHead=false
-    float skew = 0.0f;       // RPE skewControl: note skew angle (degrees)
+    bool holding = false;         // true while a hold note is actively held
+    bool draw_hold_head = true;   // false when holding and respack holdKeepHead=false
+    bool hold_hit_failed = false; // head was hit but hold subsequently failed (dim trigger)
+    float skew = 0.0f;            // RPE skewControl: note skew angle (degrees)
 };
 
 struct FrameSnapshot {
@@ -175,6 +176,16 @@ inline FrameSnapshot build_frame(
             ? ls_arr[note.line_id]
             : ls_heap[note.line_id];
 
+        // Cull notes where scroll has "pre-run" past the note's hit point but time
+        // hasn't reached that note yet.  This happens with negative-speed scroll
+        // tricks: scroll_now > scroll_hit for a strictly future note (t < t_hit) causes
+        // it to project backward from its (often off-screen) line into the viewport.
+        // Checking t < note.t_hit distinguishes genuine mid-hold states (t >= t_hit,
+        // scroll past head, head pinned) from ghost projections (t < t_hit, pre-run).
+        if (ls.scroll > note.scroll_hit && !ns.judged && !ns.holding && !ns.miss
+                && t < note.t_hit)
+            return;
+
         // Missed holds remain darkened only until their tail crosses the judge line,
         // after which the entire hold should disappear.
         if (note.kind == 3 && ns.miss && ls.scroll >= note.scroll_end) return;
@@ -265,6 +276,7 @@ inline FrameSnapshot build_frame(
             note.kind == 3, ns.judged, ns.miss, note.mh,
             ns.holding,
             !(note.kind == 3 && ns.holding),
+            note.kind == 3 && ns.hit && ns.miss,
             ctrl_skew
         });
     };

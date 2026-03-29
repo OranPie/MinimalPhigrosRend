@@ -239,6 +239,10 @@ endif()
 add_executable(chart_scanner src/chart/chart_scanner.cpp)
 target_link_libraries(chart_scanner PRIVATE phigros_core_lib)
 
+# --- Frame probe tool (headless, no SDL) ---
+add_executable(dump_frame src/dump_frame.cpp)
+target_link_libraries(dump_frame PRIVATE phigros_core_lib vendor_miniz)
+
 add_library(phigros_python_api_lib STATIC
     src/api/python_api.cpp
 )

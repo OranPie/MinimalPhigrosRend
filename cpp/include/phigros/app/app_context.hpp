@@ -208,7 +208,6 @@ struct AppContext {
         note_ren.init(W, H, cfg.note_scale_x, cfg.note_scale_y);
         note_ren.note_outline = cfg.note_outline;
         hold_ren.init(W, H, cfg.note_scale_x, cfg.note_scale_y);
-        hold_ren.hold_body_glow_alpha = cfg.hold_body_glow_alpha;
         trail.init(window.ren, W, H, cfg);
         motion_blur.init(window.ren, W, H, cfg);
         PHLOG_DEBUG(Render, "note_scale_x=" << cfg.note_scale_x

@@ -57,9 +57,6 @@ struct RenderConfig {
     double overrender = 1.0;
     bool note_outline = false;
 
-    // Hold note rendering
-    double hold_body_glow_alpha = 0.35; // additive glow intensity while hold is actively pressed [0,1]
-
     // Hit effects
     bool show_hitfx = true;
     bool show_particles = true;
@@ -163,7 +160,6 @@ inline RenderConfig load_config_json(const nlohmann::json& j) {
         get_b("overlay_transparent", cfg.overlay_transparent);
         get_d("overrender", cfg.overrender);
         get_b("note_outline", cfg.note_outline);
-        get_d("hold_body_glow_alpha", cfg.hold_body_glow_alpha);
         get_b("show_hitfx", cfg.show_hitfx);
         get_b("show_particles", cfg.show_particles);
         get_i("particle_count", cfg.particle_count);
@@ -185,7 +181,6 @@ inline RenderConfig load_config_json(const nlohmann::json& j) {
             cfg.playback_speed = std::max(0.1, std::min(20.0, *cfg.playback_speed));
         cfg.note_alpha            = std::max(0.0, std::min(1.0,  cfg.note_alpha));
         cfg.font_size             = std::max(0.5, std::min(3.0,  cfg.font_size));
-        cfg.hold_body_glow_alpha  = std::max(0.0, std::min(1.0,  cfg.hold_body_glow_alpha));
         cfg.hitfx_intensity= std::max(0.0, std::min(2.0,  cfg.hitfx_intensity));
         cfg.particle_count = std::max(0,   std::min(64,   cfg.particle_count));
 
@@ -286,7 +281,6 @@ inline nlohmann::json config_to_json(const RenderConfig& cfg) {
     r["font_align"]                 = cfg.font_align;
     r["overlay_transparent"]        = cfg.overlay_transparent;
     r["note_outline"]               = cfg.note_outline;
-    r["hold_body_glow_alpha"]       = cfg.hold_body_glow_alpha;
     r["no_cull"]                    = cfg.no_cull;
     r["no_cull_screen"]             = cfg.no_cull_screen;
     r["overrender"]                 = cfg.overrender;
