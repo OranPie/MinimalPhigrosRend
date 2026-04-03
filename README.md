@@ -67,6 +67,15 @@ Useful variants:
 ./cpp/build/phigros_render charts/MyChart/IN.json --config config/config.jsonc
 ```
 
+Build orchestration and launch helpers:
+
+```bash
+python3 scripts/build.py
+python3 scripts/build.py --profile desktop --build-type Debug
+python3 scripts/build.py --profile web --print-only
+python3 scripts/qt_launcher.py
+```
+
 ## Common Paths
 
 - Renderer quickstart: [cpp/README.md](cpp/README.md)
