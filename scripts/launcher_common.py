@@ -16,6 +16,7 @@ DEFAULT_RESPACK = ROOT_DIR / "respack.zip"
 DEFAULT_CONFIG = CONFIG_DIR / "config.jsonc"
 DEFAULT_BINARY = CPP_DIR / "build" / "phigros_render"
 DEFAULT_CHARTS_DIR = ROOT_DIR / "charts"
+INTERNAL_ASSET_LABEL = "<internal>"
 
 BUILD_PROFILES = {
     "desktop": "Native renderer/player for the current desktop platform.",
@@ -69,6 +70,32 @@ def discover_charts(charts_dir: Path) -> list[dict[str, str]]:
     if not charts_dir.is_dir():
         return results
 
+    try:
+        from phigros_cpp import scan_charts_directory  # type: ignore
+
+        for entry in scan_charts_directory(str(charts_dir)):
+            chart_path = getattr(entry, "chart_path", "")
+            assets = getattr(entry, "assets", None)
+            audio_path = getattr(assets, "music_path", "") if assets is not None else ""
+            bg_path = getattr(assets, "illustration_path", "") if assets is not None else ""
+            name = getattr(entry, "name", Path(chart_path).stem)
+            difficulty = getattr(entry, "difficulty", "")
+            source_type = getattr(entry, "source_type", "")
+            suffix = f" [{difficulty}]" if difficulty else ""
+            source = f" ({source_type})" if source_type else ""
+            results.append(
+                {
+                    "label": f"{name}{suffix}{source}",
+                    "path": chart_path,
+                    "audio": INTERNAL_ASSET_LABEL if is_internal_asset_path(audio_path) else audio_path,
+                    "bg": INTERNAL_ASSET_LABEL if is_internal_asset_path(bg_path) else bg_path,
+                }
+            )
+        if results:
+            return results
+    except Exception:
+        pass
+
     for folder in sorted(charts_dir.iterdir()):
         if not folder.is_dir():
             continue
@@ -88,6 +115,11 @@ def discover_charts(charts_dir: Path) -> list[dict[str, str]]:
         results.append({"label": f"{packed.stem} [.zip]", "path": str(packed), "audio": "", "bg": ""})
 
     return results
+
+
+def is_internal_asset_path(path: str) -> bool:
+    lower = path.lower()
+    return ".zip:" in lower or ".pez:" in lower
 
 
 def _cmake_bool(value: bool) -> str:
@@ -274,7 +306,21 @@ def launch_binary_command(
     mode: str = "",
     backend: str = "",
     record_output: str = "",
+    record_preset: str = "",
+    record_codec: str = "",
+    record_hw: str = "",
+    record_fps: str = "",
+    sim_fps: str = "",
+    record_resolution: str = "",
+    record_capture_resolution: str = "",
+    record_queue_depth: str = "",
+    record_start: str = "",
+    record_end: str = "",
     compile_output: str = "",
+    sample_rate: str = "",
+    compress_algo: str = "",
+    encrypt_algo: str = "",
+    password: str = "",
     scriptplay_path: str = "",
     script_path: str = "",
     save_replay_path: str = "",
@@ -321,7 +367,21 @@ def launch_binary_command(
         ("--mode", mode),
         ("--backend", backend),
         ("--record", record_output),
+        ("--record-preset", record_preset),
+        ("--record-codec", record_codec),
+        ("--record-hw", record_hw),
+        ("--record-fps", record_fps),
+        ("--sim-fps", sim_fps),
+        ("--record-resolution", record_resolution),
+        ("--record-capture-resolution", record_capture_resolution),
+        ("--record-queue-depth", record_queue_depth),
+        ("--record-start", record_start),
+        ("--record-end", record_end),
         ("--compile", compile_output),
+        ("--sample-rate", sample_rate),
+        ("--compress", compress_algo),
+        ("--encrypt", encrypt_algo),
+        ("--password", password),
         ("--scriptplay", scriptplay_path),
         ("--script", script_path),
         ("--save-replay", save_replay_path),
