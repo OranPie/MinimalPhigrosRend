@@ -52,3 +52,8 @@ cpp/build_wasm/
 cpp/android/.gradle/
 cpp/android/app/build/
 cpp/android/build/
+
+# phigros_ui presets and cached state
+.phigros_ui/
+phigros_ui/__pycache__/
+phigros_ui/**/__pycache__/

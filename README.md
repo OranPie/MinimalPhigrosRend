@@ -73,7 +73,8 @@ Build orchestration and launch helpers:
 python3 scripts/build.py
 python3 scripts/build.py --profile desktop --build-type Debug
 python3 scripts/build.py --profile web --print-only
-python3 scripts/qt_launcher.py
+python3 -m phigros_ui              # unified launcher UI (PySide6)
+python3 scripts/qt_launcher.py     # legacy alias for `python3 -m phigros_ui`
 ```
 
 ## Common Paths
