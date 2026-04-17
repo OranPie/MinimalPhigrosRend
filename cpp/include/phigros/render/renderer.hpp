@@ -130,11 +130,25 @@ inline FrameSnapshot build_frame(
         });
     }
 
-    // Sort lines by z_order for correct draw order
-    std::stable_sort(frame.lines.begin(), frame.lines.end(),
-        [](const LineSnapshot& a, const LineSnapshot& b) {
-            return a.z_order < b.z_order;
-        });
+    // Sort lines by z_order for correct draw order.
+    // Fast-path: if all z_order values are identical (the common case — most
+    // charts never use RPE zOrder), the original chart-order is already valid
+    // and stable_sort can be skipped entirely.
+    {
+        bool all_same_z = true;
+        if (!frame.lines.empty()) {
+            const int z0 = frame.lines.front().z_order;
+            for (const auto& l : frame.lines) {
+                if (l.z_order != z0) { all_same_z = false; break; }
+            }
+        }
+        if (!all_same_z) {
+            std::stable_sort(frame.lines.begin(), frame.lines.end(),
+                [](const LineSnapshot& a, const LineSnapshot& b) {
+                    return a.z_order < b.z_order;
+                });
+        }
+    }
 
     // Evaluate notes — only screen-position culling is applied.
     double flow_mul = cfg.note_flow_speed_multiplier;
@@ -287,7 +301,39 @@ inline FrameSnapshot build_frame(
     // if the index wasn't built (shouldn't happen in practice).
     if (!chart.notes_by_enter.empty()) {
         const bool use_enter_cull = !cfg.no_cull && !cfg.no_cull_enter_time;
-        for (size_t j = 0; j < chart.notes_by_enter.size(); ++j) {
+        // Monotonic lower-bound watermark: per-chart, per-thread cache of the
+        // smallest j such that notes_by_enter[j].t_enter is still within the
+        // active window.  Resets if t moves backward (seek / loop / new chart).
+        //
+        // The map key is (chart address, scroll_now heuristic). We use the
+        // chart pointer as a stable identifier.  When t rewinds, we rewind the
+        // watermark to 0 and rescan; forward playback pays O(Δnotes) per frame
+        // instead of O(N).
+        struct EnterWM { const void* chart_id = nullptr; double last_t = -1e18; size_t lo = 0; };
+        static thread_local EnterWM s_wm;
+        if (s_wm.chart_id != static_cast<const void*>(&chart) || t < s_wm.last_t) {
+            s_wm.chart_id = static_cast<const void*>(&chart);
+            s_wm.lo = 0;
+        }
+        s_wm.last_t = t;
+        // Advance lo past notes that are permanently out of the emit window
+        // (judged-and-emitted OR miss-and-dropped).  We only advance past notes
+        // whose t_end is well behind t, since emit_note itself returns early
+        // for already-judged/missed non-hold notes — cheap but still O(count).
+        // The primary purpose of the watermark is to skip the long tail of
+        // "already past" notes on charts with thousands of notes.
+        const double rearview = 1.0;  // must be >= the 0.5 grace in emit_note for holds
+        while (s_wm.lo < chart.notes_by_enter.size()) {
+            const size_t idx = chart.notes_by_enter[s_wm.lo];
+            const auto& n = chart.notes[idx];
+            // Safe to skip if this note's full lifetime is behind us.
+            if (n.t_end + rearview < t && states[idx].judged) {
+                ++s_wm.lo;
+            } else {
+                break;
+            }
+        }
+        for (size_t j = s_wm.lo; j < chart.notes_by_enter.size(); ++j) {
             const size_t idx = chart.notes_by_enter[j];
             if (use_enter_cull && chart.notes[idx].t_enter > t) break;
             emit_note(idx);
@@ -298,14 +344,30 @@ inline FrameSnapshot build_frame(
 
     s_last_note_count = frame.notes.size();  // 6B5: update adaptive reserve hint
 
-    // Sort by (non-hold first for z-order, then by kind) to batch same-texture notes
-    // and reduce SDL texture state thrashing in SdlExecutor.
-    // Stability not required: notes of identical (is_hold, kind) are interchangeable.
-    std::sort(frame.notes.begin(), frame.notes.end(),
-        [](const NoteSnapshot& a, const NoteSnapshot& b) {
-            if (a.is_hold != b.is_hold) return a.is_hold < b.is_hold;
-            return a.kind < b.kind;
-        });
+    // Batch same-texture notes (by is_hold, then kind) to reduce SDL texture
+    // state thrashing in SdlExecutor.  Since (is_hold, kind) has at most
+    // 2 × 4 = 8 distinct buckets, counting-sort is O(N) vs O(N log N) for
+    // std::sort — and the output order is deterministic/stable-equivalent.
+    // Skip entirely if the list is already trivially sorted (<=1 element).
+    if (frame.notes.size() > 1) {
+        constexpr int kNumBuckets = 16;  // 2 (is_hold) * 8 (kind up to 7, pad)
+        auto bucket_of = [](const NoteSnapshot& s) {
+            int k = s.kind & 0x7;
+            return (s.is_hold ? 8 : 0) | k;
+        };
+        std::array<int, kNumBuckets + 1> counts{};
+        for (const auto& s : frame.notes) counts[bucket_of(s) + 1]++;
+        // Merge hold-sort: non-hold buckets (0..7) first, then hold buckets (8..15).
+        for (int i = 1; i <= kNumBuckets; ++i) counts[i] += counts[i - 1];
+        std::vector<NoteSnapshot> sorted;
+        sorted.resize(frame.notes.size());
+        auto offsets = counts;  // copy: offsets[b] = next write pos for bucket b
+        for (auto& s : frame.notes) {
+            int b = bucket_of(s);
+            sorted[offsets[b]++] = std::move(s);
+        }
+        frame.notes.swap(sorted);
+    }
 
     // Update HUD — use precomputed metadata to avoid O(N) loops
     auto sr = engine::compute_score(judge.acc_sum, judge.max_combo,

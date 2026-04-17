@@ -37,8 +37,25 @@ public:
 
     double eval(double t) const {
         if (segs.empty()) return default_val;
-        seek(t);
-        const auto& s = segs[cursor_];
+        seek_with(cursor_, t);
+        return eval_at(cursor_, t);
+    }
+
+    // Stateless variant: caller owns the cursor. Enables thread-safe evaluation
+    // of a shared PiecewiseEased across parallel workers.
+    // Pass a size_t initialized to 0 on first call; cache it across frames for
+    // amortized O(1) sequential-time evaluation.
+    double eval(double t, size_t& cursor) const {
+        if (segs.empty()) return default_val;
+        seek_with(cursor, t);
+        return eval_at(cursor, t);
+    }
+
+private:
+    mutable size_t cursor_ = 0;
+
+    double eval_at(size_t i, double t) const {
+        const auto& s = segs[i];
         if (t <= s.t0) return s.v0;
         if (t >= s.t1) return s.v1;
         double p_raw = (t - s.t0) / (s.t1 - s.t0);
@@ -51,17 +68,15 @@ public:
         return lerp(s.v0, s.v1, e);
     }
 
-private:
-    mutable size_t cursor_ = 0;
-    void seek(double t) const {
-        size_t i = cursor_;
+    void seek_with(size_t& cursor, double t) const {
+        size_t i = cursor;
         while (i + 1 < segs.size() && t >= segs[i].t1) ++i;
         if (i > 0 && t < segs[i].t0) {
             size_t lo = 0, hi = i - 1;
             while (lo < hi) { size_t mid = lo + (hi - lo + 1) / 2; if (segs[mid].t0 <= t) lo = mid; else hi = mid - 1; }
             i = lo;
         }
-        cursor_ = i;
+        cursor = i;
     }
 };
 
