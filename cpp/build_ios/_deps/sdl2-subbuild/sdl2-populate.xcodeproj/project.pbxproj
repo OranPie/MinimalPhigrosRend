@@ -1,0 +1,639 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXAggregateTarget section */
+		4E149B33814B435582DA4711 /* ALL_BUILD */ = {
+			isa = PBXAggregateTarget;
+			buildConfigurationList = D243774AA39A4B1EBD97ACD3 /* Build configuration list for PBXAggregateTarget "ALL_BUILD" */;
+			buildPhases = (
+				D5E961507B7899EB06AFBA6F /* Generate CMakeFiles/ALL_BUILD */,
+			);
+			dependencies = (
+				F64B6DDC73A2445AB3C19394 /* PBXTargetDependency */,
+				B7A3E2AA6ABF447DB99A542C /* PBXTargetDependency */,
+			);
+			name = ALL_BUILD;
+			productName = ALL_BUILD;
+		};
+		9D4C852D9451455CAE5B7320 /* sdl2-populate */ = {
+			isa = PBXAggregateTarget;
+			buildConfigurationList = 85DABAFDB785460D9728CFD5 /* Build configuration list for PBXAggregateTarget "sdl2-populate" */;
+			buildPhases = (
+				D9EE06761D0C8ED3D5A17CA7 /* Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-mkdir */,
+				48F96B42B05398C6C323A13C /* Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-download */,
+				AE56CBFDAB8D4FC75C5E101E /* Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-update */,
+				B13249F5CE89FB84F5F90D87 /* Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-patch */,
+				8FF0AF1A21B066FD8C30F4D1 /* Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-configure */,
+				2742D9E675C28BA8B5EF7130 /* Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-build */,
+				0BB68A42A9D1826A89FD1B3D /* Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-install */,
+				A227039B909FD5C4231AAD20 /* Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-test */,
+				C19723401E512D620A9D34E6 /* Generate CMakeFiles/Debug/sdl2-populate-complete */,
+				950A717B8AA33A5EBF8A1A20 /* Generate CMakeFiles/sdl2-populate */,
+			);
+			dependencies = (
+				B308AF2F14D241B684DA31F8 /* PBXTargetDependency */,
+			);
+			name = "sdl2-populate";
+			productName = "sdl2-populate";
+		};
+		DB2023DB0FC44657B7971D7C /* ZERO_CHECK */ = {
+			isa = PBXAggregateTarget;
+			buildConfigurationList = 224666BABD574981848C3FA2 /* Build configuration list for PBXAggregateTarget "ZERO_CHECK" */;
+			buildPhases = (
+				79D67C770FAED196A15357EF /* Generate CMakeFiles/ZERO_CHECK */,
+			);
+			dependencies = (
+			);
+			name = ZERO_CHECK;
+			productName = ZERO_CHECK;
+		};
+/* End PBXAggregateTarget section */
+
+/* Begin PBXBuildStyle section */
+		1EB6230BD73E48B08035FDF3 /* Debug */ = {
+			isa = PBXBuildStyle;
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+			};
+			name = Debug;
+		};
+/* End PBXBuildStyle section */
+
+/* Begin PBXContainerItemProxy section */
+		1C133319FDC84F4FAFD3C8E1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8B854B6FD1DF40F5B9C54E0D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9D4C852D9451455CAE5B7320;
+			remoteInfo = "sdl2-populate";
+		};
+		4E2859DB031C477BB7C1C145 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8B854B6FD1DF40F5B9C54E0D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DB2023DB0FC44657B7971D7C;
+			remoteInfo = ZERO_CHECK;
+		};
+		70701F8BC6A34F7EB2B5BF2E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8B854B6FD1DF40F5B9C54E0D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DB2023DB0FC44657B7971D7C;
+			remoteInfo = ZERO_CHECK;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		6501212F07264607A9C3A724 /* /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+		E8AFE556FB2A4C2AB64185C8 /* /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		030C5751F5FC4F829826995C /* sdl2-populate */ = {
+			isa = PBXGroup;
+			children = (
+				11FA4C1EC3764576836D36FD /* sdl2-populate */,
+			);
+			name = "sdl2-populate";
+			sourceTree = "<group>";
+		};
+		11FA4C1EC3764576836D36FD /* sdl2-populate */ = {
+			isa = PBXGroup;
+			children = (
+				7BF2D55D88F44D27BD939227 /* CMake Rules */,
+				E8AFE556FB2A4C2AB64185C8 /* /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/CMakeLists.txt */,
+			);
+			name = "sdl2-populate";
+			sourceTree = "<group>";
+		};
+		1522389352DE446280E8CE54 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		2BAB88DD32524F4495E2B3C0 /* ExternalProjectTargets */ = {
+			isa = PBXGroup;
+			children = (
+				030C5751F5FC4F829826995C /* sdl2-populate */,
+			);
+			name = ExternalProjectTargets;
+			sourceTree = "<group>";
+		};
+		7BF2D55D88F44D27BD939227 /* CMake Rules */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = "CMake Rules";
+			sourceTree = "<group>";
+		};
+		918DF0B1C0044068920CC643 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		B18BB7E6254C48B1A1149989 /* CMake Rules */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = "CMake Rules";
+			sourceTree = "<group>";
+		};
+		B59BBB8A8B83487B904D7EB8 /* ALL_BUILD */ = {
+			isa = PBXGroup;
+			children = (
+				B18BB7E6254C48B1A1149989 /* CMake Rules */,
+				6501212F07264607A9C3A724 /* /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/CMakeLists.txt */,
+			);
+			name = ALL_BUILD;
+			sourceTree = "<group>";
+		};
+		C91440C2A52D44B68B1F5AFA = {
+			isa = PBXGroup;
+			children = (
+				2BAB88DD32524F4495E2B3C0 /* ExternalProjectTargets */,
+				B59BBB8A8B83487B904D7EB8 /* ALL_BUILD */,
+				1522389352DE446280E8CE54 /* Products */,
+				918DF0B1C0044068920CC643 /* Frameworks */,
+				FC2802FF11D94B51BBDB9C5C /* Resources */,
+			);
+			sourceTree = "<group>";
+		};
+		FC2802FF11D94B51BBDB9C5C /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXProject section */
+		8B854B6FD1DF40F5B9C54E0D /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+			};
+			buildConfigurationList = 7E714DAE64994714A81B5CDE /* Build configuration list for PBXProject "sdl2-populate" */;
+			buildSettings = {
+			};
+			buildStyles = (
+				1EB6230BD73E48B08035FDF3 /* Debug */,
+			);
+			compatibilityVersion = "Xcode 3.2";
+			hasScannedForEncodings = 0;
+			mainGroup = C91440C2A52D44B68B1F5AFA;
+			projectDirPath = .;
+			projectRoot = "";
+			targets = (
+				4E149B33814B435582DA4711 /* ALL_BUILD */,
+				DB2023DB0FC44657B7971D7C /* ZERO_CHECK */,
+				9D4C852D9451455CAE5B7320 /* sdl2-populate */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		0BB68A42A9D1826A89FD1B3D /* Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-install */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-build"			);
+			name = "Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-install";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-install"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-build
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E echo_append
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E touch /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-install
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		2742D9E675C28BA8B5EF7130 /* Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-build */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-configure"			);
+			name = "Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-build";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-build"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-build
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E echo_append
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E touch /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-build
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		3C0110FC8322DE7E50886E21 = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# shell script goes here
+exit 0";
+			showEnvVarsInLog = 0;
+		};
+		48F96B42B05398C6C323A13C /* Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-download */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-mkdir","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/sdl2-populate-gitinfo.txt"			);
+			name = "Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-download";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-download"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -P /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/tmp/sdl2-populate-gitclone.cmake
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E touch /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-download
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		79D67C770FAED196A15357EF /* Generate CMakeFiles/ZERO_CHECK */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Generate CMakeFiles/ZERO_CHECK";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/CMakeFiles/ZERO_CHECK"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild
+  make -f /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/CMakeScripts/ReRunCMake.make
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		8FF0AF1A21B066FD8C30F4D1 /* Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-configure */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-patch","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/tmp/sdl2-populate-cfgcmd.txt"			);
+			name = "Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-configure";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-configure"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-build
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E echo_append
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E touch /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-configure
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		950A717B8AA33A5EBF8A1A20 /* Generate CMakeFiles/sdl2-populate */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/CMakeFiles/Debug/sdl2-populate-complete"			);
+			name = "Generate CMakeFiles/sdl2-populate";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/CMakeFiles/sdl2-populate"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		9B50530E35CC49C82C2FACCF = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# shell script goes here
+exit 0";
+			showEnvVarsInLog = 0;
+		};
+		A227039B909FD5C4231AAD20 /* Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-test */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-install"			);
+			name = "Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-test";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-test"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-build
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E echo_append
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E touch /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-test
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		AE56CBFDAB8D4FC75C5E101E /* Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-update */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-download","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/sdl2-populate-update-info.txt","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/tmp/sdl2-populate-gitupdate.cmake"			);
+			name = "Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-update";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-update"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-src
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -Dcan_fetch=YES -P /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/tmp/sdl2-populate-gitupdate.cmake
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		B13249F5CE89FB84F5F90D87 /* Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-patch */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-update","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/sdl2-populate-patch-info.txt"			);
+			name = "Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-patch";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-patch"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E echo_append
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E touch /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-patch
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		C19723401E512D620A9D34E6 /* Generate CMakeFiles/Debug/sdl2-populate-complete */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-build","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-configure","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-download","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-install","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-mkdir","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-patch","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-test","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-update"			);
+			name = "Generate CMakeFiles/Debug/sdl2-populate-complete";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/CMakeFiles/Debug/sdl2-populate-complete"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E make_directory /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/CMakeFiles/Debug
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E touch /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/CMakeFiles/Debug/sdl2-populate-complete
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E touch /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-done
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		D5E961507B7899EB06AFBA6F /* Generate CMakeFiles/ALL_BUILD */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Generate CMakeFiles/ALL_BUILD";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/CMakeFiles/ALL_BUILD"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild
+  echo Build\\ all\\ projects
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		D9EE06761D0C8ED3D5A17CA7 /* Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-mkdir */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Generate sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-mkdir";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-mkdir"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -Dcfgdir=/Debug -P /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/tmp/sdl2-populate-mkdirs.cmake
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E touch /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/sdl2-populate-prefix/src/sdl2-populate-stamp/Debug/sdl2-populate-mkdir
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		F685025343C3856C94F59E6A = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# shell script goes here
+exit 0";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B308AF2F14D241B684DA31F8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DB2023DB0FC44657B7971D7C /* ZERO_CHECK */;
+			targetProxy = 4E2859DB031C477BB7C1C145 /* PBXContainerItemProxy */;
+		};
+		B7A3E2AA6ABF447DB99A542C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DB2023DB0FC44657B7971D7C /* ZERO_CHECK */;
+			targetProxy = 70701F8BC6A34F7EB2B5BF2E /* PBXContainerItemProxy */;
+		};
+		F64B6DDC73A2445AB3C19394 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9D4C852D9451455CAE5B7320 /* sdl2-populate */;
+			targetProxy = 1C133319FDC84F4FAFD3C8E1 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		8FB8D56E7E43495991CF09C8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
+				COMBINE_HIDPI_IMAGES = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'","$(inherited)");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				INSTALL_PATH = "";
+				ONLY_ACTIVE_ARCH = NO;
+				OTHER_LDFLAGS = ("","$(inherited)");
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = ALL_BUILD;
+				SECTORDER_FLAGS = "";
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("$(inherited)");
+			};
+			name = Debug;
+		};
+		985785DE7FE1423FB3D7B3BA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				SDKROOT = /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk;
+				SYMROOT = "/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-subbuild/build";
+			};
+			name = Debug;
+		};
+		ED93BB2416DA420FB7A4467F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
+				COMBINE_HIDPI_IMAGES = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'","$(inherited)");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				INSTALL_PATH = "";
+				ONLY_ACTIVE_ARCH = NO;
+				OTHER_LDFLAGS = ("","$(inherited)");
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = "sdl2-populate";
+				SECTORDER_FLAGS = "";
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("$(inherited)");
+			};
+			name = Debug;
+		};
+		FD6266E146AB4E3BA633575C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
+				COMBINE_HIDPI_IMAGES = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'","$(inherited)");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				INSTALL_PATH = "";
+				ONLY_ACTIVE_ARCH = NO;
+				OTHER_LDFLAGS = ("","$(inherited)");
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = ZERO_CHECK;
+				SECTORDER_FLAGS = "";
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("$(inherited)");
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		224666BABD574981848C3FA2 /* Build configuration list for PBXAggregateTarget "ZERO_CHECK" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FD6266E146AB4E3BA633575C /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		7E714DAE64994714A81B5CDE /* Build configuration list for PBXProject "sdl2-populate" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				985785DE7FE1423FB3D7B3BA /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		85DABAFDB785460D9728CFD5 /* Build configuration list for PBXAggregateTarget "sdl2-populate" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ED93BB2416DA420FB7A4467F /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D243774AA39A4B1EBD97ACD3 /* Build configuration list for PBXAggregateTarget "ALL_BUILD" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8FB8D56E7E43495991CF09C8 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 8B854B6FD1DF40F5B9C54E0D /* Project object */;
+}

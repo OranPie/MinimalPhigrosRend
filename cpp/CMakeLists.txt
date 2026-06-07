@@ -9,6 +9,11 @@ include(FetchContent)
 option(BUILD_PYTHON_BINDINGS "Build Python bindings" OFF)
 option(BUILD_RENDER_APP "Build native render executable" ON)
 
+# iOS and Android use their own native UI layer; SDL render exe is desktop-only.
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS" OR ANDROID)
+    set(BUILD_RENDER_APP OFF CACHE BOOL "" FORCE)
+endif()
+
 # ── Version ───────────────────────────────────────────────────────────────────
 set(PHIGROS_VERSION "1.0.0-dev")
 add_compile_definitions(PHIGROS_VERSION="${PHIGROS_VERSION}")
@@ -16,16 +21,34 @@ add_compile_definitions(PHIGROS_VERSION="${PHIGROS_VERSION}")
 # ── Mobile platform configuration ─────────────────────────────────────────────
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/mobile.cmake" OPTIONAL)
 
-# --- nlohmann/json: prefer system package, fallback to FetchContent ---
-find_package(nlohmann_json QUIET)
-if(NOT nlohmann_json_FOUND)
-    FetchContent_Declare(
-        json
-        GIT_REPOSITORY https://github.com/nlohmann/json.git
-        GIT_TAG        v3.11.3
-        GIT_SHALLOW    TRUE
+# --- nlohmann/json: prefer known local header cache, then package, then FetchContent ---
+set(PHIGROS_LOCAL_JSON_INCLUDE_ROOT "")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/build_ios/_deps/json-src/include/nlohmann/json.hpp")
+    set(PHIGROS_LOCAL_JSON_INCLUDE_ROOT
+        "${CMAKE_CURRENT_SOURCE_DIR}/build_ios/_deps/json-src/include")
+elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/build_wasm/_deps/json-src/include/nlohmann/json.hpp")
+    set(PHIGROS_LOCAL_JSON_INCLUDE_ROOT
+        "${CMAKE_CURRENT_SOURCE_DIR}/build_wasm/_deps/json-src/include")
+endif()
+
+if(PHIGROS_LOCAL_JSON_INCLUDE_ROOT)
+    add_library(nlohmann_json::nlohmann_json INTERFACE IMPORTED)
+    set_target_properties(nlohmann_json::nlohmann_json PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${PHIGROS_LOCAL_JSON_INCLUDE_ROOT}"
     )
-    FetchContent_MakeAvailable(json)
+    set(nlohmann_json_FOUND TRUE)
+    message(STATUS "[json] Using local header cache at ${PHIGROS_LOCAL_JSON_INCLUDE_ROOT}")
+else()
+    find_package(nlohmann_json QUIET)
+    if(NOT nlohmann_json_FOUND)
+        FetchContent_Declare(
+            json
+            GIT_REPOSITORY https://github.com/nlohmann/json.git
+            GIT_TAG        v3.11.3
+            GIT_SHALLOW    TRUE
+        )
+        FetchContent_MakeAvailable(json)
+    endif()
 endif()
 
 # --- SDL3 via FetchContent ---
@@ -235,6 +258,24 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_logger.cpp")
     target_link_libraries(test_logger PRIVATE phigros_core_lib)
 endif()
 
+if(BUILD_RENDER_APP AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_hold_renderer.cpp")
+    add_executable(test_hold_renderer tests/test_hold_renderer.cpp)
+    target_include_directories(test_hold_renderer PRIVATE "${VENDOR_DIR}/miniz")
+    target_link_libraries(test_hold_renderer PRIVATE phigros_core_lib vendor_miniz)
+    if(SDL_VERSION EQUAL 3)
+        target_link_libraries(test_hold_renderer PRIVATE ${SDL_TARGET})
+        target_compile_definitions(test_hold_renderer PRIVATE PHIGROS_SDL3=1)
+    elseif(EMSCRIPTEN)
+        target_compile_definitions(test_hold_renderer PRIVATE PHIGROS_SDL2=1 PHIGROS_WASM=1)
+    else()
+        target_include_directories(test_hold_renderer PRIVATE ${SDL2_INCLUDE_DIRS})
+        target_link_directories(test_hold_renderer PRIVATE ${SDL2_LIBRARY_DIRS})
+        target_link_libraries(test_hold_renderer PRIVATE ${SDL2_LIBRARIES})
+        target_compile_options(test_hold_renderer PRIVATE ${SDL2_CFLAGS_OTHER})
+        target_compile_definitions(test_hold_renderer PRIVATE PHIGROS_SDL2=1)
+    endif()
+endif()
+
 # --- Chart scanner tool ---
 add_executable(chart_scanner src/chart/chart_scanner.cpp)
 target_link_libraries(chart_scanner PRIVATE phigros_core_lib)
@@ -249,10 +290,29 @@ add_library(phigros_python_api_lib STATIC
 target_include_directories(phigros_python_api_lib PUBLIC include)
 target_link_libraries(phigros_python_api_lib PUBLIC phigros_core_lib)
 
+add_library(phigros_mobile_bridge STATIC
+    src/api/mobile_bridge.cpp
+)
+target_include_directories(phigros_mobile_bridge PUBLIC include PRIVATE "${VENDOR_DIR}/miniz")
+target_link_libraries(phigros_mobile_bridge PUBLIC phigros_python_api_lib PRIVATE vendor_miniz)
+
+if(ANDROID)
+    add_library(phigros_mobile_bridge_jni SHARED
+        src/api/mobile_bridge_jni.cpp
+    )
+    target_include_directories(phigros_mobile_bridge_jni PRIVATE include)
+    target_link_libraries(phigros_mobile_bridge_jni PRIVATE phigros_mobile_bridge)
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_mobile_bridge.cpp")
+    add_executable(test_mobile_bridge tests/test_mobile_bridge.cpp)
+    target_link_libraries(test_mobile_bridge PRIVATE phigros_mobile_bridge)
+endif()
+
 # --- Convenience target: run all test executables ---
 # Usage: cmake --build build --target run-tests
 set(TEST_TARGETS "")
-foreach(tgt test_easing test_engine test_parser test_logger test_zip_extract verify_chart)
+foreach(tgt test_easing test_engine test_parser test_logger test_hold_renderer test_zip_extract verify_chart test_mobile_bridge)
     if(TARGET ${tgt})
         list(APPEND TEST_TARGETS ${tgt})
     endif()
@@ -348,10 +408,11 @@ if(BUILD_RENDER_APP)
         target_compile_definitions(phigros_render PRIVATE PHIGROS_HAS_LIBAV=1)
     endif()
 
-    # ── iOS app bundle (only when targeting iOS via Xcode) ───────────────────
-    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-        add_subdirectory(ios)
-    endif()
+endif()
+
+# ── iOS app bundle (does not depend on the SDL render executable target) ─────
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    add_subdirectory(ios)
 endif()
 
 if(BUILD_PYTHON_BINDINGS)

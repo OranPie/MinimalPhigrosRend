@@ -18,6 +18,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QFileDialog,
     QFormLayout,
     QGridLayout,
     QGroupBox,
@@ -31,6 +32,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QScrollArea,
+    QSettings,
     QSizePolicy,
     QSplitter,
     QTabWidget,
@@ -52,6 +54,8 @@ from ..common import (
 from ..presets import delete_preset, list_presets, load_preset, save_preset
 from ..process import ProcessRunner
 from ..widgets import FileRow, add_form_row
+
+_SETTINGS_CHARTS_DIR = "renderer/charts_dir"
 
 
 class RendererTab(QWidget):
@@ -77,6 +81,24 @@ class RendererTab(QWidget):
         left_host = QWidget()
         left = QVBoxLayout(left_host)
         left.setContentsMargins(0, 0, 0, 0)
+
+        charts_dir_row = QHBoxLayout()
+        self._charts_dir_label = QLabel("Charts dir:")
+        self._charts_dir_edit = QLineEdit()
+        settings = QSettings()
+        self._charts_dir_edit.setText(
+            settings.value(_SETTINGS_CHARTS_DIR, str(DEFAULT_CHARTS_DIR))
+        )
+        self._charts_dir_edit.setPlaceholderText(str(DEFAULT_CHARTS_DIR))
+        self._charts_dir_edit.setToolTip("Directory scanned for chart entries. Saved in QSettings.")
+        self._charts_dir_browse = QPushButton("Browse…")
+        self._charts_dir_browse.clicked.connect(self._browse_charts_dir)
+        self._charts_dir_edit.textChanged.connect(self._on_charts_dir_changed)
+        charts_dir_row.addWidget(self._charts_dir_label)
+        charts_dir_row.addWidget(self._charts_dir_edit, 1)
+        charts_dir_row.addWidget(self._charts_dir_browse)
+        left.addLayout(charts_dir_row)
+
         self.chart_search = QLineEdit()
         self.chart_search.setPlaceholderText("Filter charts (substring match)…")
         self.chart_search.textChanged.connect(self._apply_chart_filter)
@@ -141,6 +163,7 @@ class RendererTab(QWidget):
         tabs.addTab(self._build_render_tab(), "Render")
         tabs.addTab(self._build_record_tab(), "Record/Compile")
         tabs.addTab(self._build_logging_tab(), "Logging")
+        tabs.addTab(self._build_mods_tab(), "Mods")
         scroll_layout.addWidget(tabs)
 
         scroll_layout.addWidget(self._build_toggles_group())
@@ -239,13 +262,35 @@ class RendererTab(QWidget):
         form = QFormLayout(tab)
         self.screenshot_dir = FileRow("Screenshots", "", directory=True, tooltip="Directory for `--screenshot-dir` periodic PNG output.")
         self.screenshot_fps = QLineEdit(); self.screenshot_fps.setPlaceholderText("0.2")
+        self.approach = QLineEdit(); self.approach.setPlaceholderText("e.g. 3.0")
+        self.chart_speed = QLineEdit(); self.chart_speed.setPlaceholderText("e.g. 1.0")
+        self.expand = QLineEdit(); self.expand.setPlaceholderText("e.g. 1.0")
+        self.note_scale_x = QLineEdit(); self.note_scale_x.setPlaceholderText("e.g. 1.0")
+        self.note_scale_y = QLineEdit(); self.note_scale_y.setPlaceholderText("e.g. 1.0")
+        self.note_alpha = QLineEdit(); self.note_alpha.setPlaceholderText("0.0 – 1.0")
+        self.font_size = QLineEdit(); self.font_size.setPlaceholderText("e.g. 1.0")
         self.debug_flags = QLineEdit(); self.debug_flags.setPlaceholderText("FRAME_TIME|AUDIO_INFO")
-        add_form_row(form, "Screenshot FPS", self.screenshot_fps, "Chart-time screenshot rate via `--screenshot-fps <fps>`. Default 0.2.")
-        add_form_row(form, "Debug flags", self.debug_flags, "Pipe or comma separated flags for `--debug-flags`, e.g. `FRAME_TIME|AUDIO_INFO`.")
+        self.dump_frame_t = QLineEdit(); self.dump_frame_t.setPlaceholderText("e.g. 5.0")
+        self.list_charts_dir = FileRow("List charts dir", "", directory=True, tooltip="Directory passed to `--list-charts <dir>` to enumerate chart metadata and exit.")
+        rows_before_file = [
+            ("Screenshot FPS", self.screenshot_fps, "Chart-time screenshot rate via `--screenshot-fps <fps>`. Default 0.2."),
+            ("Approach time", self.approach, "Note approach duration in seconds via `--approach <sec>`."),
+            ("Chart speed", self.chart_speed, "Chart speed multiplier via `--chart-speed <mul>`. Stacks with note speed."),
+            ("Lane expand", self.expand, "Lane width expand factor via `--expand <factor>`."),
+            ("Note scale X", self.note_scale_x, "Horizontal note scale multiplier via `--note-scale-x <mul>`."),
+            ("Note scale Y", self.note_scale_y, "Vertical note scale multiplier via `--note-scale-y <mul>`."),
+            ("Note alpha", self.note_alpha, "Note opacity in [0,1] via `--note-alpha <alpha>`."),
+            ("Font size", self.font_size, "HUD font size multiplier via `--font-size <mul>`."),
+            ("Debug flags", self.debug_flags, "Pipe or comma separated flags for `--debug-flags`, e.g. `FRAME_TIME|AUDIO_INFO`."),
+            ("Dump frame at", self.dump_frame_t, "Render a single frame at this chart-time (seconds) and exit via `--dump-frame <t>`."),
+        ]
+        for label, widget, tip in rows_before_file:
+            add_form_row(form, label, widget, tip)
+            self._connect_refresh(widget)
         self.screenshot_dir.edit.textChanged.connect(self.refresh_preview)
         form.addRow(self.screenshot_dir)
-        for w in (self.screenshot_fps, self.debug_flags):
-            self._connect_refresh(w)
+        self.list_charts_dir.edit.textChanged.connect(self.refresh_preview)
+        form.addRow(self.list_charts_dir)
         return tab
 
     def _build_record_tab(self) -> QWidget:
@@ -311,6 +356,61 @@ class RendererTab(QWidget):
             self._connect_refresh(w)
         return tab
 
+    def _build_mods_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        info = QLabel(
+            "List of `.mod.json` files to load via `--mod <file>` (one per entry). "
+            "They are applied in order."
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        self.mods_list = QListWidget()
+        self.mods_list.setToolTip("Each entry is passed as `--mod <path>` to the renderer.")
+        layout.addWidget(self.mods_list, 1)
+        btns = QHBoxLayout()
+        self.mods_add = QPushButton("Add…")
+        self.mods_remove = QPushButton("Remove")
+        self.mods_clear = QPushButton("Clear All")
+        btns.addWidget(self.mods_add)
+        btns.addWidget(self.mods_remove)
+        btns.addWidget(self.mods_clear)
+        btns.addStretch()
+        layout.addLayout(btns)
+        self.mods_add.clicked.connect(self._on_mod_add)
+        self.mods_remove.clicked.connect(self._on_mod_remove)
+        self.mods_clear.clicked.connect(self._on_mod_clear)
+        return tab
+
+    def _on_mod_add(self) -> None:
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Select mod file(s)", "", "Mod files (*.mod.json *.json);;All files (*)"
+        )
+        for path in paths:
+            if path.strip():
+                self.mods_list.addItem(path.strip())
+        if paths:
+            self.refresh_preview()
+
+    def _on_mod_remove(self) -> None:
+        for item in self.mods_list.selectedItems():
+            self.mods_list.takeItem(self.mods_list.row(item))
+        self.refresh_preview()
+
+    def _on_mod_clear(self) -> None:
+        self.mods_list.clear()
+        self.refresh_preview()
+
+    def _browse_charts_dir(self) -> None:
+        current = self._charts_dir_edit.text().strip() or str(DEFAULT_CHARTS_DIR)
+        directory = QFileDialog.getExistingDirectory(self, "Select Charts Directory", current)
+        if directory:
+            self._charts_dir_edit.setText(directory)
+
+    def _on_charts_dir_changed(self, text: str) -> None:
+        QSettings().setValue(_SETTINGS_CHARTS_DIR, text.strip() or str(DEFAULT_CHARTS_DIR))
+        self.load_charts()
+
     def _build_toggles_group(self) -> QGroupBox:
         flags_group = QGroupBox("Toggles")
         flags = QGridLayout(flags_group)
@@ -324,6 +424,7 @@ class RendererTab(QWidget):
         self.log_no_color = QCheckBox("No log color")
         self.log_time = QCheckBox("Log timestamps")
         self.truncate = QCheckBox("Truncate at duration")
+        self.info_mode = QCheckBox("Print chart info")
         tips = {
             self.headless: "Pass `--headless` to run without a visible window.",
             self.score_only: "Pass `--score-only` for fast headless engine scoring.",
@@ -335,6 +436,7 @@ class RendererTab(QWidget):
             self.log_no_color: "Pass `--log-no-color` to disable ANSI colors.",
             self.log_time: "Pass `--log-time` to prepend timestamps.",
             self.truncate: "Pass `--truncate-at-duration` so scoring only counts notes fully inside the duration window.",
+            self.info_mode: "Pass `--info` to print chart metadata and exit without rendering.",
         }
         for idx, (toggle, tip) in enumerate(tips.items()):
             toggle.setToolTip(tip)
@@ -371,6 +473,13 @@ class RendererTab(QWidget):
             duration=self.duration.text().strip(),
             width=self.width.text().strip(),
             height=self.height.text().strip(),
+            approach=self.approach.text().strip(),
+            chart_speed=self.chart_speed.text().strip(),
+            expand=self.expand.text().strip(),
+            note_scale_x=self.note_scale_x.text().strip(),
+            note_scale_y=self.note_scale_y.text().strip(),
+            note_alpha=self.note_alpha.text().strip(),
+            font_size=self.font_size.text().strip(),
             mode=self.mode.currentText(),
             backend=self.backend.currentText(),
             record_output=self.record_output.text(),
@@ -400,6 +509,8 @@ class RendererTab(QWidget):
             audio_offset_ms=self.audio_offset.text().strip(),
             playback_speed=self.playback_speed.text().strip(),
             benchmark_iterations=self.benchmark_iterations.text().strip(),
+            list_charts_dir=self.list_charts_dir.text(),
+            dump_frame_t=self.dump_frame_t.text().strip(),
             headless=self.headless.isChecked(),
             score_only=self.score_only.isChecked(),
             benchmark=self.benchmark.isChecked(),
@@ -410,6 +521,11 @@ class RendererTab(QWidget):
             log_no_color=self.log_no_color.isChecked(),
             log_time=self.log_time.isChecked(),
             truncate_at_duration=self.truncate.isChecked(),
+            info_mode=self.info_mode.isChecked(),
+            mod_paths=[
+                self.mods_list.item(i).text()
+                for i in range(self.mods_list.count())
+            ],
             extra_args=self.extra_args_field.text().strip(),
         )
 
@@ -426,6 +542,13 @@ class RendererTab(QWidget):
         self.duration.setText(opts.duration)
         self.width.setText(opts.width)
         self.height.setText(opts.height)
+        self.approach.setText(opts.approach)
+        self.chart_speed.setText(opts.chart_speed)
+        self.expand.setText(opts.expand)
+        self.note_scale_x.setText(opts.note_scale_x)
+        self.note_scale_y.setText(opts.note_scale_y)
+        self.note_alpha.setText(opts.note_alpha)
+        self.font_size.setText(opts.font_size)
         self.mode.setCurrentText(opts.mode)
         self.backend.setCurrentText(opts.backend)
         self.record_output.setText(opts.record_output)
@@ -455,6 +578,8 @@ class RendererTab(QWidget):
         self.audio_offset.setText(opts.audio_offset_ms)
         self.playback_speed.setText(opts.playback_speed)
         self.benchmark_iterations.setText(opts.benchmark_iterations)
+        self.list_charts_dir.setText(opts.list_charts_dir)
+        self.dump_frame_t.setText(opts.dump_frame_t)
         self.headless.setChecked(opts.headless)
         self.score_only.setChecked(opts.score_only)
         self.benchmark.setChecked(opts.benchmark)
@@ -465,6 +590,10 @@ class RendererTab(QWidget):
         self.log_no_color.setChecked(opts.log_no_color)
         self.log_time.setChecked(opts.log_time)
         self.truncate.setChecked(opts.truncate_at_duration)
+        self.info_mode.setChecked(opts.info_mode)
+        self.mods_list.clear()
+        for path in (opts.mod_paths or []):
+            self.mods_list.addItem(path)
         self.extra_args_field.setText(opts.extra_args)
 
     # ------------------------------------------------------------------ #
@@ -472,10 +601,13 @@ class RendererTab(QWidget):
     # ------------------------------------------------------------------ #
 
     def load_charts(self) -> None:
-        self._charts = discover_charts(DEFAULT_CHARTS_DIR)
+        charts_dir_str = self._charts_dir_edit.text().strip() if hasattr(self, "_charts_dir_edit") else ""
+        from pathlib import Path as _Path
+        charts_dir = _Path(charts_dir_str) if charts_dir_str else DEFAULT_CHARTS_DIR
+        self._charts = discover_charts(charts_dir)
         self._apply_chart_filter()
         self.detail_hint.setText(
-            f"Discovered {len(self._charts)} chart entries from `{DEFAULT_CHARTS_DIR}`. "
+            f"Discovered {len(self._charts)} chart entries from `{charts_dir}`. "
             "Zip-packaged audio/background defaults show as `<internal>`."
         )
 

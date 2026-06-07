@@ -32,7 +32,7 @@ class LauncherWindow(QMainWindow):
     ORG = "MinimalPhigrosRend"
     APP = "phigros_ui"
 
-    def __init__(self) -> None:
+    def __init__(self, startup: dict | None = None) -> None:
         super().__init__()
         self.setWindowTitle(f"MinimalPhigrosRend — UI {__version__}")
         self.resize(1320, 900)
@@ -56,6 +56,11 @@ class LauncherWindow(QMainWindow):
         self.build_tab.output.connect(self._on_log_output)
         self.renderer_tab.output.connect(self._on_log_output)
 
+        # Wire config-editor "Use in Renderer" signal.
+        self.config_tab.use_in_renderer.connect(
+            lambda p: self.renderer_tab.config.setText(p)
+        )
+
         # ---- menu & status bar ------------------------------------------ #
         self._build_menu()
         self.status_label = QLabel("Ready")
@@ -69,6 +74,39 @@ class LauncherWindow(QMainWindow):
         self.renderer_tab._runner.sequence_finished.connect(self._on_process_finished)
 
         self._restore_state()
+        self._apply_startup(startup or {})
+
+    # ------------------------------------------------------------------ #
+    # startup args                                                       #
+    # ------------------------------------------------------------------ #
+
+    def _apply_startup(self, startup: dict) -> None:
+        """Apply CLI startup overrides after the window is fully built."""
+        if not startup:
+            return
+        rt = self.renderer_tab
+
+        if startup.get("chart"):
+            rt.chart.setText(startup["chart"])
+        if startup.get("charts_dir"):
+            rt._charts_dir_edit.setText(startup["charts_dir"])
+        if startup.get("config"):
+            rt.config.setText(startup["config"])
+            # also update the config editor
+            self.config_tab.path_field.setText(startup["config"])
+            self.config_tab._open()
+        if startup.get("preset"):
+            from .presets import load_preset
+            try:
+                opts = load_preset(startup["preset"])
+                rt.apply_options(opts)
+            except Exception as exc:
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "CLI --preset", str(exc))
+        tab_name = startup.get("tab", "").lower()
+        tab_map = {"renderer": 0, "build": 1, "config": 2, "log": 3}
+        if tab_name in tab_map:
+            self.tabs.setCurrentIndex(tab_map[tab_name])
 
     # ------------------------------------------------------------------ #
     # menu                                                               #
@@ -163,7 +201,7 @@ class LauncherWindow(QMainWindow):
         super().closeEvent(event)
 
 
-def main() -> int:
+def main(startup: dict | None = None) -> int:
     # PySide6 import delayed to keep ``python -m phigros_ui --help``
     # (or plain ``import phigros_ui``) cheap.
     try:
@@ -174,7 +212,7 @@ def main() -> int:
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName(LauncherWindow.APP)
     app.setOrganizationName(LauncherWindow.ORG)
-    window = LauncherWindow()
+    window = LauncherWindow(startup=startup)
     window.show()
     return app.exec()
 

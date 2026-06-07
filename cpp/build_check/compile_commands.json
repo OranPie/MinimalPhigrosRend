@@ -1,0 +1,164 @@
+[
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/stb -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/vendor_stb.dir/src/vendor/vendor_impl.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/src/vendor/vendor_impl.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/src/vendor/vendor_impl.cpp",
+  "output": "CMakeFiles/vendor_stb.dir/src/vendor/vendor_impl.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/cc -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz -g -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/vendor_miniz.dir/vendor/miniz/miniz.c.o -c /Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz/miniz.c",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz/miniz.c",
+  "output": "CMakeFiles/vendor_miniz.dir/vendor/miniz/miniz.c.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/cc -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz -g -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/vendor_miniz.dir/vendor/miniz/miniz_tdef.c.o -c /Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz/miniz_tdef.c",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz/miniz_tdef.c",
+  "output": "CMakeFiles/vendor_miniz.dir/vendor/miniz/miniz_tdef.c.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/cc -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz -g -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/vendor_miniz.dir/vendor/miniz/miniz_tinfl.c.o -c /Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz/miniz_tinfl.c",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz/miniz_tinfl.c",
+  "output": "CMakeFiles/vendor_miniz.dir/vendor/miniz/miniz_tinfl.c.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/cc -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz -g -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/vendor_miniz.dir/vendor/miniz/miniz_zip.c.o -c /Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz/miniz_zip.c",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz/miniz_zip.c",
+  "output": "CMakeFiles/vendor_miniz.dir/vendor/miniz/miniz_zip.c.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniaudio -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/stb -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/vendor_miniaudio.dir/src/vendor/audio_impl.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/src/vendor/audio_impl.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/src/vendor/audio_impl.cpp",
+  "output": "CMakeFiles/vendor_miniaudio.dir/src/vendor/audio_impl.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_HAS_OPENSSL=1 -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -isystem /opt/homebrew/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/phigros_core_lib.dir/src/chart/official.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/src/chart/official.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/src/chart/official.cpp",
+  "output": "CMakeFiles/phigros_core_lib.dir/src/chart/official.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_HAS_OPENSSL=1 -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -isystem /opt/homebrew/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/phigros_core_lib.dir/src/chart/rpe.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/src/chart/rpe.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/src/chart/rpe.cpp",
+  "output": "CMakeFiles/phigros_core_lib.dir/src/chart/rpe.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_HAS_OPENSSL=1 -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -isystem /opt/homebrew/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/phigros_core_lib.dir/src/chart/pec.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/src/chart/pec.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/src/chart/pec.cpp",
+  "output": "CMakeFiles/phigros_core_lib.dir/src/chart/pec.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_HAS_OPENSSL=1 -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -isystem /opt/homebrew/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/phigros_core_lib.dir/src/chart/compiler.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/src/chart/compiler.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/src/chart/compiler.cpp",
+  "output": "CMakeFiles/phigros_core_lib.dir/src/chart/compiler.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_HAS_OPENSSL=1 -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -isystem /opt/homebrew/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/phigros_core_lib.dir/src/chart/phbc_io.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/src/chart/phbc_io.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/src/chart/phbc_io.cpp",
+  "output": "CMakeFiles/phigros_core_lib.dir/src/chart/phbc_io.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_HAS_OPENSSL=1 -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -isystem /opt/homebrew/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/phigros_core_lib.dir/src/chart/phbc_compress.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/src/chart/phbc_compress.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/src/chart/phbc_compress.cpp",
+  "output": "CMakeFiles/phigros_core_lib.dir/src/chart/phbc_compress.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_HAS_OPENSSL=1 -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -isystem /opt/homebrew/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/phigros_core_lib.dir/src/chart/phbc_crypto.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/src/chart/phbc_crypto.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/src/chart/phbc_crypto.cpp",
+  "output": "CMakeFiles/phigros_core_lib.dir/src/chart/phbc_crypto.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_HAS_OPENSSL=1 -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -isystem /opt/homebrew/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/phigros_core_lib.dir/src/chart/chart_loader.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/src/chart/chart_loader.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/src/chart/chart_loader.cpp",
+  "output": "CMakeFiles/phigros_core_lib.dir/src/chart/chart_loader.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/phigros_core.dir/src/main.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/src/main.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/src/main.cpp",
+  "output": "CMakeFiles/phigros_core.dir/src/main.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/test_easing.dir/tests/test_easing.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/tests/test_easing.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/tests/test_easing.cpp",
+  "output": "CMakeFiles/test_easing.dir/tests/test_easing.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/verify_chart.dir/tests/verify_chart.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/tests/verify_chart.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/tests/verify_chart.cpp",
+  "output": "CMakeFiles/verify_chart.dir/tests/verify_chart.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_HAS_OPENSSL=1 -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/test_engine.dir/tests/test_engine.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/tests/test_engine.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/tests/test_engine.cpp",
+  "output": "CMakeFiles/test_engine.dir/tests/test_engine.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/test_parser.dir/tests/test_parser.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/tests/test_parser.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/tests/test_parser.cpp",
+  "output": "CMakeFiles/test_parser.dir/tests/test_parser.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/bench.dir/tests/bench.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/tests/bench.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/tests/bench.cpp",
+  "output": "CMakeFiles/bench.dir/tests/bench.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/test_zip_extract.dir/tests/test_zip_extract.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/tests/test_zip_extract.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/tests/test_zip_extract.cpp",
+  "output": "CMakeFiles/test_zip_extract.dir/tests/test_zip_extract.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/test_logger.dir/tests/test_logger.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/tests/test_logger.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/tests/test_logger.cpp",
+  "output": "CMakeFiles/test_logger.dir/tests/test_logger.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/chart_scanner.dir/src/chart/chart_scanner.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/src/chart/chart_scanner.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/src/chart/chart_scanner.cpp",
+  "output": "CMakeFiles/chart_scanner.dir/src/chart/chart_scanner.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/dump_frame.dir/src/dump_frame.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/src/dump_frame.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/src/dump_frame.cpp",
+  "output": "CMakeFiles/dump_frame.dir/src/dump_frame.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/phigros_python_api_lib.dir/src/api/python_api.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/src/api/python_api.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/src/api/python_api.cpp",
+  "output": "CMakeFiles/phigros_python_api_lib.dir/src/api/python_api.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -I/Users/yanyige/MinimalPhigrosRend/cpp/vendor/miniz -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/phigros_mobile_bridge.dir/src/api/mobile_bridge.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/src/api/mobile_bridge.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/src/api/mobile_bridge.cpp",
+  "output": "CMakeFiles/phigros_mobile_bridge.dir/src/api/mobile_bridge.cpp.o"
+},
+{
+  "directory": "/Users/yanyige/MinimalPhigrosRend/cpp/build_check",
+  "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ -DPHIGROS_VERSION=\\\"1.0.0-dev\\\" -I/Users/yanyige/MinimalPhigrosRend/cpp/include -isystem /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src/include -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk -o CMakeFiles/test_mobile_bridge.dir/tests/test_mobile_bridge.cpp.o -c /Users/yanyige/MinimalPhigrosRend/cpp/tests/test_mobile_bridge.cpp",
+  "file": "/Users/yanyige/MinimalPhigrosRend/cpp/tests/test_mobile_bridge.cpp",
+  "output": "CMakeFiles/test_mobile_bridge.dir/tests/test_mobile_bridge.cpp.o"
+}
+]

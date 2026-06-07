@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -26,6 +27,8 @@ from ..common import DEFAULT_CONFIG
 
 
 class ConfigEditorTab(QWidget):
+    use_in_renderer = Signal(str)
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         root = QVBoxLayout(self)
@@ -39,7 +42,9 @@ class ConfigEditorTab(QWidget):
         self.open_btn = QPushButton("Open")
         self.save_btn = QPushButton("Save")
         self.reload_btn = QPushButton("Reload")
-        for btn in (self.browse_btn, self.open_btn, self.save_btn, self.reload_btn):
+        self.use_btn = QPushButton("Use in Renderer")
+        self.use_btn.setToolTip("Set the Renderer tab's config path to this file.")
+        for btn in (self.browse_btn, self.open_btn, self.save_btn, self.reload_btn, self.use_btn):
             header.addWidget(btn)
         root.addLayout(header)
 
@@ -58,6 +63,7 @@ class ConfigEditorTab(QWidget):
         self.open_btn.clicked.connect(self._open)
         self.save_btn.clicked.connect(self._save)
         self.reload_btn.clicked.connect(self._open)
+        self.use_btn.clicked.connect(self._use_in_renderer)
 
         if DEFAULT_CONFIG.is_file():
             self._open()
@@ -90,3 +96,8 @@ class ConfigEditorTab(QWidget):
             self.status.setText(f"Saved {path}")
         except Exception as exc:
             QMessageBox.critical(self, "Save Config", str(exc))
+
+    def _use_in_renderer(self) -> None:
+        path = self.path_field.text().strip()
+        if path:
+            self.use_in_renderer.emit(path)

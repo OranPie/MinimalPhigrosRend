@@ -29,6 +29,7 @@ Primary native interfaces under `include/phigros/`:
 - `src/main.cpp`: headless/native core entry
 - `src/python/module.cpp`: Python extension module definition
 - `src/api/python_api.cpp`: native API implementation shared by bindings
+- `include/phigros/api/mobile_bridge.h`: C ABI used by native mobile shells
 - `include/phigros/app/app_args.hpp`: CLI option surface definition
 
 ## Binding Boundary

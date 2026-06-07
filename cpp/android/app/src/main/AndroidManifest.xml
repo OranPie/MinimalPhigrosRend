@@ -16,19 +16,23 @@
         android:icon="@mipmap/ic_launcher"
         android:label="Phigros Renderer"
         android:hardwareAccelerated="true"
-        android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+        android:theme="@style/Theme.PhigrosRenderer">
 
         <activity
-            android:name=".PhigrosActivity"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|screenLayout|uiMode|smallestScreenSize|density"
-            android:exported="true"
-            android:launchMode="singleTask"
-            android:screenOrientation="landscape">
-
+            android:name=".MainActivity"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".PhigrosActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|screenLayout|uiMode|smallestScreenSize|density"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:screenOrientation="landscape">
 
             <!-- Allow opening .phbc / .json chart files via file:// URI (older file managers) -->
             <intent-filter>

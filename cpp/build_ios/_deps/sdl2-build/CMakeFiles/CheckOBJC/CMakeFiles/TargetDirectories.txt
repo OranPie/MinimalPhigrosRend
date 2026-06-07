@@ -1,0 +1,2 @@
+/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-build/CMakeFiles/CheckOBJC/CMakeFiles/ALL_BUILD.dir
+/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/sdl2-build/CMakeFiles/CheckOBJC/CMakeFiles/ZERO_CHECK.dir

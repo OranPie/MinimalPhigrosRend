@@ -1,0 +1,2 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar qc libphigros_mobile_bridge.a CMakeFiles/phigros_mobile_bridge.dir/src/api/mobile_bridge.cpp.o
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ranlib libphigros_mobile_bridge.a

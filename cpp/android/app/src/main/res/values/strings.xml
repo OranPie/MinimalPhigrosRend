@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Phigros Renderer</string>
+    <string name="mobile_shell_title">Phigros Mobile Shell</string>
+    <string name="mobile_shell_subtitle">Native Kotlin UI with a shared C++ chart bridge.</string>
 </resources>

@@ -314,6 +314,13 @@ _RENDERER_VALUE_FLAGS: tuple[tuple[str, str], ...] = (
     ("duration", "--duration"),
     ("width", "--width"),
     ("height", "--height"),
+    ("approach", "--approach"),
+    ("chart_speed", "--chart-speed"),
+    ("expand", "--expand"),
+    ("note_scale_x", "--note-scale-x"),
+    ("note_scale_y", "--note-scale-y"),
+    ("note_alpha", "--note-alpha"),
+    ("font_size", "--font-size"),
     ("mode", "--mode"),
     ("backend", "--backend"),
     ("record_output", "--record"),
@@ -343,6 +350,8 @@ _RENDERER_VALUE_FLAGS: tuple[tuple[str, str], ...] = (
     ("audio_offset_ms", "--audio-offset"),
     ("playback_speed", "--playback-speed"),
     ("benchmark_iterations", "--benchmark-iterations"),
+    ("list_charts_dir", "--list-charts"),
+    ("dump_frame_t", "--dump-frame"),
 )
 
 _RENDERER_TOGGLE_FLAGS: tuple[tuple[str, str], ...] = (
@@ -356,6 +365,7 @@ _RENDERER_TOGGLE_FLAGS: tuple[tuple[str, str], ...] = (
     ("log_no_color", "--log-no-color"),
     ("log_time", "--log-time"),
     ("truncate_at_duration", "--truncate-at-duration"),
+    ("info_mode", "--info"),
 )
 
 
@@ -383,6 +393,13 @@ class RendererOptions:
     duration: str = ""
     width: str = ""
     height: str = ""
+    approach: str = ""
+    chart_speed: str = ""
+    expand: str = ""
+    note_scale_x: str = ""
+    note_scale_y: str = ""
+    note_alpha: str = ""
+    font_size: str = ""
     mode: str = ""
     backend: str = ""
     record_output: str = ""
@@ -412,6 +429,8 @@ class RendererOptions:
     audio_offset_ms: str = ""
     playback_speed: str = ""
     benchmark_iterations: str = ""
+    list_charts_dir: str = ""
+    dump_frame_t: str = ""
 
     # toggles
     headless: bool = False
@@ -424,6 +443,10 @@ class RendererOptions:
     log_no_color: bool = False
     log_time: bool = False
     truncate_at_duration: bool = False
+    info_mode: bool = False
+
+    # repeatable mod files (each emits --mod <path>)
+    mod_paths: list = field(default_factory=list)
 
     # free-form suffix, appended after everything else
     extra_args: str = ""
@@ -450,6 +473,10 @@ class RendererOptions:
         for attr, flag in _RENDERER_TOGGLE_FLAGS:
             if bool(getattr(self, attr, False)):
                 command.append(flag)
+
+        for mod_path in (self.mod_paths or []):
+            if mod_path.strip():
+                command.extend(["--mod", mod_path.strip()])
 
         if self.extra_args.strip():
             command.extend(shlex.split(self.extra_args))

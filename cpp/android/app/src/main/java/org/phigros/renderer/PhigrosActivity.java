@@ -23,14 +23,20 @@ import java.io.OutputStream;
 public class PhigrosActivity extends SDLActivity {
 
     private static final String TAG = "PhigrosRenderer";
+    public static final String EXTRA_CHART_PATH = "org.phigros.renderer.chart_path";
+    public static final String EXTRA_PLAY_MODE = "org.phigros.renderer.play_mode";
+    public static final String PLAY_MODE_MANUAL = "manual";
+    public static final String PLAY_MODE_SCORE_ONLY = "score_only";
 
     // Path that SDL_main will use; set before SDL starts.
     private String resolvedChartPath = null;
+    private String resolvedPlayMode = PLAY_MODE_MANUAL;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         // Resolve the chart path from the Intent before SDL starts.
         resolvedChartPath = resolveChartPath(getIntent());
+        resolvedPlayMode = resolvePlayMode(getIntent());
         super.onCreate(savedInstanceState);
     }
 
@@ -49,11 +55,12 @@ public class PhigrosActivity extends SDLActivity {
      */
     @Override
     protected String[] getArguments() {
+        final String chartPath = resolvedChartPath != null ? resolvedChartPath : "/sdcard/phigros/IN.json";
+        final String modeArg = PLAY_MODE_SCORE_ONLY.equals(resolvedPlayMode) ? "--score-only" : "--play";
         if (resolvedChartPath != null) {
-            return new String[]{ resolvedChartPath, "--score-only" };
+            return new String[]{ chartPath, modeArg };
         }
-        // Default: score-only mode on the well-known chart location
-        return new String[]{ "/sdcard/phigros/IN.json", "--score-only" };
+        return new String[]{ chartPath, modeArg };
     }
 
     /**
@@ -68,6 +75,8 @@ public class PhigrosActivity extends SDLActivity {
      */
     private String resolveChartPath(Intent intent) {
         if (intent == null) return null;
+        String extraPath = intent.getStringExtra(EXTRA_CHART_PATH);
+        if (extraPath != null && new File(extraPath).exists()) return extraPath;
         Uri data = intent.getData();
         if (data == null) return null;
 
@@ -81,6 +90,13 @@ public class PhigrosActivity extends SDLActivity {
             return copyContentUriToCache(data);
         }
         return null;
+    }
+
+    private String resolvePlayMode(Intent intent) {
+        if (intent == null) return PLAY_MODE_MANUAL;
+        String requestedMode = intent.getStringExtra(EXTRA_PLAY_MODE);
+        if (PLAY_MODE_SCORE_ONLY.equals(requestedMode)) return PLAY_MODE_SCORE_ONLY;
+        return PLAY_MODE_MANUAL;
     }
 
     /**
@@ -138,4 +154,3 @@ public class PhigrosActivity extends SDLActivity {
         return null;
     }
 }
-

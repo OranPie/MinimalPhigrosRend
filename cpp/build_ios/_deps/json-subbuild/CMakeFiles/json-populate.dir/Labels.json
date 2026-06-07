@@ -1,0 +1,46 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/CMakeFiles/json-populate"
+		},
+		{
+			"file" : "/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/CMakeFiles/json-populate.rule"
+		},
+		{
+			"file" : "/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/CMakeFiles/(CONFIG)/json-populate-complete.rule"
+		},
+		{
+			"file" : "/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/(CONFIG)/json-populate-build.rule"
+		},
+		{
+			"file" : "/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/(CONFIG)/json-populate-configure.rule"
+		},
+		{
+			"file" : "/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/(CONFIG)/json-populate-download.rule"
+		},
+		{
+			"file" : "/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/(CONFIG)/json-populate-install.rule"
+		},
+		{
+			"file" : "/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/(CONFIG)/json-populate-mkdir.rule"
+		},
+		{
+			"file" : "/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/(CONFIG)/json-populate-patch.rule"
+		},
+		{
+			"file" : "/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/(CONFIG)/json-populate-test.rule"
+		},
+		{
+			"file" : "/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/(CONFIG)/json-populate-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"json-populate"
+		],
+		"name" : "json-populate"
+	}
+}

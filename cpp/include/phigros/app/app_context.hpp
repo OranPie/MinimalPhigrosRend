@@ -161,7 +161,12 @@ struct AppContext {
         PHLOG_DEBUG(Respack, "color_perfect=(" << (int)respack.cfg.color_perfect.r
             << "," << (int)respack.cfg.color_perfect.g
             << "," << (int)respack.cfg.color_perfect.b
-            << ") hitfx_duration=" << respack.cfg.hitfx_duration << "s");
+            << ") hitfx_duration=" << respack.cfg.hitfx_duration
+            << "s hold_atlas=[" << respack.cfg.hold_tail_h
+            << "," << respack.cfg.hold_head_h
+            << "] holdKeepHead=" << respack.cfg.hold_keep_head
+            << " holdRepeat=" << respack.cfg.hold_repeat
+            << " holdCompact=" << respack.cfg.hold_compact);
 
         // Background — priority: CLI/script override > config > RPE meta > auto-discover
         std::string bgp = bg_override.empty() ? cfg.bg_path : bg_override;

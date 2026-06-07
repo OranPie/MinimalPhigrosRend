@@ -8,11 +8,42 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstdio>
+#include <cctype>
 
 // miniz header
 #include "miniz.h"
 
 namespace phigros::io {
+
+inline std::string trim_copy(std::string s) {
+    while (!s.empty() && (s.front() == ' ' || s.front() == '\t'))
+        s.erase(s.begin());
+    while (!s.empty() &&
+           (s.back() == ' ' || s.back() == '\t' || s.back() == '\r' || s.back() == '\n'))
+        s.pop_back();
+    return s;
+}
+
+inline std::string unquote_copy(std::string s) {
+    s = trim_copy(std::move(s));
+    if (s.size() >= 2 &&
+        ((s.front() == '"' && s.back() == '"') ||
+         (s.front() == '\'' && s.back() == '\''))) {
+        s = s.substr(1, s.size() - 2);
+    }
+    return s;
+}
+
+inline std::string lower_copy(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return s;
+}
+
+inline bool parse_bool(const std::string& s) {
+    std::string v = lower_copy(unquote_copy(s));
+    return v == "true" || v == "yes" || v == "1" || v == "on";
+}
 
 struct RespackConfig {
     std::string name;
@@ -132,18 +163,8 @@ inline RespackConfig parse_info_yml(const std::string& text) {
         std::string key = line.substr(0, colon);
         std::string val = line.substr(colon + 1);
 
-        // Trim
-        auto trim = [](std::string& s) {
-            while (!s.empty() && (s.front() == ' ' || s.front() == '\t'))
-                s.erase(s.begin());
-            while (!s.empty() &&
-                   (s.back() == ' ' || s.back() == '\t' || s.back() == '\r'))
-                s.pop_back();
-        };
-        trim(key); trim(val);
-        // Remove quotes
-        if (val.size() >= 2 && val.front() == '"' && val.back() == '"')
-            val = val.substr(1, val.size() - 2);
+        key = trim_copy(std::move(key));
+        val = unquote_copy(std::move(val));
 
         if (key == "name") cfg.name = val;
         else if (key == "hitFx" || key == "hitfx") {
@@ -180,12 +201,12 @@ inline RespackConfig parse_info_yml(const std::string& text) {
         }
         else if (key == "hitFxDuration") cfg.hitfx_duration = std::atof(val.c_str());
         else if (key == "hitFxScale") cfg.hitfx_scale = std::atof(val.c_str());
-        else if (key == "hitFxRotate") cfg.hitfx_rotate = (val == "true");
-        else if (key == "hitFxTinted") cfg.hitfx_tinted = (val == "true");
-        else if (key == "hideParticles") cfg.hide_particles = (val == "true");
-        else if (key == "holdKeepHead") cfg.hold_keep_head = (val == "true");
-        else if (key == "holdRepeat") cfg.hold_repeat = (val == "true");
-        else if (key == "holdCompact") cfg.hold_compact = (val == "true");
+        else if (key == "hitFxRotate") cfg.hitfx_rotate = parse_bool(val);
+        else if (key == "hitFxTinted") cfg.hitfx_tinted = parse_bool(val);
+        else if (key == "hideParticles") cfg.hide_particles = parse_bool(val);
+        else if (key == "holdKeepHead") cfg.hold_keep_head = parse_bool(val);
+        else if (key == "holdRepeat") cfg.hold_repeat = parse_bool(val);
+        else if (key == "holdCompact") cfg.hold_compact = parse_bool(val);
         else if (key == "colorPerfect") parse_hex_color(val, cfg.color_perfect, cfg.alpha_perfect);
         else if (key == "colorGood") parse_hex_color(val, cfg.color_good, cfg.alpha_good);
     }
@@ -196,9 +217,49 @@ inline RespackConfig parse_info_yml(const std::string& text) {
     return cfg;
 }
 
-// Extract a file from a miniz ZIP archive
-inline std::vector<uint8_t> zip_extract(mz_zip_archive& zip, const char* name) {
+inline std::string normalize_zip_member_name(std::string name) {
+    std::replace(name.begin(), name.end(), '\\', '/');
+    while (name.rfind("./", 0) == 0) name.erase(0, 2);
+    while (!name.empty() && name.front() == '/') name.erase(name.begin());
+    return lower_copy(name);
+}
+
+inline bool is_ignored_zip_member(const std::string& normalized_name) {
+    if (normalized_name.rfind("__macosx/", 0) == 0) return true;
+    auto slash = normalized_name.find_last_of('/');
+    std::string base = slash == std::string::npos
+        ? normalized_name
+        : normalized_name.substr(slash + 1);
+    return base.rfind("._", 0) == 0 || base.empty();
+}
+
+inline int zip_find_member(mz_zip_archive& zip, const char* name) {
     int idx = mz_zip_reader_locate_file(&zip, name, nullptr, 0);
+    if (idx >= 0) return idx;
+
+    const std::string wanted = normalize_zip_member_name(name);
+    const int file_count = static_cast<int>(mz_zip_reader_get_num_files(&zip));
+    for (int i = 0; i < file_count; ++i) {
+        mz_zip_archive_file_stat stat{};
+        if (!mz_zip_reader_file_stat(&zip, i, &stat)) continue;
+        if (stat.m_is_directory) continue;
+
+        std::string candidate = normalize_zip_member_name(stat.m_filename);
+        if (is_ignored_zip_member(candidate)) continue;
+        if (candidate == wanted) return i;
+        if (candidate.size() > wanted.size() &&
+            candidate.compare(candidate.size() - wanted.size(), wanted.size(), wanted) == 0 &&
+            candidate[candidate.size() - wanted.size() - 1] == '/') {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Extract a file from a miniz ZIP archive. Besides exact root entries, accept
+// packs that were zipped with a single top-level folder (e.g. Skin/info.yml).
+inline std::vector<uint8_t> zip_extract(mz_zip_archive& zip, const char* name) {
+    int idx = zip_find_member(zip, name);
     if (idx < 0) return {};
     mz_zip_archive_file_stat stat;
     if (!mz_zip_reader_file_stat(&zip, idx, &stat)) return {};
@@ -230,6 +291,8 @@ inline Respack load_respack(SDL_Renderer* ren, const std::string& zip_path) {
 
     // Parse info.yml
     auto info_data = zip_extract(zip, "info.yml");
+    if (info_data.empty())
+        info_data = zip_extract(zip, "info.yaml");
     if (!info_data.empty())
         rp.cfg = parse_info_yml(std::string(info_data.begin(), info_data.end()));
 

@@ -1,70 +1,74 @@
-# iOS app target — wraps the phigros_render shared library in an iOS .app bundle.
-#
-# Build:
-#   cmake -G Xcode \
-#         -DCMAKE_SYSTEM_NAME=iOS \
-#         -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
-#         -DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=<TEAM_ID> \
-#         -DSDL2_DIR=<path/to/SDL2.framework/..> \
-#         ..
-#   xcodebuild -scheme PhigrosRenderer -configuration Release
-#
-# Requires: SDL2 compiled for iOS (XCFramework or individual device/simulator frameworks).
-
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
     return()
 endif()
 
-set(_IOS_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ios/PhigrosRenderer")
+enable_language(Swift)
+
+set(_IOS_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/PhigrosRenderer")
+set(_ROOT_RESPACK "${CMAKE_CURRENT_SOURCE_DIR}/../../respack.zip")
 
 add_executable(PhigrosRendererApp MACOSX_BUNDLE
-    "${_IOS_SRC_DIR}/main.m"
-    "${_IOS_SRC_DIR}/PhigrosAppDelegate.m"
-    "${_IOS_SRC_DIR}/PhigrosAppDelegate.h"
+    # Entry point
+    "${_IOS_SRC_DIR}/PhigrosMobileApp.swift"
+    # Bridging header (C++ → Swift)
+    "${_IOS_SRC_DIR}/PhigrosRenderer-Bridging-Header.h"
+    # Models
+    "${_IOS_SRC_DIR}/Models/PlayMode.swift"
+    "${_IOS_SRC_DIR}/Models/GameBridge.swift"
+    "${_IOS_SRC_DIR}/Models/ChartLibrary.swift"
+    "${_IOS_SRC_DIR}/Models/GameplaySettings.swift"
+    "${_IOS_SRC_DIR}/Models/ChartMediaResolver.swift"
+    # Views (SwiftUI navigation + settings)
+    "${_IOS_SRC_DIR}/Views/ChartLibraryView.swift"
+    "${_IOS_SRC_DIR}/Views/PlayModeSheet.swift"
+    "${_IOS_SRC_DIR}/Views/SettingsView.swift"
+    "${_IOS_SRC_DIR}/Views/ResultView.swift"
+    # Game layer (UIKit + Metal)
+    "${_IOS_SRC_DIR}/Game/GameViewController.swift"
+    "${_IOS_SRC_DIR}/Game/GameMetalView.swift"
+    "${_IOS_SRC_DIR}/Game/MetalRenderer.swift"
+    "${_IOS_SRC_DIR}/Game/MetalRespack.swift"
+    "${_IOS_SRC_DIR}/Game/GameHUDView.swift"
+    "${_IOS_SRC_DIR}/Game/PauseMenuView.swift"
+    "${_IOS_SRC_DIR}/Game/Shaders.metal"
+    "${_ROOT_RESPACK}"
 )
 
-# Link the core engine library
-target_link_libraries(PhigrosRendererApp PRIVATE phigros_render)
+set_source_files_properties("${_ROOT_RESPACK}" PROPERTIES
+    MACOSX_PACKAGE_LOCATION "Resources"
+)
 
-# ── Bundle settings ───────────────────────────────────────────────────────────
+target_include_directories(PhigrosRendererApp PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../include"
+)
+target_link_libraries(PhigrosRendererApp PRIVATE phigros_mobile_bridge)
+
 set_target_properties(PhigrosRendererApp PROPERTIES
     MACOSX_BUNDLE_INFO_PLIST "${_IOS_SRC_DIR}/Info.plist"
     XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "org.phigros.renderer"
-    XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"   # iPhone + iPad
+    XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
     XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"
     XCODE_ATTRIBUTE_ENABLE_BITCODE "NO"
-    XCODE_ATTRIBUTE_CLANG_ENABLE_OBJC_ARC "YES"
-    XCODE_ATTRIBUTE_SWIFT_VERSION "5.0"
+    XCODE_ATTRIBUTE_SWIFT_VERSION "5.9"
+    XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "16.0"
+    XCODE_ATTRIBUTE_SWIFT_OBJC_BRIDGING_HEADER "${_IOS_SRC_DIR}/PhigrosRenderer-Bridging-Header.h"
+    # Metal shader settings — ensure output is default.metallib so makeDefaultLibrary() finds it
+    XCODE_ATTRIBUTE_MTL_ENABLE_DEBUG_INFO "INCLUDE_SOURCE"
+    XCODE_ATTRIBUTE_MTL_LANGUAGE_REVISION "Metal30"
+    XCODE_ATTRIBUTE_MTL_FAST_MATH "YES"
     OUTPUT_NAME "PhigrosRenderer"
 )
 
-# ── SDL2 framework (required for iOS) ────────────────────────────────────────
-find_library(SDL2_FRAMEWORK SDL2
-    PATHS "${SDL2_DIR}" ENV SDL2_DIR
-    PATH_SUFFIXES "Frameworks" "xcframeworks/ios-arm64"
-    NO_DEFAULT_PATH
-)
-if(SDL2_FRAMEWORK)
-    target_link_libraries(PhigrosRendererApp PRIVATE "${SDL2_FRAMEWORK}")
-    set_target_properties(PhigrosRendererApp PROPERTIES
-        XCODE_ATTRIBUTE_FRAMEWORK_SEARCH_PATHS "$(inherited) ${SDL2_DIR}"
-    )
-else()
-    message(WARNING "SDL2.framework not found — set SDL2_DIR to point at the SDL2 XCFramework parent directory.")
-endif()
-
-# ── Required iOS system frameworks ───────────────────────────────────────────
 target_link_libraries(PhigrosRendererApp PRIVATE
-    "-framework UIKit"
     "-framework Foundation"
-    "-framework Metal"
+    "-framework SwiftUI"
+    "-framework UIKit"
     "-framework MetalKit"
-    "-framework QuartzCore"
-    "-framework CoreMotion"
-    "-framework CoreHaptics"
-    "-framework GameController"
-    "-framework AVFoundation"
-    "-framework AudioToolbox"
+    "-framework Metal"
+    "-framework UniformTypeIdentifiers"
+    # C++ runtime — required because the static C++ libs use exceptions
+    # but the app target contains only Swift sources.
+    "c++"
 )
 
 install(TARGETS PhigrosRendererApp BUNDLE DESTINATION .)

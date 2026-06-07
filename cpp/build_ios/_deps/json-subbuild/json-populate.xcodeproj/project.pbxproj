@@ -1,0 +1,639 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXAggregateTarget section */
+		9745B9963ED945B6987F7FC2 /* ALL_BUILD */ = {
+			isa = PBXAggregateTarget;
+			buildConfigurationList = F71D672747794558B95F352B /* Build configuration list for PBXAggregateTarget "ALL_BUILD" */;
+			buildPhases = (
+				7A3BC75D5FA3A04004B159D0 /* Generate CMakeFiles/ALL_BUILD */,
+			);
+			dependencies = (
+				B71C42F891F54077B4D3BADE /* PBXTargetDependency */,
+				5046E12889454B1DB14D18B2 /* PBXTargetDependency */,
+			);
+			name = ALL_BUILD;
+			productName = ALL_BUILD;
+		};
+		BB73BE4DA7AC4CCF9D6506AB /* ZERO_CHECK */ = {
+			isa = PBXAggregateTarget;
+			buildConfigurationList = 9FEDFB08BE814C9387115FF4 /* Build configuration list for PBXAggregateTarget "ZERO_CHECK" */;
+			buildPhases = (
+				42BAEEC67B400F29F3CE983B /* Generate CMakeFiles/ZERO_CHECK */,
+			);
+			dependencies = (
+			);
+			name = ZERO_CHECK;
+			productName = ZERO_CHECK;
+		};
+		C4A15B45A0044579BD51DB57 /* json-populate */ = {
+			isa = PBXAggregateTarget;
+			buildConfigurationList = A9E1341AB7AB404FBE7EF060 /* Build configuration list for PBXAggregateTarget "json-populate" */;
+			buildPhases = (
+				08271AA596F6E05D789FD89A /* Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-mkdir */,
+				F70F6BD0A2B7B56CBCC08FBA /* Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-download */,
+				BCA4F242C03BD63B19E47D2D /* Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-update */,
+				790A99DF764DE10B59AE23E0 /* Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-patch */,
+				AF07A11044BDD709EB53E316 /* Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-configure */,
+				B2B1ED984551138E05A39AFA /* Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-build */,
+				7956D15E4F84186439EB97BE /* Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-install */,
+				7A1CA3C560E092A03985E769 /* Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-test */,
+				7F6F6BF748803FF7DA473C7D /* Generate CMakeFiles/Debug/json-populate-complete */,
+				2AA8950EC771ED5DEAA9D598 /* Generate CMakeFiles/json-populate */,
+			);
+			dependencies = (
+				D2EC1D19453E45AA847244CA /* PBXTargetDependency */,
+			);
+			name = "json-populate";
+			productName = "json-populate";
+		};
+/* End PBXAggregateTarget section */
+
+/* Begin PBXBuildStyle section */
+		7C7A734697874A2C800BBB26 /* Debug */ = {
+			isa = PBXBuildStyle;
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+			};
+			name = Debug;
+		};
+/* End PBXBuildStyle section */
+
+/* Begin PBXContainerItemProxy section */
+		1C802D41624C4CFEAE8E5F51 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 58C89615371D4C1A93DFC6B7 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C4A15B45A0044579BD51DB57;
+			remoteInfo = "json-populate";
+		};
+		24D99E7B36FA4E65963B1C7A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 58C89615371D4C1A93DFC6B7 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BB73BE4DA7AC4CCF9D6506AB;
+			remoteInfo = ZERO_CHECK;
+		};
+		9D787093439D4F7899BB67DC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 58C89615371D4C1A93DFC6B7 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BB73BE4DA7AC4CCF9D6506AB;
+			remoteInfo = ZERO_CHECK;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		3E74D81CF4D34E51A3762C25 /* /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+		C476C3C6996849C896A1B1F6 /* /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0F09EAE6818147D99A995FDE /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		13C62A74688840069EDFF7D3 /* ALL_BUILD */ = {
+			isa = PBXGroup;
+			children = (
+				ED7F8473FE5E425A8FBEAAD2 /* CMake Rules */,
+				C476C3C6996849C896A1B1F6 /* /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/CMakeLists.txt */,
+			);
+			name = ALL_BUILD;
+			sourceTree = "<group>";
+		};
+		18D5BE663255487F8F63C203 = {
+			isa = PBXGroup;
+			children = (
+				D4EFD3686544403CB1A36D09 /* ExternalProjectTargets */,
+				13C62A74688840069EDFF7D3 /* ALL_BUILD */,
+				E19D137E51BB4575AB7FA53C /* Products */,
+				0F09EAE6818147D99A995FDE /* Frameworks */,
+				FC41F1A3D49943ECAF47C86A /* Resources */,
+			);
+			sourceTree = "<group>";
+		};
+		448498FFAD424AE3AC75F6B2 /* json-populate */ = {
+			isa = PBXGroup;
+			children = (
+				BB8DAAB5A063437692F873B9 /* json-populate */,
+			);
+			name = "json-populate";
+			sourceTree = "<group>";
+		};
+		BB8DAAB5A063437692F873B9 /* json-populate */ = {
+			isa = PBXGroup;
+			children = (
+				F76F91879B964836BF4E946F /* CMake Rules */,
+				3E74D81CF4D34E51A3762C25 /* /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/CMakeLists.txt */,
+			);
+			name = "json-populate";
+			sourceTree = "<group>";
+		};
+		D4EFD3686544403CB1A36D09 /* ExternalProjectTargets */ = {
+			isa = PBXGroup;
+			children = (
+				448498FFAD424AE3AC75F6B2 /* json-populate */,
+			);
+			name = ExternalProjectTargets;
+			sourceTree = "<group>";
+		};
+		E19D137E51BB4575AB7FA53C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		ED7F8473FE5E425A8FBEAAD2 /* CMake Rules */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = "CMake Rules";
+			sourceTree = "<group>";
+		};
+		F76F91879B964836BF4E946F /* CMake Rules */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = "CMake Rules";
+			sourceTree = "<group>";
+		};
+		FC41F1A3D49943ECAF47C86A /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXProject section */
+		58C89615371D4C1A93DFC6B7 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+			};
+			buildConfigurationList = F3C2F1807EA843C5BF107885 /* Build configuration list for PBXProject "json-populate" */;
+			buildSettings = {
+			};
+			buildStyles = (
+				7C7A734697874A2C800BBB26 /* Debug */,
+			);
+			compatibilityVersion = "Xcode 3.2";
+			hasScannedForEncodings = 0;
+			mainGroup = 18D5BE663255487F8F63C203;
+			projectDirPath = .;
+			projectRoot = "";
+			targets = (
+				9745B9963ED945B6987F7FC2 /* ALL_BUILD */,
+				BB73BE4DA7AC4CCF9D6506AB /* ZERO_CHECK */,
+				C4A15B45A0044579BD51DB57 /* json-populate */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		08271AA596F6E05D789FD89A /* Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-mkdir */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-mkdir";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-mkdir"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -Dcfgdir=/Debug -P /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/tmp/json-populate-mkdirs.cmake
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E touch /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-mkdir
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		2AA8950EC771ED5DEAA9D598 /* Generate CMakeFiles/json-populate */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/CMakeFiles/Debug/json-populate-complete"			);
+			name = "Generate CMakeFiles/json-populate";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/CMakeFiles/json-populate"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		3C0110FC8322DE7E50886E21 = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# shell script goes here
+exit 0";
+			showEnvVarsInLog = 0;
+		};
+		42BAEEC67B400F29F3CE983B /* Generate CMakeFiles/ZERO_CHECK */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Generate CMakeFiles/ZERO_CHECK";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/CMakeFiles/ZERO_CHECK"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild
+  make -f /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/CMakeScripts/ReRunCMake.make
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		42E440331AA76CA2DE27A6A8 = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# shell script goes here
+exit 0";
+			showEnvVarsInLog = 0;
+		};
+		790A99DF764DE10B59AE23E0 /* Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-patch */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-update","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-patch-info.txt"			);
+			name = "Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-patch";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-patch"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E echo_append
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E touch /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-patch
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		7956D15E4F84186439EB97BE /* Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-install */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-build"			);
+			name = "Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-install";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-install"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-build
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E echo_append
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E touch /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-install
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		7A1CA3C560E092A03985E769 /* Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-test */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-install"			);
+			name = "Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-test";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-test"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-build
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E echo_append
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E touch /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-test
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		7A3BC75D5FA3A04004B159D0 /* Generate CMakeFiles/ALL_BUILD */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Generate CMakeFiles/ALL_BUILD";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/CMakeFiles/ALL_BUILD"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild
+  echo Build\\ all\\ projects
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		7F6F6BF748803FF7DA473C7D /* Generate CMakeFiles/Debug/json-populate-complete */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-build","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-configure","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-download","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-install","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-mkdir","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-patch","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-test","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-update"			);
+			name = "Generate CMakeFiles/Debug/json-populate-complete";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/CMakeFiles/Debug/json-populate-complete"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E make_directory /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/CMakeFiles/Debug
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E touch /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/CMakeFiles/Debug/json-populate-complete
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E touch /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-done
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		9B50530E35CC49C82C2FACCF = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# shell script goes here
+exit 0";
+			showEnvVarsInLog = 0;
+		};
+		AF07A11044BDD709EB53E316 /* Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-configure */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-patch","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/tmp/json-populate-cfgcmd.txt"			);
+			name = "Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-configure";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-configure"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-build
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E echo_append
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E touch /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-configure
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		B2B1ED984551138E05A39AFA /* Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-build */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-configure"			);
+			name = "Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-build";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-build"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-build
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E echo_append
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E touch /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-build
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		BCA4F242C03BD63B19E47D2D /* Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-update */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-download","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-update-info.txt","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/tmp/json-populate-gitupdate.cmake"			);
+			name = "Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-update";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-update"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-src
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -Dcan_fetch=YES -P /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/tmp/json-populate-gitupdate.cmake
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+		F70F6BD0A2B7B56CBCC08FBA /* Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-download */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-mkdir","/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-gitinfo.txt"			);
+			name = "Generate json-populate-prefix/src/json-populate-stamp/Debug/json-populate-download";
+			outputPaths = (
+"/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-download"			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e
+if test \"$CONFIGURATION\" = \"Debug\"; then :
+  cd /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -P /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/tmp/json-populate-gitclone.cmake
+  /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E touch /Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/Debug/json-populate-download
+fi
+";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		5046E12889454B1DB14D18B2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BB73BE4DA7AC4CCF9D6506AB /* ZERO_CHECK */;
+			targetProxy = 24D99E7B36FA4E65963B1C7A /* PBXContainerItemProxy */;
+		};
+		B71C42F891F54077B4D3BADE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C4A15B45A0044579BD51DB57 /* json-populate */;
+			targetProxy = 1C802D41624C4CFEAE8E5F51 /* PBXContainerItemProxy */;
+		};
+		D2EC1D19453E45AA847244CA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BB73BE4DA7AC4CCF9D6506AB /* ZERO_CHECK */;
+			targetProxy = 9D787093439D4F7899BB67DC /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		4A7A14396BB843028035F7AA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
+				COMBINE_HIDPI_IMAGES = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'","$(inherited)");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				INSTALL_PATH = "";
+				ONLY_ACTIVE_ARCH = NO;
+				OTHER_LDFLAGS = ("","$(inherited)");
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = ZERO_CHECK;
+				SECTORDER_FLAGS = "";
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("$(inherited)");
+			};
+			name = Debug;
+		};
+		56B054E577794F1F8DC35C3A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
+				COMBINE_HIDPI_IMAGES = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'","$(inherited)");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				INSTALL_PATH = "";
+				ONLY_ACTIVE_ARCH = NO;
+				OTHER_LDFLAGS = ("","$(inherited)");
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = ALL_BUILD;
+				SECTORDER_FLAGS = "";
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("$(inherited)");
+			};
+			name = Debug;
+		};
+		6B7720A924804FDDA03E24AB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				SDKROOT = /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk;
+				SYMROOT = "/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/build";
+			};
+			name = Debug;
+		};
+		8F0767FF7D0B42ECB9485F0B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
+				COMBINE_HIDPI_IMAGES = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'","$(inherited)");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				INSTALL_PATH = "";
+				ONLY_ACTIVE_ARCH = NO;
+				OTHER_LDFLAGS = ("","$(inherited)");
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = "json-populate";
+				SECTORDER_FLAGS = "";
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("$(inherited)");
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		9FEDFB08BE814C9387115FF4 /* Build configuration list for PBXAggregateTarget "ZERO_CHECK" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4A7A14396BB843028035F7AA /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A9E1341AB7AB404FBE7EF060 /* Build configuration list for PBXAggregateTarget "json-populate" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8F0767FF7D0B42ECB9485F0B /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F3C2F1807EA843C5BF107885 /* Build configuration list for PBXProject "json-populate" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6B7720A924804FDDA03E24AB /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F71D672747794558B95F352B /* Build configuration list for PBXAggregateTarget "ALL_BUILD" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				56B054E577794F1F8DC35C3A /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 58C89615371D4C1A93DFC6B7 /* Project object */;
+}

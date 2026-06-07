@@ -1,0 +1,14 @@
+# Target labels
+ json-populate
+# Source files and their labels
+/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/CMakeFiles/json-populate
+/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/CMakeFiles/json-populate.rule
+/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/CMakeFiles/(CONFIG)/json-populate-complete.rule
+/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/(CONFIG)/json-populate-build.rule
+/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/(CONFIG)/json-populate-configure.rule
+/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/(CONFIG)/json-populate-download.rule
+/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/(CONFIG)/json-populate-install.rule
+/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/(CONFIG)/json-populate-mkdir.rule
+/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/(CONFIG)/json-populate-patch.rule
+/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/(CONFIG)/json-populate-test.rule
+/Users/yanyige/MinimalPhigrosRend/cpp/build_ios/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/(CONFIG)/json-populate-update.rule
