@@ -6,7 +6,8 @@
 
 ## 面向使用者的入口
 
-- `phigros_render`：原生渲染器 / 播放器 CLI
+- `phigros_sdl_app`：原生 SDL 渲染器 / 播放器应用
+- `phigros_render`：旧原生渲染器 / 播放器 CLI
 - `phigros_cpp`：由原生核心构建出的 Python 包
 - `chart_scanner`：谱面发现工具二进制
 
@@ -25,10 +26,12 @@
 
 ## 可执行入口与模块入口
 
-- `src/app/main.cpp`：渲染器 / 播放器可执行入口
+- `src/app/sdl_mobile_app.cpp`：桌面端、Android 与 iOS 共用的 SDL 应用入口
+- `src/app/main.cpp`：旧渲染器 / 播放器 CLI 入口
 - `src/main.cpp`：无头 / 原生 core 入口
 - `src/python/module.cpp`：Python 扩展模块定义
 - `src/api/python_api.cpp`：供绑定共享的原生 API 实现
+- `include/phigros/api/mobile_bridge.h`：旧原生移动端壳使用的 C ABI
 - `include/phigros/app/app_args.hpp`：CLI 选项接口定义
 
 ## 绑定边界

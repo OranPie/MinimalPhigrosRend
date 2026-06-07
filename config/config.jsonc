@@ -1,16 +1,16 @@
 // MinimalPhigrosRend config v2 (JSON with comments)
 //
-// Basic usage (Python renderer):
+// Basic usage (legacy Python renderer):
 //   python3 -m phic_renderer --input <chart_or_pack> --config <this_file>
 //   python3 -m phic_renderer --input <chart_or_pack> --save_config config.jsonc
 //
-// Basic usage (C++ renderer):
+// Basic usage (legacy C++ CLI; build with -DBUILD_LEGACY_CLI=ON):
 //   phigros_render <chart_path> --config <this_file>
 //
 // Notes:
 // - Lines starting with // or # are comments.
 // - CLI args override config values.
-// - For C++-specific render options see docs/CPP_RENDERER.md
+// - For SDL app and legacy C++ render options see docs/CPP_RENDERER.md
 {
   "version": 2,
   "window": {

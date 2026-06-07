@@ -2,36 +2,49 @@
 
 > 🌐 [English](CPP_RENDERER.md)
 
-`phigros_render` 是当前仓库面向使用者的原生渲染器 / 播放器入口。
+`phigros_sdl_app` 是当前仓库面向使用者的原生渲染器 / 播放器入口。
 
-本页面向构建与运行工作流。内部子系统细节请看 [../cpp/docs/](../cpp/docs/)。
+本页面面向构建与运行工作流。内部子系统细节请看 [../cpp/docs/](../cpp/docs/)。旧的 argv 命令行可执行文件 `phigros_render` 仅在显式打开 `BUILD_LEGACY_CLI=ON` 时构建。
 
 ## 快速构建
 
 ```bash
 cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DUSE_BGFX=OFF
-cmake --build cpp/build --parallel
+cmake --build cpp/build --target phigros_sdl_app --parallel
 ```
 
 产物：
 
-- `cpp/build/phigros_render`
+- `cpp/build/phigros_sdl_app`
 
 ## 快速运行
 
 ```bash
-./cpp/build/phigros_render charts/MyChart/IN.json
+./cpp/build/phigros_sdl_app
 ```
 
-常见任务：
+应用会直接进入 SDL 谱面库。将谱面目录或 zip 放到 `charts/` 下，然后使用应用内页面：
+
+- 谱面库与重新扫描
+- 谱面详情
+- 设置
+- 播放界面
+- 暂停菜单
+- 结算页
+
+桌面端、Android 与 iOS 共用这个 SDL 应用入口，不再要求从 argv 传入 chart path。
+
+## 旧 CLI
 
 ```bash
-./cpp/build/phigros_render charts/MyChart/IN.json --score-only
-./cpp/build/phigros_render charts/MyChart/IN.json --play
-./cpp/build/phigros_render charts/MyChart/IN.json --mode scriptplay --scriptplay docs/scriptplay_template.json
-./cpp/build/phigros_render charts/MyChart/IN.json --record out.mp4
-./cpp/build/phigros_render charts/MyChart/IN.json --benchmark --benchmark-iterations 20
-./cpp/build/phigros_render charts/MyChart/IN.json --config config/config.jsonc
+cmake -S cpp -B cpp/build_cli -DBUILD_LEGACY_CLI=ON -DUSE_BGFX=OFF
+cmake --build cpp/build_cli --target phigros_render --parallel
+./cpp/build_cli/phigros_render charts/MyChart/IN.json --score-only
+./cpp/build_cli/phigros_render charts/MyChart/IN.json --play
+./cpp/build_cli/phigros_render charts/MyChart/IN.json --mode scriptplay --scriptplay docs/scriptplay_template.json
+./cpp/build_cli/phigros_render charts/MyChart/IN.json --record out.mp4
+./cpp/build_cli/phigros_render charts/MyChart/IN.json --benchmark --benchmark-iterations 20
+./cpp/build_cli/phigros_render charts/MyChart/IN.json --config config/config.jsonc
 ```
 
 ## 支持的输入
@@ -43,7 +56,7 @@ cmake --build cpp/build --parallel
 
 格式内部说明见 [../cpp/docs/FORMAT.zh.md](../cpp/docs/FORMAT.zh.md) 与 [../cpp/docs/CHART_LOADER.zh.md](../cpp/docs/CHART_LOADER.zh.md)。
 
-## 常见 CLI 区域
+## 常见旧 CLI 区域
 
 播放控制：
 
@@ -98,10 +111,10 @@ cmake --build cpp/build --parallel
 
 ## 配置
 
-通过 `--config <path>` 使用 JSON / JSONC 风格配置文件：
+SDL 应用当前使用内置默认值与应用内开关调整运行时设置。旧 CLI 仍可通过 `--config <path>` 使用 JSON / JSONC 风格配置文件：
 
 ```bash
-./cpp/build/phigros_render charts/MyChart/IN.json --config config/config.jsonc
+./cpp/build_cli/phigros_render charts/MyChart/IN.json --config config/config.jsonc
 ```
 
 建议继续阅读：

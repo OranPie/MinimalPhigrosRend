@@ -9,7 +9,9 @@
 来自 `cpp/CMakeLists.txt` 的重要 CMake 选项：
 
 - `BUILD_PYTHON_BINDINGS`
-- `BUILD_RENDER_APP`
+- `BUILD_RENDER_APP`（默认 SDL 原生应用目标）
+- `BUILD_LEGACY_CLI`（旧 argv 入口 `phigros_render`）
+- `BUILD_MOBILE_BRIDGE`（旧 Kotlin/Swift 原生 UI 桥）
 - `USE_SDL3`
 - `USE_BGFX`
 - `USE_LIBAV`
@@ -21,11 +23,11 @@
 
 ## 常见构建路径
 
-渲染器构建：
+SDL 应用构建：
 
 ```bash
 cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DUSE_BGFX=OFF
-cmake --build cpp/build --parallel
+cmake --build cpp/build --target phigros_sdl_app --parallel
 ```
 
 绑定构建：
@@ -42,7 +44,9 @@ cmake --build cpp/build_py --target _core --parallel
 - `phigros_core_lib`
 - `phigros_core`
 - `phigros_python_api_lib`
-- `phigros_render`
+- `phigros_sdl_app`
+- 打开 `BUILD_LEGACY_CLI=ON` 时的 `phigros_render`
+- 打开 `BUILD_MOBILE_BRIDGE=ON` 时的 `phigros_mobile_bridge`
 - `chart_scanner`
 
 测试与基准目标：
@@ -60,7 +64,7 @@ cmake --build cpp/build_py --target _core --parallel
 
 - 桌面端：启用时默认使用 SDL3，也保留 SDL2 回退路径。
 - WebAssembly：通过 web 构建辅助脚本与 Emscripten 环境构建。
-- 移动端：平台包装工程位于 `android/`、`ios/` 与 `cmake/mobile.cmake`。
+- Android/iOS：最小平台包装工程加载原生 SDL 应用。旧业务 UI 桥位于 `BUILD_MOBILE_BRIDGE` 后。
 - 可选的编解码 / 压缩 / 加密支持取决于系统包与构建开关。
 
 ## 验证工作流

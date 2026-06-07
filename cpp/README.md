@@ -2,7 +2,7 @@
 
 > 🌐 [中文](README.zh.md)
 
-This directory contains the native C++ implementation: parser/core library targets, the renderer/player app, tests, platform wrappers, shaders, and internal subsystem docs.
+This directory contains the native C++ implementation: parser/core library targets, the SDL renderer/player app, tests, platform wrappers, shaders, and internal subsystem docs.
 
 ## Directory Structure
 
@@ -13,7 +13,7 @@ cpp/
 ├── cmake/                Mobile/platform helper CMake files
 ├── include/phigros/
 │   ├── api/              Native API exposed to Python bindings
-│   ├── app/              CLI, windowing, input, game-loop integration
+│   ├── app/              SDL app, CLI, windowing, input, game-loop integration
 │   ├── chart/            Chart loading, parsing, compilation, PHBC I/O
 │   ├── config/           RenderConfig load/save and defaults
 │   ├── core/             Core types, logging, mods
@@ -23,7 +23,7 @@ cpp/
 │   ├── math/             Easing, tracks, utility math
 │   └── render/           Frame building and draw backends
 ├── src/
-│   ├── app/              Native renderer app entry
+│   ├── app/              SDL app and legacy CLI entries
 │   ├── api/              C++ API implementation used by bindings
 │   ├── chart/            Parser/loader/compiler implementations
 │   ├── python/           Python extension module glue
@@ -46,19 +46,21 @@ Desktop build:
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_BGFX=OFF
-cmake --build build --parallel
+cmake --build build --target phigros_sdl_app --parallel
 ```
 
 Common outputs:
 
-- `build/phigros_render`
+- `build/phigros_sdl_app`
 - `build/phigros_core`
 - `build/chart_scanner`
 - test binaries such as `build/test_engine`
 
+The SDL app starts directly at the chart library. Put chart folders or zips under `charts/`; argv-based chart launching lives in the legacy CLI target and requires `-DBUILD_LEGACY_CLI=ON`.
+
 ## Use Paths
 
-- Renderer CLI usage: [../docs/CPP_RENDERER.md](../docs/CPP_RENDERER.md)
+- Renderer app usage: [../docs/CPP_RENDERER.md](../docs/CPP_RENDERER.md)
 - Python bindings usage: [../docs/PYTHON_BINDINGS.md](../docs/PYTHON_BINDINGS.md)
 - Internal architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Interfaces: [docs/INTERFACES.md](docs/INTERFACES.md)

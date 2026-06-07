@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# build_android.sh — Build phigros_render as an Android shared library (.so).
+# build_android.sh — Build phigros_sdl_app as an Android shared library (.so).
 #
 # Prerequisites:
 #   - Android NDK (r25+) installed
@@ -8,9 +8,8 @@
 #   - ABI: armeabi-v7a, arm64-v8a, x86, x86_64 (default: arm64-v8a)
 #   - API level: default 24 (Android 7.0+)
 #
-# The output is a shared library used by the Gradle project in android/.
-# Run this script first, then build the APK with `./gradlew assembleRelease`
-# from the android/ directory.
+# The Gradle project under cpp/android can build this target directly. This
+# script is useful when you want to compile one ABI manually.
 #
 # Usage:
 #   ./scripts/build_android.sh [ABI] [API_LEVEL] [Release|Debug]
@@ -60,18 +59,22 @@ cmake "$CPP_DIR" \
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
     -DUSE_BGFX=OFF \
     -DUSE_SDL3=OFF \
-    -DPHIGROS_ANDROID_LIB=ON
+    -DBUILD_RENDER_APP=ON \
+    -DBUILD_LEGACY_CLI=OFF \
+    -DBUILD_PYTHON_BINDINGS=OFF \
+    -DUSE_LIBAV=OFF \
+    -DUSE_ENCRYPTION=OFF
 
 echo "[Android] Building…"
 cmake --build . --parallel "$(nproc 2>/dev/null || echo 4)" \
-    --target phigros_render
+    --target phigros_sdl_app
 
 LIB_DIR="$CPP_DIR/android/app/src/main/jniLibs/$ABI"
 mkdir -p "$LIB_DIR"
-cp -f "$BUILD_DIR"/libphigros_render*.so "$LIB_DIR/" 2>/dev/null || true
+cp -f "$BUILD_DIR"/libphigros_sdl_app*.so "$LIB_DIR/" 2>/dev/null || true
 
 echo ""
 echo "[Android] Done → $BUILD_DIR/"
 echo "  .so copied to android/app/src/main/jniLibs/$ABI/"
 echo ""
-echo "Next: cd android && ./gradlew assembleDebug"
+echo "Next: cd $CPP_DIR/android && ./gradlew assembleDebug"

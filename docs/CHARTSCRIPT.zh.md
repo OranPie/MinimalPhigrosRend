@@ -1,9 +1,9 @@
 # ChartScript — 声明式谱面播放列表 DSL
 
 > 🌐 [English](CHARTSCRIPT.md)
-ChartScript 是内置于 `phigros_render` 中的播放列表脚本系统。
+ChartScript 是内置于旧 `phigros_render` CLI 中的播放列表脚本系统。
 它以统一的、基于 JSON 的 DSL 取代了 Python 版 `advance.json` / `gen_advance_from_charts.py` 工作流，
-表达能力更强、类型更完整，并完全运行于 C++ 渲染器内部。
+表达能力更强、类型更完整，并运行于 C++ legacy 渲染目标内部。
 
 ---
 

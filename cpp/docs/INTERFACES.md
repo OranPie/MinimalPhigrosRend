@@ -6,7 +6,8 @@ This page separates user-facing, binding-facing, and internal-only interfaces.
 
 ## User-Facing Entry Surfaces
 
-- `phigros_render`: native renderer/player CLI
+- `phigros_sdl_app`: native SDL renderer/player app
+- `phigros_render`: legacy native renderer/player CLI
 - `phigros_cpp`: Python package built from the native core
 - `chart_scanner`: chart discovery utility binary
 
@@ -25,11 +26,12 @@ Primary native interfaces under `include/phigros/`:
 
 ## Executable and Module Entry Points
 
-- `src/app/main.cpp`: renderer/player executable entry
+- `src/app/sdl_mobile_app.cpp`: SDL app entry shared by desktop, Android, and iOS
+- `src/app/main.cpp`: legacy renderer/player CLI entry
 - `src/main.cpp`: headless/native core entry
 - `src/python/module.cpp`: Python extension module definition
 - `src/api/python_api.cpp`: native API implementation shared by bindings
-- `include/phigros/api/mobile_bridge.h`: C ABI used by native mobile shells
+- `include/phigros/api/mobile_bridge.h`: legacy C ABI used by old native mobile shells
 - `include/phigros/app/app_args.hpp`: CLI option surface definition
 
 ## Binding Boundary

@@ -6,7 +6,8 @@ MinimalPhigrosRend 是一个以现代 C++ 核心为中心的 Phigros 谱面渲�
 
 当前仓库中持续维护的运行入口主要有：
 
-- `phigros_render`：桌面端 / WebAssembly 原生 C++ 渲染器与播放器
+- `phigros_sdl_app`：桌面端、Android、iOS 共用的 SDL 原生应用
+- `phigros_render`：显式打开 `BUILD_LEGACY_CLI=ON` 时可构建的旧命令行渲染器 / 播放器
 - `phigros_cpp`：Python 绑定，提供谱面加载、预处理、逐帧求值、自动游玩模拟与 PHBC 工作流
 - 一组辅助脚本，用于本地预览、谱面扫描、ChartScript 播放与 Web UI 导出
 
@@ -45,26 +46,27 @@ MinimalPhigrosRend/
 
 ## 快速开始
 
-构建原生渲染器：
+构建原生 SDL 应用：
 
 ```bash
 cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DUSE_BGFX=OFF
-cmake --build cpp/build --parallel
+cmake --build cpp/build --target phigros_sdl_app --parallel
 ```
 
-运行谱面：
+启动应用：
 
 ```bash
-./cpp/build/phigros_render charts/MyChart/IN.json
+./cpp/build/phigros_sdl_app
 ```
 
-常用变体：
+应用会直接进入 SDL 谱面库。将谱面目录或 zip 放到 `charts/` 下，然后在应用内进入详情、设置、播放、暂停和结算页。
+
+旧 CLI 仍可按需显式构建：
 
 ```bash
-./cpp/build/phigros_render charts/MyChart/IN.json --score-only
-./cpp/build/phigros_render charts/MyChart/IN.json --play
-./cpp/build/phigros_render charts/MyChart/IN.json --record out.mp4
-./cpp/build/phigros_render charts/MyChart/IN.json --config config/config.jsonc
+cmake -S cpp -B cpp/build_cli -DBUILD_LEGACY_CLI=ON -DUSE_BGFX=OFF
+cmake --build cpp/build_cli --target phigros_render --parallel
+./cpp/build_cli/phigros_render charts/MyChart/IN.json --score-only
 ```
 
 ## 常用文档入口

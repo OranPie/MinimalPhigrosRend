@@ -2,7 +2,7 @@
 
 > 🌐 [English](README.md)
 
-这个目录包含原生 C++ 实现：解析 / 核心库目标、渲染器 / 播放器应用、测试、平台包装工程、着色器，以及内部子系统文档。
+这个目录包含原生 C++ 实现：解析 / 核心库目标、SDL 渲染器 / 播放器应用、测试、平台包装工程、着色器，以及内部子系统文档。
 
 ## 目录结构
 
@@ -13,7 +13,7 @@ cpp/
 ├── cmake/                移动端 / 平台辅助 CMake 文件
 ├── include/phigros/
 │   ├── api/              暴露给 Python 绑定的原生 API
-│   ├── app/              CLI、窗口、输入、游戏循环集成
+│   ├── app/              SDL 应用、CLI、窗口、输入、游戏循环集成
 │   ├── chart/            谱面加载、解析、编译、PHBC I/O
 │   ├── config/           RenderConfig 加载 / 保存与默认值
 │   ├── core/             核心类型、日志、mods
@@ -23,7 +23,7 @@ cpp/
 │   ├── math/             缓动、轨道、数学工具
 │   └── render/           帧构建与绘制后端
 ├── src/
-│   ├── app/              原生渲染器应用入口
+│   ├── app/              SDL 应用与旧 CLI 入口
 │   ├── api/              供绑定使用的 C++ API 实现
 │   ├── chart/            解析器 / 加载器 / 编译器实现
 │   ├── python/           Python 扩展模块胶水层
@@ -46,19 +46,21 @@ cpp/
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_BGFX=OFF
-cmake --build build --parallel
+cmake --build build --target phigros_sdl_app --parallel
 ```
 
 常见产物：
 
-- `build/phigros_render`
+- `build/phigros_sdl_app`
 - `build/phigros_core`
 - `build/chart_scanner`
 - `build/test_engine` 等测试可执行文件
 
+SDL 应用启动后直接进入谱面库。将谱面目录或 zip 放到 `charts/`；基于 argv 的谱面启动属于旧 CLI 目标，需要显式打开 `-DBUILD_LEGACY_CLI=ON`。
+
 ## 文档入口
 
-- 渲染器 CLI 使用：[../docs/CPP_RENDERER.zh.md](../docs/CPP_RENDERER.zh.md)
+- 渲染器应用使用：[../docs/CPP_RENDERER.zh.md](../docs/CPP_RENDERER.zh.md)
 - Python 绑定使用：[../docs/PYTHON_BINDINGS.zh.md](../docs/PYTHON_BINDINGS.zh.md)
 - 内部架构：[docs/ARCHITECTURE.zh.md](docs/ARCHITECTURE.zh.md)
 - 接口：[docs/INTERFACES.zh.md](docs/INTERFACES.zh.md)

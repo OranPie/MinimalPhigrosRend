@@ -11,7 +11,7 @@
 ## 运行方式
 
 ```bash
-./cpp/build/phigros_render charts/MyChart/IN.json \
+./cpp/build_cli/phigros_render charts/MyChart/IN.json \
   --score-only \
   --mode scriptplay \
   --scriptplay docs/scriptplay_template.json

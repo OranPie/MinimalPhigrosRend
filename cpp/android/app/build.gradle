@@ -1,6 +1,5 @@
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
 }
 
 android {
@@ -20,8 +19,13 @@ android {
                 abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
                 arguments "-DUSE_BGFX=OFF",
                           "-DUSE_SDL3=OFF",
-                          "-DPHIGROS_ANDROID_LIB=ON",
+                          "-DBUILD_RENDER_APP=ON",
+                          "-DBUILD_LEGACY_CLI=OFF",
+                          "-DBUILD_PYTHON_BINDINGS=OFF",
+                          "-DUSE_LIBAV=OFF",
+                          "-DUSE_ENCRYPTION=OFF",
                           "-DANDROID_STL=c++_shared"
+                targets "phigros_sdl_app"
             }
         }
     }
@@ -52,25 +56,10 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = '17'
-    }
-
     buildFeatures {
-        compose true
-    }
-
-    composeOptions {
-        kotlinCompilerExtensionVersion '1.5.8'
+        buildConfig false
     }
 }
 
 dependencies {
-    implementation platform('androidx.compose:compose-bom:2024.02.01')
-    implementation 'androidx.core:core-ktx:1.12.0'
-    implementation 'androidx.activity:activity-compose:1.8.2'
-    implementation 'androidx.compose.material3:material3'
-    implementation 'androidx.compose.ui:ui'
-    implementation 'androidx.compose.ui:ui-tooling-preview'
-    debugImplementation 'androidx.compose.ui:ui-tooling'
 }

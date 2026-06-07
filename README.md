@@ -6,7 +6,8 @@ MinimalPhigrosRend is a Phigros chart renderer and chart-processing toolkit buil
 
 The active runtime surfaces in this repository are:
 
-- `phigros_render`: native C++ renderer / player for desktop and WebAssembly
+- `phigros_sdl_app`: native SDL app for desktop, Android, and iOS
+- `phigros_render`: optional legacy CLI renderer/player when `BUILD_LEGACY_CLI=ON`
 - `phigros_cpp`: Python bindings for chart loading, preprocessing, frame evaluation, autoplay simulation, and PHBC workflows
 - helper scripts for local preview, chart scanning, ChartScript playback, and Web UI export
 
@@ -45,36 +46,35 @@ MinimalPhigrosRend/
 
 ## Quick Start
 
-Build the native renderer:
+Build the native SDL app:
 
 ```bash
 cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DUSE_BGFX=OFF
-cmake --build cpp/build --parallel
+cmake --build cpp/build --target phigros_sdl_app --parallel
 ```
 
-Run a chart:
+Launch the app:
 
 ```bash
-./cpp/build/phigros_render charts/MyChart/IN.json
+./cpp/build/phigros_sdl_app
 ```
 
-Useful variants:
+The app opens directly into the SDL chart library. Put chart folders or zips under `charts/` and use the in-app library, detail, settings, play, pause, and result screens.
+
+Legacy CLI tools are still available when explicitly enabled:
 
 ```bash
-./cpp/build/phigros_render charts/MyChart/IN.json --score-only
-./cpp/build/phigros_render charts/MyChart/IN.json --play
-./cpp/build/phigros_render charts/MyChart/IN.json --record out.mp4
-./cpp/build/phigros_render charts/MyChart/IN.json --config config/config.jsonc
+cmake -S cpp -B cpp/build_cli -DBUILD_LEGACY_CLI=ON -DUSE_BGFX=OFF
+cmake --build cpp/build_cli --target phigros_render --parallel
+./cpp/build_cli/phigros_render charts/MyChart/IN.json --score-only
 ```
 
-Build orchestration and launch helpers:
+Build orchestration helpers:
 
 ```bash
 python3 scripts/build.py
 python3 scripts/build.py --profile desktop --build-type Debug
 python3 scripts/build.py --profile web --print-only
-python3 -m phigros_ui              # unified launcher UI (PySide6)
-python3 scripts/qt_launcher.py     # legacy alias for `python3 -m phigros_ui`
 ```
 
 ## Common Paths

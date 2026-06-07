@@ -9,7 +9,9 @@ This page documents the main build switches, target families, and verification w
 Important CMake options from `cpp/CMakeLists.txt`:
 
 - `BUILD_PYTHON_BINDINGS`
-- `BUILD_RENDER_APP`
+- `BUILD_RENDER_APP` (default SDL native app target)
+- `BUILD_LEGACY_CLI` (legacy argv-based `phigros_render`)
+- `BUILD_MOBILE_BRIDGE` (legacy Kotlin/Swift native UI bridge)
 - `USE_SDL3`
 - `USE_BGFX`
 - `USE_LIBAV`
@@ -21,11 +23,11 @@ These options decide which runtime surfaces and optional dependencies are compil
 
 ## Common Build Paths
 
-Renderer build:
+SDL app build:
 
 ```bash
 cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DUSE_BGFX=OFF
-cmake --build cpp/build --parallel
+cmake --build cpp/build --target phigros_sdl_app --parallel
 ```
 
 Bindings build:
@@ -42,7 +44,9 @@ Core/runtime targets:
 - `phigros_core_lib`
 - `phigros_core`
 - `phigros_python_api_lib`
-- `phigros_render`
+- `phigros_sdl_app`
+- `phigros_render` when `BUILD_LEGACY_CLI=ON`
+- `phigros_mobile_bridge` when `BUILD_MOBILE_BRIDGE=ON`
 - `chart_scanner`
 
 Test and benchmark targets:
@@ -60,7 +64,7 @@ Test and benchmark targets:
 
 - Desktop: SDL3 by default when enabled; SDL2 fallback paths exist.
 - WebAssembly: uses the web build helpers and Emscripten environment.
-- Mobile: platform wrappers live under `android/`, `ios/`, and `cmake/mobile.cmake`.
+- Android/iOS: minimal platform wrappers load the native SDL app. Legacy business UI bridges are behind `BUILD_MOBILE_BRIDGE`.
 - Optional codec/compression/encryption support depends on system packages and build flags.
 
 ## Verification Workflow

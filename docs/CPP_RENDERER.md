@@ -2,36 +2,49 @@
 
 > 🌐 [中文](CPP_RENDERER.zh.md)
 
-`phigros_render` is the user-facing native renderer/player in this repository.
+`phigros_sdl_app` is the user-facing native renderer/player in this repository.
 
-Use this page for build and runtime workflow. Use [../cpp/docs/](../cpp/docs/) for internal subsystem details.
+Use this page for build and runtime workflow. Use [../cpp/docs/](../cpp/docs/) for internal subsystem details. The older argv-based `phigros_render` executable remains available only when `BUILD_LEGACY_CLI=ON`.
 
 ## Quick Build
 
 ```bash
 cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DUSE_BGFX=OFF
-cmake --build cpp/build --parallel
+cmake --build cpp/build --target phigros_sdl_app --parallel
 ```
 
 Binary output:
 
-- `cpp/build/phigros_render`
+- `cpp/build/phigros_sdl_app`
 
 ## Quick Run
 
 ```bash
-./cpp/build/phigros_render charts/MyChart/IN.json
+./cpp/build/phigros_sdl_app
 ```
 
-Common tasks:
+The app opens directly into the SDL chart library. Put chart folders or chart zips under `charts/`, then use the in-app screens:
+
+- chart library and rescan
+- chart detail
+- settings
+- play view
+- pause menu
+- result screen
+
+The desktop, Android, and iOS builds share this SDL app entry instead of requiring a chart path from argv.
+
+## Legacy CLI
 
 ```bash
-./cpp/build/phigros_render charts/MyChart/IN.json --score-only
-./cpp/build/phigros_render charts/MyChart/IN.json --play
-./cpp/build/phigros_render charts/MyChart/IN.json --mode scriptplay --scriptplay docs/scriptplay_template.json
-./cpp/build/phigros_render charts/MyChart/IN.json --record out.mp4
-./cpp/build/phigros_render charts/MyChart/IN.json --benchmark --benchmark-iterations 20
-./cpp/build/phigros_render charts/MyChart/IN.json --config config/config.jsonc
+cmake -S cpp -B cpp/build_cli -DBUILD_LEGACY_CLI=ON -DUSE_BGFX=OFF
+cmake --build cpp/build_cli --target phigros_render --parallel
+./cpp/build_cli/phigros_render charts/MyChart/IN.json --score-only
+./cpp/build_cli/phigros_render charts/MyChart/IN.json --play
+./cpp/build_cli/phigros_render charts/MyChart/IN.json --mode scriptplay --scriptplay docs/scriptplay_template.json
+./cpp/build_cli/phigros_render charts/MyChart/IN.json --record out.mp4
+./cpp/build_cli/phigros_render charts/MyChart/IN.json --benchmark --benchmark-iterations 20
+./cpp/build_cli/phigros_render charts/MyChart/IN.json --config config/config.jsonc
 ```
 
 ## Supported Inputs
@@ -43,7 +56,7 @@ Common tasks:
 
 For format internals, see [../cpp/docs/FORMAT.md](../cpp/docs/FORMAT.md) and [../cpp/docs/CHART_LOADER.md](../cpp/docs/CHART_LOADER.md).
 
-## Common CLI Areas
+## Common Legacy CLI Areas
 
 Playback:
 
@@ -110,10 +123,10 @@ Utility and logging:
 
 ## Config
 
-Use `--config <path>` with a JSON/JSONC-style file:
+The SDL app currently uses built-in defaults and in-app toggles for its runtime settings. The legacy CLI can still load a JSON/JSONC-style config:
 
 ```bash
-./cpp/build/phigros_render charts/MyChart/IN.json --config config/config.jsonc
+./cpp/build_cli/phigros_render charts/MyChart/IN.json --config config/config.jsonc
 ```
 
 Read these next:

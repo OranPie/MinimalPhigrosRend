@@ -53,7 +53,8 @@ Key targets defined in `cpp/CMakeLists.txt`:
 | `phigros_core_lib` | Core chart/parser/compiler library (no render deps) |
 | `phigros_core` | Headless/native CLI target built on `phigros_core_lib` |
 | `phigros_python_api_lib` | Native API layer consumed by the Python extension |
-| `phigros_render` | Full renderer/player app (render-app targets must be enabled) |
+| `phigros_sdl_app` | SDL renderer/player app shared by desktop, Android, and iOS |
+| `phigros_render` | Legacy argv-based renderer/player app (`BUILD_LEGACY_CLI=ON`) |
 | `chart_scanner` | Chart-directory discovery utility |
 | `test_easing`, `test_engine`, `test_parser`, `test_logger`, `test_zip_extract`, `verify_chart`, `bench` | Unit tests and benchmark entrypoints |
 

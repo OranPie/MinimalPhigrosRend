@@ -4,11 +4,12 @@
 
 本页说明当前仓库中的配置是如何使用的。
 
-它覆盖当前仍在维护的 C++ 渲染器与 `phigros_cpp` 求值工作流，不再把历史上的独立 Python 渲染器路径当作当前主路径来描述。
+它覆盖当前仍在维护的 SDL 应用、旧 C++ CLI 工具与 `phigros_cpp` 求值工作流，不再把历史上的独立 Python 渲染器路径当作当前主路径来描述。
 
 ## 哪些入口会使用配置
 
-- `phigros_render`：通过 `--config` 加载运行时渲染 / 播放配置
+- `phigros_sdl_app`：应用内默认值与开关使用同一套运行时渲染 / 播放配置模型
+- `phigros_render`：显式打开 `BUILD_LEGACY_CLI=ON` 时，通过 `--config` 加载旧 CLI 配置
 - `phigros_cpp`：逐帧求值与自动游玩辅助函数使用的配置对象
 - ChartScript：在同一套渲染配置模型上叠加每个条目 / 片段的覆盖配置
 
@@ -32,12 +33,12 @@
 
 ChartScript 会在同一套渲染配置模型上，为每个条目或片段继续叠加覆盖。
 
-## 渲染器工作流
+## 旧 CLI 工作流
 
 示例：
 
 ```bash
-./cpp/build/phigros_render charts/MyChart/IN.json --config config/config.jsonc --width 1920 --height 1080 --approach 2.6
+./cpp/build_cli/phigros_render charts/MyChart/IN.json --config config/config.jsonc --width 1920 --height 1080 --approach 2.6
 ```
 
 常见分工：
@@ -46,7 +47,7 @@ ChartScript 会在同一套渲染配置模型上，为每个条目或片段继�
 - 临时试验性的参数放在 CLI 里
 - 播放列表特定视觉放在 ChartScript 覆盖配置里
 
-CLI 用法见 [CPP_RENDERER.zh.md](CPP_RENDERER.zh.md)，字段内部参考见 [../cpp/docs/CONFIG.zh.md](../cpp/docs/CONFIG.zh.md)。
+应用与旧 CLI 用法见 [CPP_RENDERER.zh.md](CPP_RENDERER.zh.md)，字段内部参考见 [../cpp/docs/CONFIG.zh.md](../cpp/docs/CONFIG.zh.md)。
 
 ## Python 工作流
 
@@ -75,7 +76,7 @@ Python API 入口见 [PYTHON_BINDINGS.zh.md](PYTHON_BINDINGS.zh.md)。
 
 ## 应该看哪份文档
 
-- 想知道 CLI 怎么传配置：看 [CPP_RENDERER.zh.md](CPP_RENDERER.zh.md)
+- 想知道配置如何用于 SDL 应用和旧 CLI：看 [CPP_RENDERER.zh.md](CPP_RENDERER.zh.md)
 - 想知道字段默认值、截断规则、嵌套结构或序列化行为：看 [../cpp/docs/CONFIG.zh.md](../cpp/docs/CONFIG.zh.md)
 - 想看 ChartScript 覆盖示例：看 [CHARTSCRIPT.zh.md](CHARTSCRIPT.zh.md)
 - 想看完整文档地图：看 [INDEX.zh.md](INDEX.zh.md)

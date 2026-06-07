@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# build_desktop.sh — Build phigros_render for the current desktop platform.
+# build_desktop.sh — Build the SDL native app for the current desktop platform.
 # Usage: ./scripts/build_desktop.sh [Release|Debug] [extra cmake args...]
 set -euo pipefail
 
@@ -15,14 +15,16 @@ cd "$BUILD_DIR"
 echo "[Desktop] Configuring (${BUILD_TYPE})…"
 cmake "$CPP_DIR" \
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+    -DBUILD_RENDER_APP=ON \
+    -DBUILD_LEGACY_CLI=OFF \
     -DUSE_BGFX=OFF \
     -DUSE_SDL3=ON \
     "$@"
 
 echo "[Desktop] Building…"
-cmake --build . --parallel "$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)"
+cmake --build . --target phigros_sdl_app --parallel "$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 
 echo ""
-echo "[Desktop] Done → $BUILD_DIR/phigros_render"
-echo "Usage: $BUILD_DIR/phigros_render <chart> [options]"
-echo "       $BUILD_DIR/phigros_render --help"
+echo "[Desktop] Done → $BUILD_DIR/phigros_sdl_app"
+echo "Run: $BUILD_DIR/phigros_sdl_app"
+echo "Put chart folders or zips under charts/ and use the in-app library."

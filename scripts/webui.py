@@ -6,7 +6,7 @@ Two render modes:
   2. Export    — headless + --record, produces downloadable MP4
 
 Usage:
-    python3 scripts/webui.py [--port 8080] [--binary cpp/build/phigros_render]
+    python3 scripts/webui.py [--port 8080] [--binary cpp/build_cli/phigros_render]
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ except ImportError:
 _HERE   = Path(__file__).resolve().parent
 _ROOT   = _HERE.parent
 _CHARTS = _ROOT / "charts"
-_BIN    = _ROOT / "cpp" / "build" / "phigros_render"
+_BIN    = _ROOT / "cpp" / "build_cli" / "phigros_render"
 _RESPACK = _ROOT / "respack.zip"
 _TMP    = Path("/tmp/phigros_webui")
 _TMP.mkdir(parents=True, exist_ok=True)

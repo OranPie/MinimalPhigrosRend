@@ -1,6 +1,6 @@
 # Legacy Advance Mode Guide
 
-> 本文档描述的是历史上的 Python `phic_renderer` advance 工作流，不是当前 `phigros_render` 的主路径。
+> 本文档描述的是历史上的 Python `phic_renderer` advance 工作流，不是当前 `phigros_sdl_app` 的主路径。
 > 当前 C++ 渲染器请使用 ChartScript DSL，见 [CHARTSCRIPT.md](CHARTSCRIPT.md)。
 > 当前配置工作流见 [CONFIG_USAGE.md](CONFIG_USAGE.md)。
 

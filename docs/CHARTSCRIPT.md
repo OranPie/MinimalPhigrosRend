@@ -1,10 +1,10 @@
 # ChartScript — Declarative Chart Playlist DSL
 
 > 🌐 [中文](CHARTSCRIPT.zh.md)
-ChartScript is the playlist scripting system built into `phigros_render`.
+ChartScript is the playlist scripting system built into the legacy `phigros_render` CLI.
 It replaces the Python `advance.json` / `gen_advance_from_charts.py` workflow
 with a unified JSON-based DSL that is more expressive, fully typed, and runs
-entirely inside the C++ renderer.
+inside the C++ legacy renderer target.
 
 ---
 

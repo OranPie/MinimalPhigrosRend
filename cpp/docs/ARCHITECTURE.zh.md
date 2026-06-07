@@ -53,7 +53,8 @@ cpp/
 | `phigros_core_lib` | 核心谱面/解析器/编译器库（无渲染依赖） |
 | `phigros_core` | 基于 `phigros_core_lib` 的无头/原生 CLI 目标 |
 | `phigros_python_api_lib` | Python 扩展所使用的原生 API 层 |
-| `phigros_render` | 完整渲染器/播放器应用（启用渲染目标后） |
+| `phigros_sdl_app` | 桌面端、Android 与 iOS 共用的 SDL 渲染器/播放器应用 |
+| `phigros_render` | 旧 argv 渲染器/播放器应用（`BUILD_LEGACY_CLI=ON`） |
 | `chart_scanner` | 谱面目录发现工具 |
 | `test_easing`, `test_engine`, `test_parser`, `test_logger`, `test_zip_extract`, `verify_chart`, `bench` | 单元测试和基准测试入口 |
 
