@@ -13,9 +13,10 @@ struct HitFX {
     double x, y;
     double t0;
     math::RGB rgba;
+    uint8_t alpha = 255;
     double rot = 0.0;
     double rot_speed = 0.0;   // radians/sec — for sheet rotation animation
-    std::string variant;      // "" = default, "good" = GOOD effect sheet
+    std::string variant;      // "" = default, "perfect", "good"
 
     bool alive(double t, double duration = 0.5) const {
         return t < t0 + duration;
@@ -122,8 +123,9 @@ public:
 
     // Add a hit-flash animation at (x,y). Also spawns a FlashFX ring.
     void add_hitfx(double x, double y, double t, math::RGB color, double rot = 0.0,
-                   double rot_speed = 0.0, const std::string& variant = "") {
-        hitfx.push_back({x, y, t, color, rot, rot_speed, variant});
+                   double rot_speed = 0.0, const std::string& variant = "",
+                   uint8_t alpha = 255) {
+        hitfx.push_back({x, y, t, color, alpha, rot, rot_speed, variant});
         flashes.push_back({x, y, t, color});
     }
 
@@ -147,7 +149,9 @@ public:
     void hold_tick_fx(std::vector<NoteState>& states, int idx_next,
                       double t, int hold_fx_interval_ms,
                       const std::vector<Line>& lines,
-                      math::RGB default_hitfx_color = {235, 255, 236}) {
+                      math::RGB default_hitfx_color = {255, 236, 159},
+                      uint8_t default_hitfx_alpha = 0xe1,
+                      const std::string& variant = "perfect") {
         int st0 = std::max(0, idx_next - 50);
         int st1 = std::min(static_cast<int>(states.size()), idx_next + 500);
         int now_ms = static_cast<int>(t * 1000.0);
@@ -167,7 +171,8 @@ public:
                                                  ls.scroll, n, n.scroll_hit,
                                                  false, 1.0, false, true);  // hold_keep_head=true → line position
                     math::RGB color = n.tint_hitfx_rgb.value_or(default_hitfx_color);
-                    add_hitfx(pos.x, pos.y, t, color, ls.rot);
+                    add_hitfx(pos.x, pos.y, t, color, ls.rot, 0.0,
+                              variant, default_hitfx_alpha);
                     add_particle_burst(pos.x, pos.y, t * 1000.0, 500.0, color);
                 }
             }

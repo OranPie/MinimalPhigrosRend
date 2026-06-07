@@ -25,6 +25,7 @@ struct Note {
     double speed_mul = 1.0;
     double size_px = 1.0;
     double alpha01 = 1.0;
+    double judge_area = 1.0;
 
     math::RGB tint_rgb{255, 255, 255};
     std::optional<math::RGB> tint_hitfx_rgb;
@@ -152,14 +153,38 @@ struct NoteState {
     std::string judge_grade;
 };
 
+// Optional package/chart metadata. Field names mirror Phira ChartInfo where
+// they are useful to this renderer, while keeping the runtime model format-agnostic.
+struct ChartMetadata {
+    std::string name;
+    std::string level;
+    std::string composer;
+    std::string charter;
+    std::string illustrator;
+    std::string format;
+    double difficulty = 0.0;
+    double preview_start = 0.0;
+    std::optional<double> preview_end;
+    double aspect_ratio = 16.0 / 9.0;
+    double background_dim = 0.6;
+    double line_length = 6.0;
+    bool hold_partial_cover = false;
+    bool note_uniform_scale = false;
+    bool force_aspect_ratio = false;
+    std::string song_path;
+    std::string bg_path;
+};
+
 // Result of loading a chart
 struct ChartData {
     double offset = 0.0; // seconds
     std::vector<Line> lines;
     std::vector<Note> notes; // sorted by t_hit
 
-    // Optional paths from RPE META (relative to chart root).
-    // Populated by load_rpe(); empty if not present or not an RPE chart.
+    ChartMetadata metadata;
+
+    // Compatibility fields for existing call sites. New code should prefer
+    // metadata.song_path / metadata.bg_path.
     std::string meta_song_path;
     std::string meta_bg_path;
 

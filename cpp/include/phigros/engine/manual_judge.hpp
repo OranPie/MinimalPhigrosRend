@@ -5,6 +5,7 @@
 #include "phigros/engine/effects.hpp"
 #include "phigros/render/renderer.hpp"  // FrameSnapshot / NoteSnapshot
 #include "phigros/core/types.hpp"
+#include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
 #include <cmath>
@@ -28,8 +29,10 @@ struct ManualJudge {
     std::unordered_map<int64_t, int> drag_chain_map;
 
     // Default hitfx tints (typically from respack config).
-    math::RGB hitfx_color_perfect{235, 255, 236};
-    math::RGB hitfx_color_good{235, 180, 225};
+    math::RGB hitfx_color_perfect{255, 236, 159};
+    math::RGB hitfx_color_good{180, 225, 255};
+    uint8_t hitfx_alpha_perfect = 0xe1;
+    uint8_t hitfx_alpha_good = 0xeb;
 
     // Optional callback invoked whenever a note is judged (for ReplayWriter)
     std::function<void(int note_idx, float t, const std::string& grade)> on_judgment;
@@ -106,7 +109,9 @@ struct ManualJudge {
                     float dx = a.x - static_cast<float>(ns.wx);
                     float dy = a.y - static_cast<float>(ns.wy);
                     float d2 = dx * dx + dy * dy;
-                    if (d2 > r2) continue;
+                    float note_r2 = r2 * static_cast<float>(
+                        std::max(0.0, note.judge_area) * std::max(0.0, note.judge_area));
+                    if (d2 > note_r2) continue;
 
                     if (dt < best_dt - 0.001 || (std::abs(dt - best_dt) < 0.001 && d2 < best_dist2)) {
                         best_dt = dt;
@@ -194,7 +199,9 @@ struct ManualJudge {
                 if (a.has_position) {
                     float dx = a.x - static_cast<float>(ns.wx);
                     float dy = a.y - static_cast<float>(ns.wy);
-                    if (dx * dx + dy * dy <= r2) {
+                    float note_r2 = r2 * static_cast<float>(
+                        std::max(0.0, note.judge_area) * std::max(0.0, note.judge_area));
+                    if (dx * dx + dy * dy <= note_r2) {
                         caught = true;
                         catching_ptr = a.id;
                     }
@@ -230,6 +237,14 @@ private:
         return hitfx_color_perfect;
     }
 
+    std::string _resolve_hitfx_variant(const std::string& grade) const {
+        return (grade == "GOOD" || grade == "BAD") ? "good" : "perfect";
+    }
+
+    uint8_t _resolve_hitfx_alpha(const std::string& grade) const {
+        return (grade == "GOOD" || grade == "BAD") ? hitfx_alpha_good : hitfx_alpha_perfect;
+    }
+
     void _emit_effect(EffectManager& effects,
                       const phigros::render::FrameSnapshot& frame,
                       int nidx, double t, const Note& note, const std::string& grade) {
@@ -237,7 +252,10 @@ private:
         for (const auto& ns : frame.notes) {
             if (ns.nid == nidx) {
                 math::RGB color = _resolve_hitfx_color(note, grade);
-                effects.add_hitfx(ns.wx, ns.wy, t, color);
+                effects.add_hitfx(ns.wx, ns.wy, t, color,
+                                  0.0, 0.0,
+                                  _resolve_hitfx_variant(grade),
+                                  _resolve_hitfx_alpha(grade));
                 effects.add_particle_burst(ns.wx, ns.wy, t * 1000.0, 500.0, color);
                 PHLOG_TRACE(Input, "EmitEffect note=" << nidx
                     << " grade=" << grade

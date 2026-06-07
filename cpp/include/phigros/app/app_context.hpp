@@ -110,7 +110,7 @@ struct AppContext {
               int W, int H,
               const config::RenderConfig& cfg,
               bool               no_vsync = false,
-              const std::string& meta_bg_path = {})
+              const ChartMetadata& chart_metadata = {})
     {
         namespace fs = std::filesystem;
 
@@ -168,15 +168,15 @@ struct AppContext {
             << " holdRepeat=" << respack.cfg.hold_repeat
             << " holdCompact=" << respack.cfg.hold_compact);
 
-        // Background — priority: CLI/script override > config > RPE meta > auto-discover
+        // Background — priority: CLI/script override > config > chart metadata > package > auto-discover
         std::string bgp = bg_override.empty() ? cfg.bg_path : bg_override;
 
-        // RPE meta_bg_path: relative to chart root
-        if (bgp.empty() && !meta_bg_path.empty()) {
+        // Chart metadata bg path: relative to chart root/package.
+        if (bgp.empty() && !chart_metadata.bg_path.empty()) {
             if (chart_is_zip)
-                bgp = chart_zip_file + ":" + meta_bg_path;
+                bgp = chart_zip_file + ":" + chart_metadata.bg_path;
             else if (!chart_dir.empty())
-                bgp = (fs::path(chart_dir) / meta_bg_path).string();
+                bgp = (fs::path(chart_dir) / chart_metadata.bg_path).string();
             PHLOG_TRACE(Render, "Background from chart metadata: " << bgp);
         }
 
@@ -258,6 +258,7 @@ struct AppContext {
             PHLOG_INFO(Render, "Trail enabled: alpha=" << cfg.trail_alpha.value()
                 << " frames=" << cfg.trail_frames.value_or(6)
                 << " decay=" << cfg.trail_decay.value_or(0.85));
+
         if (motion_blur.enabled())
             PHLOG_INFO(Render, "MotionBlur enabled: samples=" << cfg.motion_blur_samples.value()
                 << " shutter=" << cfg.motion_blur_shutter.value_or(0.5));
@@ -266,14 +267,21 @@ struct AppContext {
         hud_ren.screen_w = W;
         hud_ren.screen_h = H;
 
-        // Audio
+        // Audio — priority: CLI/script override > package > chart metadata > auto-discover
         audio_path = audio_override;
-        if (audio_path.empty())
+        if (audio_path.empty() && !resolved_audio_path.empty())
             audio_path = resolved_audio_path;
+        if (audio_path.empty() && !chart_metadata.song_path.empty()) {
+            if (chart_is_zip)
+                audio_path = chart_zip_file + ":" + chart_metadata.song_path;
+            else if (!chart_dir.empty())
+                audio_path = (fs::path(chart_dir) / chart_metadata.song_path).string();
+        }
         if (audio_path.empty() && !chart_dir.empty())
             audio_path = find_chart_audio(chart_dir);
         PHLOG_DEBUG(Audio, "Audio resolution: override="
             << (audio_override.empty() ? "<none>" : audio_override)
+            << " metadata=" << (chart_metadata.song_path.empty() ? "<none>" : chart_metadata.song_path)
             << " resolved=" << (audio_path.empty() ? "<none>" : audio_path));
         if (!audio_path.empty()) {
             if (audio.init()) {

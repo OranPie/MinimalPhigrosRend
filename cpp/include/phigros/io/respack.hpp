@@ -58,10 +58,10 @@ struct RespackConfig {
     bool hold_keep_head = false;
     bool hold_repeat = false;
     bool hold_compact = false;
-    math::RGB color_perfect{235, 255, 236};
-    math::RGB color_good{235, 180, 225};
-    uint8_t alpha_perfect = 160;
-    uint8_t alpha_good = 255;
+    math::RGB color_perfect{255, 236, 159};
+    math::RGB color_good{180, 225, 255};
+    uint8_t alpha_perfect = 0xe1;
+    uint8_t alpha_good = 0xeb;
 };
 
 struct Respack {
@@ -73,6 +73,8 @@ struct Respack {
 
     // Hit effect spritesheet
     render::Texture hitfx_sheet;
+    render::Texture hitfx_sheet_perfect;
+    render::Texture hitfx_sheet_good;
 
     // Raw hitsound OGG bytes loaded from respack (indexed by note kind 1–4).
     // Index 0 unused; 3 (hold) is empty if the respack has no hold.ogg.
@@ -119,7 +121,10 @@ struct Respack {
     void destroy() {
         click.destroy(); drag.destroy(); flick.destroy(); hold.destroy();
         click_mh.destroy(); drag_mh.destroy(); flick_mh.destroy(); hold_mh.destroy();
-        hitfx_sheet.destroy(); white_tex.destroy();
+        hitfx_sheet.destroy();
+        hitfx_sheet_perfect.destroy();
+        hitfx_sheet_good.destroy();
+        white_tex.destroy();
         loaded = false;
     }
 };
@@ -127,14 +132,18 @@ struct Respack {
 // Parse hex color 0xAARRGGBB or 0xRRGGBB
 inline void parse_hex_color(const std::string& s, math::RGB& rgb, uint8_t& alpha) {
     unsigned long long val = 0;
+    std::string raw = trim_copy(s);
     try {
-        if (s.size() > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
-            val = std::stoull(s.substr(2), nullptr, 16);
+        if (raw.size() > 2 && raw[0] == '0' && (raw[1] == 'x' || raw[1] == 'X'))
+            val = std::stoull(raw.substr(2), nullptr, 16);
         else
-            val = std::stoull(s, nullptr, 16);
+            val = std::stoull(raw, nullptr, 16);
     } catch (...) { return; }
 
-    if (s.size() > 8) { // 0xAARRGGBB
+    size_t digits = raw.size();
+    if (digits > 2 && raw[0] == '0' && (raw[1] == 'x' || raw[1] == 'X'))
+        digits -= 2;
+    if (digits == 8) { // AARRGGBB
         alpha = static_cast<uint8_t>((val >> 24) & 0xFF);
         rgb.r = static_cast<uint8_t>((val >> 16) & 0xFF);
         rgb.g = static_cast<uint8_t>((val >> 8) & 0xFF);
@@ -306,6 +315,8 @@ inline Respack load_respack(SDL_Renderer* ren, const std::string& zip_path) {
     rp.flick_mh  = load_tex_from_zip(zip, ren, "flick_mh.png");
     rp.hold_mh   = load_tex_from_zip(zip, ren, "hold_mh.png");
     rp.hitfx_sheet = load_tex_from_zip(zip, ren, "hit_fx.png");
+    rp.hitfx_sheet_perfect = load_tex_from_zip(zip, ren, "hit_fx_perfect.png");
+    rp.hitfx_sheet_good = load_tex_from_zip(zip, ren, "hit_fx_good.png");
 
     // Hitsound audio (OGG bytes stored for AudioSystem to decode into pools)
     rp.hitsound_ogg[1] = zip_extract(zip, "click.ogg");

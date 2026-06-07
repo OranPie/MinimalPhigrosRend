@@ -10,10 +10,7 @@
 //   t, W, H, lines[], frame_notes[], all_holds[]
 
 #include "phigros/core/logger.hpp"
-#include "phigros/chart/format_detect.hpp"
-#include "phigros/chart/parser.hpp"
 #include "phigros/chart/chart_loader.hpp"
-#include "phigros/chart/phbc_io.hpp"
 #include "phigros/engine/kinematics.hpp"
 #include "phigros/engine/judge.hpp"
 #include "phigros/engine/visibility.hpp"
@@ -21,9 +18,8 @@
 #include "phigros/engine/exact_autoplay.hpp"
 #include "phigros/config/render_config.hpp"
 #include "phigros/render/renderer.hpp"
-#include <nlohmann/json.hpp>
 #include <fstream>
-#include <sstream>
+#include <iostream>
 #include <cstdio>
 #include <cmath>
 #include <string>
@@ -31,46 +27,13 @@
 #include <algorithm>
 #include <filesystem>
 
-using json = nlohmann::json;
+using namespace phigros;
+using namespace phigros::render;
+using namespace phigros::engine;
 namespace fs = std::filesystem;
 
-static phigros::ChartData load_chart_auto(const std::string& path, int W, int H) {
-    // Zip reference: "archive.zip:file.json"
-    if (phigros::chart::is_zip_path(path)) {
-        auto [zip_path, file_in_zip] = phigros::chart::split_zip_path(path);
-        auto data = phigros::chart::extract_zip_file(zip_path, file_in_zip);
-        if (data.empty()) throw std::runtime_error("Failed to extract from zip: " + path);
-        std::string ext = fs::path(file_in_zip).extension().string();
-        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-        if (ext == ".phbc") {
-            std::string blob(data.begin(), data.end());
-            std::istringstream in(blob, std::ios::in | std::ios::binary);
-            return phigros::chart::read_phbc(in).to_chart_data();
-        }
-        std::string text(data.begin(), data.end());
-        std::string fmt = phigros::chart::detect_format_text(text);
-        if (fmt == "rpe") return phigros::chart::load_rpe(json::parse(text), W, H);
-        if (fmt == "official") return phigros::chart::load_official(json::parse(text), W, H);
-        return phigros::chart::load_pec_text(text, W, H);
-    }
-    // Resolve chart directory entry
-    if (auto resolved = phigros::chart::resolve_chart_entry(path))
-        return load_chart_auto(resolved->chart_path, W, H);
-    // Direct file
-    std::string ext = fs::path(path).extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-    if (ext == ".phbc") {
-        std::ifstream f(path, std::ios::binary);
-        if (!f) throw std::runtime_error("Cannot open: " + path);
-        return phigros::chart::read_phbc(f).to_chart_data();
-    }
-    std::ifstream f(path);
-    if (!f) throw std::runtime_error("Cannot open: " + path);
-    std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    std::string fmt = phigros::chart::detect_format_text(text);
-    if (fmt == "rpe") return phigros::chart::load_rpe(json::parse(text), W, H);
-    if (fmt == "official") return phigros::chart::load_official(json::parse(text), W, H);
-    return phigros::chart::load_pec(path, W, H);
+static ChartData load_chart_auto(const std::string& path, int W, int H) {
+    return chart::load_chart_data(path, W, H);
 }
 
 int main(int argc, char* argv[]) {

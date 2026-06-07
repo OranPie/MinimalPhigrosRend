@@ -179,6 +179,7 @@ add_library(phigros_core_lib STATIC
     src/chart/official.cpp
     src/chart/rpe.cpp
     src/chart/pec.cpp
+    src/chart/pbc.cpp
     src/chart/compiler.cpp
     src/chart/phbc_io.cpp
     src/chart/phbc_compress.cpp

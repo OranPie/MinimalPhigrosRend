@@ -42,22 +42,35 @@ struct HitFXRenderer {
               float intensity = 1.0f,
               int W = 1280, int H = 720, double expand = 1.0) const {
 
-        const auto& sheet = respack.hitfx_sheet;
-        bool has_sheet = sheet.valid();
         int cols = respack.cfg.hitfx_cols;
         int rows = respack.cfg.hitfx_rows;
         int total_frames = cols * rows;
         double duration = respack.cfg.hitfx_duration;
         double scale = respack.cfg.hitfx_scale;
 
-        int cell_w = (has_sheet && cols > 0) ? (sheet.w / cols) : 0;
-        int cell_h = (has_sheet && rows > 0) ? (sheet.h / rows) : 0;
-        double draw_size = (cell_w > 0) ? apply_expand_size(cell_w * scale, expand) : 0.0;
+        auto sheet_for = [&](const engine::HitFX& fx) -> const Texture& {
+            if (fx.variant == "good" && respack.hitfx_sheet_good.valid())
+                return respack.hitfx_sheet_good;
+            if (fx.variant == "perfect" && respack.hitfx_sheet_perfect.valid())
+                return respack.hitfx_sheet_perfect;
+            if (respack.hitfx_sheet.valid()) return respack.hitfx_sheet;
+            if (respack.hitfx_sheet_perfect.valid()) return respack.hitfx_sheet_perfect;
+            return respack.hitfx_sheet_good;
+        };
+        const bool has_any_sheet = respack.hitfx_sheet.valid()
+            || respack.hitfx_sheet_perfect.valid()
+            || respack.hitfx_sheet_good.valid();
 
         if (show_hitfx) {
             // ── Spritesheet hit effects ──────────────────────────────────────
-            if (has_sheet && cell_w > 0 && cell_h > 0 && total_frames > 0) {
+            if (has_any_sheet && cols > 0 && rows > 0 && total_frames > 0) {
                 for (const auto& fx : effects.hitfx) {
+                    const auto& sheet = sheet_for(fx);
+                    if (!sheet.valid()) continue;
+                    int cell_w = sheet.w / cols;
+                    int cell_h = sheet.h / rows;
+                    if (cell_w <= 0 || cell_h <= 0) continue;
+                    double draw_size = apply_expand_size(cell_w * scale, expand);
                     double age = t - fx.t0;
                     if (age < 0 || age > duration) continue;
 
@@ -73,7 +86,7 @@ struct HitFXRenderer {
                     // Ease-out alpha: fast start, slow fade (matches visual impact)
                     double fade = std::pow(1.0 - p, 0.65);
                     uint8_t a = static_cast<uint8_t>(
-                        std::clamp(255.0 * fade * double(intensity), 0.0, 255.0));
+                        std::clamp(double(fx.alpha) * fade * double(intensity), 0.0, 255.0));
 
                     // Animated rotation (rot + rot_speed * age)
                     double rendered_rot = respack.cfg.hitfx_rotate
@@ -89,7 +102,7 @@ struct HitFXRenderer {
             }
 
             // ── Flash ring (fallback when no sheet, matches Python reference) ─
-            if (!has_sheet) {
+            if (!has_any_sheet) {
                 for (const auto& f : effects.flashes) {
                     double age = t - f.t0;
                     if (age < 0 || age > engine::FlashFX::DURATION) continue;

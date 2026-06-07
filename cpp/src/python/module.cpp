@@ -65,12 +65,36 @@ py::dict chart_assets_to_dict(const chart::ChartAssets& assets) {
     return d;
 }
 
+py::dict chart_metadata_to_dict(const ChartMetadata& metadata) {
+    py::dict d;
+    d["name"] = metadata.name;
+    d["level"] = metadata.level;
+    d["composer"] = metadata.composer;
+    d["charter"] = metadata.charter;
+    d["illustrator"] = metadata.illustrator;
+    d["format"] = metadata.format;
+    d["difficulty"] = metadata.difficulty;
+    d["preview_start"] = metadata.preview_start;
+    d["preview_end"] = metadata.preview_end ? py::cast(*metadata.preview_end) : py::none();
+    d["aspect_ratio"] = metadata.aspect_ratio;
+    d["background_dim"] = metadata.background_dim;
+    d["line_length"] = metadata.line_length;
+    d["hold_partial_cover"] = metadata.hold_partial_cover;
+    d["note_uniform_scale"] = metadata.note_uniform_scale;
+    d["force_aspect_ratio"] = metadata.force_aspect_ratio;
+    d["song_path"] = metadata.song_path;
+    d["bg_path"] = metadata.bg_path;
+    return d;
+}
+
 py::dict chart_entry_to_dict(const chart::ChartEntry& entry) {
     py::dict d;
     d["name"] = entry.name;
     d["difficulty"] = entry.difficulty;
     d["chart_path"] = entry.chart_path;
     d["source_type"] = entry.source_type;
+    d["format"] = chart::chart_format_name(entry.format);
+    d["metadata"] = chart_metadata_to_dict(entry.metadata);
     d["assets"] = chart_assets_to_dict(entry.assets);
     return d;
 }

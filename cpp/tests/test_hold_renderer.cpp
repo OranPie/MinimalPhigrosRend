@@ -102,6 +102,17 @@ hitFxTinted: false
         mz_zip_reader_end(&reader);
     }
     std::filesystem::remove(zip_path);
+
+    {
+        math::RGB perfect{};
+        uint8_t alpha = 0;
+        io::parse_hex_color("0xe1ffec9f", perfect, alpha);
+        check("argb_alpha_perfect", alpha == 0xe1);
+        check("argb_rgb_perfect", perfect.r == 0xff && perfect.g == 0xec && perfect.b == 0x9f);
+        io::parse_hex_color("ebb4e1ff", perfect, alpha);
+        check("argb_alpha_no_prefix", alpha == 0xeb);
+        check("argb_rgb_no_prefix", perfect.r == 0xb4 && perfect.g == 0xe1 && perfect.b == 0xff);
+    }
 }
 
 int main() {

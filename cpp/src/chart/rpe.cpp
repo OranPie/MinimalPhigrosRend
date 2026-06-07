@@ -263,11 +263,20 @@ ChartData load_rpe(const json& data, int W, int H, int rpe_easing_shift) {
         << " easing_shift=" << rpe_easing_shift);
     double offset_ms = meta.value("offset", 0.0);
     result.offset = offset_ms / 1000.0;
+    result.metadata.format = "rpe";
+    result.metadata.name = meta.value("name", std::string{});
+    result.metadata.composer = meta.value("composer", std::string{});
+    result.metadata.charter = meta.value("charter", std::string{});
+    result.metadata.level = meta.value("level", std::string{});
     // RPE META: song and background paths (relative to chart root)
-    if (meta.contains("song") && meta["song"].is_string())
+    if (meta.contains("song") && meta["song"].is_string()) {
         result.meta_song_path = meta["song"].get<std::string>();
-    if (meta.contains("background") && meta["background"].is_string())
+        result.metadata.song_path = result.meta_song_path;
+    }
+    if (meta.contains("background") && meta["background"].is_string()) {
         result.meta_bg_path = meta["background"].get<std::string>();
+        result.metadata.bg_path = result.meta_bg_path;
+    }
 
     // Build BPM map
     auto bpm_list = data.value("BPMList", json::array());
@@ -487,6 +496,7 @@ ChartData load_rpe(const json& data, int W, int H, int rpe_easing_shift) {
             note.speed_mul = speed_mul;
             note.size_px = size;
             note.alpha01 = alpha_note;
+            note.judge_area = n.value("judgeArea", 1.0);
 
             if (n.contains("tint") && !n["tint"].is_null())
                 note.tint_rgb = parse_rgb3(n["tint"]);

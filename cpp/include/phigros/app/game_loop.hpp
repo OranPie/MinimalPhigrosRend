@@ -368,6 +368,8 @@ struct GameLoop {
         effects.particle_count = cfg.particle_count;
         manual_judge.hitfx_color_perfect = ctx.respack.cfg.color_perfect;
         manual_judge.hitfx_color_good = ctx.respack.cfg.color_good;
+        manual_judge.hitfx_alpha_perfect = ctx.respack.cfg.alpha_perfect;
+        manual_judge.hitfx_alpha_good = ctx.respack.cfg.alpha_good;
         autoplay = engine::SimulatePlayer(parse_sim_mode(cfg.simulateplay.mode),
                                           cfg.simulateplay.max_pointers);
         autoplay.set_humanize(cfg.simulateplay.enabled, cfg.simulateplay.jitter_ms);
@@ -558,7 +560,10 @@ struct GameLoop {
                             math::RGB col = resolve_hitfx_color(note, g);
                             auto hit_pos = note_hitfx_pos(note, ft);
                             if (hit_pos) {
-                                effects.add_hitfx(hit_pos->x, hit_pos->y, ft, col);
+                                effects.add_hitfx(hit_pos->x, hit_pos->y, ft, col,
+                                                  0.0, 0.0,
+                                                  resolve_hitfx_variant(g),
+                                                  resolve_hitfx_alpha(g));
                                 effects.add_particle_burst(hit_pos->x, hit_pos->y,
                                     ft * 1000.0, 500.0, col);
                             }
@@ -578,7 +583,10 @@ struct GameLoop {
                             math::RGB col = resolve_hitfx_color(note, g);
                             auto hit_pos = note_hitfx_pos(note, ft);
                             if (hit_pos) {
-                                effects.add_hitfx(hit_pos->x, hit_pos->y, ft, col);
+                                effects.add_hitfx(hit_pos->x, hit_pos->y, ft, col,
+                                                  0.0, 0.0,
+                                                  resolve_hitfx_variant(g),
+                                                  resolve_hitfx_alpha(g));
                                 effects.add_particle_burst(hit_pos->x, hit_pos->y,
                                     ft * 1000.0, 500.0, col);
                             }
@@ -616,7 +624,10 @@ struct GameLoop {
                     if (is_recording) recorder.record_hitsound(n.kind, ev.judge_t);
                     if (cfg.show_hitfx) {
                         auto col = resolve_hitfx_color(n, ev.grade);
-                        effects.add_hitfx(ev.x, ev.y, ev.judge_t, col);
+                        effects.add_hitfx(ev.x, ev.y, ev.judge_t, col,
+                                          0.0, 0.0,
+                                          resolve_hitfx_variant(ev.grade),
+                                          resolve_hitfx_alpha(ev.grade));
                         if (cfg.show_particles)
                             effects.add_particle_burst(ev.x, ev.y, ev.judge_t * 1000.0,
                                 ctx.respack.cfg.hitfx_duration * 1000.0, col);
@@ -636,7 +647,9 @@ struct GameLoop {
                                   engine::Judge::BAD, judge);
             effects.hold_tick_fx(states, idx_next, t,
                                  cfg.hold_fx_interval_ms, chart.lines,
-                                 ctx.respack.cfg.color_perfect);
+                                 ctx.respack.cfg.color_perfect,
+                                 ctx.respack.cfg.alpha_perfect,
+                                 "perfect");
             effects.update(t, t * 1000.0, ctx.respack.cfg.hitfx_duration);
         }
         if (args.record_profile && is_recording)
@@ -823,6 +836,22 @@ private:
         if (note.tint_hitfx_rgb) return *note.tint_hitfx_rgb;
         if (resolved_grade == "GOOD" || resolved_grade == "BAD") return ctx.respack.cfg.color_good;
         return ctx.respack.cfg.color_perfect;
+    }
+
+    std::string resolve_hitfx_variant(const std::string& grade) const {
+        const std::string resolved_grade = grade.rfind("hold_start:", 0) == 0
+            ? grade.substr(std::strlen("hold_start:"))
+            : grade;
+        return (resolved_grade == "GOOD" || resolved_grade == "BAD") ? "good" : "perfect";
+    }
+
+    uint8_t resolve_hitfx_alpha(const std::string& grade) const {
+        const std::string resolved_grade = grade.rfind("hold_start:", 0) == 0
+            ? grade.substr(std::strlen("hold_start:"))
+            : grade;
+        return (resolved_grade == "GOOD" || resolved_grade == "BAD")
+            ? ctx.respack.cfg.alpha_good
+            : ctx.respack.cfg.alpha_perfect;
     }
 
     bool has_debug(DebugFlag flag) const {
@@ -1992,6 +2021,8 @@ private:
         manual_judge  = engine::ManualJudge{};
         manual_judge.hitfx_color_perfect = ctx.respack.cfg.color_perfect;
         manual_judge.hitfx_color_good = ctx.respack.cfg.color_good;
+        manual_judge.hitfx_alpha_perfect = ctx.respack.cfg.alpha_perfect;
+        manual_judge.hitfx_alpha_good = ctx.respack.cfg.alpha_good;
         autoplay.reset();
         autoplay.set_humanize(cfg.simulateplay.enabled, cfg.simulateplay.jitter_ms);
         autoplay.set_visuals(cfg.simulateplay.enabled && cfg.simulateplay.render_pointer,

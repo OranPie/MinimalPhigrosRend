@@ -776,7 +776,7 @@ static void test_effects() {
     CHECK(!pb.alive(500), "Burst expired at 500ms");
 
     // HitFX lifecycle
-    engine::HitFX fx{50, 60, 1.0, {255, 255, 0}, 255, 0.0};
+    engine::HitFX fx{50, 60, 1.0, {255, 255, 0}, 255, 0.0, 0.0, ""};
     CHECK(fx.alive(1.0), "HitFX alive at t0");
     CHECK(fx.alive(1.49), "HitFX alive at t0+0.49");
     CHECK(!fx.alive(1.51), "HitFX expired at t0+0.51");
@@ -784,6 +784,8 @@ static void test_effects() {
     // EffectManager update
     engine::EffectManager em;
     em.add_hitfx(0, 0, 1.0, {255, 255, 0});
+    CHECK(em.hitfx[0].alpha == 255 && em.hitfx[0].variant.empty(),
+          "HitFX default alpha/variant");
     em.add_particle_burst(0, 0, 1000, 500, {255, 0, 0});
     CHECK(em.hitfx.size() == 1 && em.particles.size() == 1,
           "EffectManager has 1 hitfx + 1 burst");

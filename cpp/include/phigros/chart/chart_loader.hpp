@@ -4,8 +4,21 @@
 #include <vector>
 #include <filesystem>
 #include <optional>
+#include <cstdint>
 
 namespace phigros::chart {
+
+enum class ChartFormat {
+    Unknown,
+    Official,
+    Rpe,
+    Pec,
+    Phbc,
+    Pbc
+};
+
+std::string chart_format_name(ChartFormat format);
+ChartFormat chart_format_from_string(const std::string& format);
 
 // Asset bundle for a chart
 struct ChartAssets {
@@ -21,6 +34,14 @@ struct ChartEntry {
     std::string chart_path;      // Path to JSON/PEC/PHBC file
     ChartAssets assets;          // Associated assets
     std::string source_type;     // "folder", "zip", "json"
+    ChartMetadata metadata;      // info.yml/info.json/RPE metadata when known
+    ChartFormat format = ChartFormat::Unknown;
+};
+
+struct LoadedChart {
+    ChartData chart;
+    ChartEntry entry;
+    ChartFormat format = ChartFormat::Unknown;
 };
 
 // ── Chart discovery ──────────────────────────────────────────────────────────
@@ -41,6 +62,31 @@ ChartEntry load_json_chart(const std::filesystem::path& json_path);
 // Prefers the requested difficulty (default "IN"), otherwise falls back to the first entry.
 std::optional<ChartEntry> resolve_chart_entry(const std::string& path,
                                               const std::string& preferred_difficulty = "IN");
+
+// ── Unified chart loading ───────────────────────────────────────────────────
+
+// Detect chart format from bytes. explicit_format (usually info.yml format)
+// wins over suffix/content inference; suffix is only used for .phbc.
+ChartFormat detect_chart_format_bytes(const std::vector<uint8_t>& data,
+                                       const std::string& explicit_format = {},
+                                       const std::string& virtual_name = {});
+
+// Detect a direct file, zip member, folder, or chart package path.
+ChartFormat detect_chart_format(const std::string& path,
+                                const std::string& preferred_difficulty = "IN");
+
+// Load a direct file, zip member, folder, or chart package path.
+LoadedChart load_chart_with_entry(const std::string& path,
+                                  int W, int H,
+                                  int rpe_easing_shift = 0,
+                                  const std::string& password = {},
+                                  const std::string& preferred_difficulty = "IN");
+
+ChartData load_chart_data(const std::string& path,
+                          int W, int H,
+                          int rpe_easing_shift = 0,
+                          const std::string& password = {},
+                          const std::string& preferred_difficulty = "IN");
 
 // ── Asset resolution ─────────────────────────────────────────────────────────
 

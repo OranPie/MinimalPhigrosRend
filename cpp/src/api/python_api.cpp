@@ -1,7 +1,6 @@
 #include "phigros/api/python_api.hpp"
-#include "phigros/chart/format_detect.hpp"
+#include "phigros/chart/chart_loader.hpp"
 #include "phigros/chart/compiler.hpp"
-#include "phigros/chart/parser.hpp"
 #include "phigros/engine/hold_logic.hpp"
 #include "phigros/engine/visibility.hpp"
 #include <algorithm>
@@ -11,9 +10,6 @@
 #include <sstream>
 #include <stdexcept>
 
-#include <nlohmann/json.hpp>
-
-using json = nlohmann::json;
 namespace fs = std::filesystem;
 
 namespace phigros::api {
@@ -22,71 +18,11 @@ namespace {
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
-// Detect format of a chart file at the given path.
-// Returns "rpe", "official", "pec", "phbc", or "" (unknown/unreadable).
-std::string detect_format(const std::string& path) {
-    std::ifstream f(path, std::ios::binary);
-    if (!f) return "";
-    std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    return chart::detect_format_text(text);
-}
-
 ChartData load_chart_from_path(const std::string& path,
                                const config::RenderConfig& cfg,
                                const std::string& password) {
-    if (path.size() >= 5 && path.substr(path.size() - 5) == ".phbc") {
-        std::ifstream f(path, std::ios::binary);
-        if (!f) throw std::runtime_error("Cannot open .phbc file: " + path);
-        return chart::read_phbc(f, password).to_chart_data();
-    }
-
-    if (chart::is_zip_path(path)) {
-        auto parts = chart::split_zip_path(path);
-        auto bytes = chart::extract_zip_file(parts.first, parts.second);
-        if (bytes.empty())
-            throw std::runtime_error("Failed to extract chart from zip: " + path);
-        std::string text(bytes.begin(), bytes.end());
-        try {
-            auto j = json::parse(text);
-            if (j.contains("META") || j.contains("BPMList"))
-                return chart::load_rpe(j, cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
-            return chart::load_official(j, cfg.window_w, cfg.window_h);
-        } catch (const json::exception& e) {
-            throw std::runtime_error("JSON parse error in zip entry '" + path + "': " +
-                                     std::string(e.what()));
-        }
-    }
-
-    if (fs::is_directory(path)) {
-        auto entries = chart::load_folder_chart(path);
-        if (entries.empty())
-            throw std::runtime_error("No recognised chart files found in folder: " + path);
-        const chart::ChartEntry* chosen = &entries.front();
-        for (const auto& entry : entries) {
-            if (entry.difficulty == "IN") { chosen = &entry; break; }
-        }
-        return load_chart_from_path(chosen->chart_path, cfg, password);
-    }
-
-    if (!fs::exists(path))
-        throw std::runtime_error("Chart file not found: " + path);
-
-    const std::string fmt = detect_format(path);
-    if (fmt == "rpe" || fmt == "official") {
-        std::ifstream f(path);
-        if (!f) throw std::runtime_error("Cannot open chart file: " + path);
-        try {
-            auto j = json::parse(f);
-            if (fmt == "rpe")
-                return chart::load_rpe(j, cfg.window_w, cfg.window_h, cfg.rpe_easing_shift);
-            return chart::load_official(j, cfg.window_w, cfg.window_h);
-        } catch (const json::exception& e) {
-            throw std::runtime_error("JSON parse error in '" + path + "': " +
-                                     std::string(e.what()));
-        }
-    }
-
-    return chart::load_pec(path, cfg.window_w, cfg.window_h);
+    return chart::load_chart_data(path, cfg.window_w, cfg.window_h,
+                                  cfg.rpe_easing_shift, password);
 }
 
 engine::SimMode parse_sim_mode(const std::string& mode) {
