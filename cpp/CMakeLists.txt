@@ -12,7 +12,7 @@ option(BUILD_LEGACY_CLI "Build legacy argv-based renderer executable" OFF)
 option(BUILD_MOBILE_BRIDGE "Build legacy native mobile UI bridge" OFF)
 
 # ── Version ───────────────────────────────────────────────────────────────────
-set(PHIGROS_VERSION "1.0.0-dev")
+set(PHIGROS_VERSION "1.0.0")
 add_compile_definitions(PHIGROS_VERSION="${PHIGROS_VERSION}")
 
 # ── Mobile platform configuration ─────────────────────────────────────────────
