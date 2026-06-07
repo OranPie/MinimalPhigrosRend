@@ -119,8 +119,13 @@ static ChartMetadata metadata_from_map(const std::map<std::string, std::string>&
     out.charter = meta_get_any(meta, {"charter", "Charter"});
     out.illustrator = meta_get_any(meta, {"illustrator", "Illustrator"});
     out.format = lower_copy(meta_get_any(meta, {"format", "Format"}));
-    out.song_path = meta_get_any(meta, {"music", "Music", "song", "Song"});
-    out.bg_path = meta_get_any(meta, {"illustration", "Illustration", "background", "Background", "picture", "Picture"});
+    out.song_path = meta_get_any(meta, {
+        "music", "Music", "song", "Song", "audio", "Audio", "bgm", "Bgm", "BGM"
+    });
+    out.bg_path = meta_get_any(meta, {
+        "illustration", "Illustration", "background", "Background",
+        "picture", "Picture", "image", "Image", "cover", "Cover", "bg", "Bg", "BG"
+    });
     if (auto v = meta_get_double_opt(meta, {"difficulty", "Difficulty"})) out.difficulty = *v;
     if (auto v = meta_get_double_opt(meta, {"previewStart", "preview_start"})) out.preview_start = *v;
     if (auto v = meta_get_double_opt(meta, {"previewEnd", "preview_end"})) out.preview_end = *v;
@@ -151,7 +156,10 @@ static ChartMetadata metadata_from_json(const json& info) {
     out.illustrator = str("illustrator", "Illustrator");
     out.format = lower_copy(str("format", "Format"));
     out.song_path = str("music", "song");
+    if (out.song_path.empty()) out.song_path = str("audio", "bgm");
     out.bg_path = str("illustration", "background");
+    if (out.bg_path.empty()) out.bg_path = str("picture", "image");
+    if (out.bg_path.empty()) out.bg_path = str("cover", "bg");
     if (info.contains("difficulty") && info["difficulty"].is_number())
         out.difficulty = info["difficulty"].get<double>();
     if (info.contains("previewStart") && info["previewStart"].is_number())
@@ -328,7 +336,7 @@ static std::string find_zip_member_casefold(mz_zip_archive& zip, const std::stri
 }
 
 static bool is_music_file(const fs::path& p) {
-    return has_extension(p, {".ogg", ".mp3", ".wav"});
+    return has_extension(p, {".ogg", ".mp3", ".wav", ".flac"});
 }
 
 static bool is_illustration_file(const fs::path& p) {
@@ -337,6 +345,58 @@ static bool is_illustration_file(const fs::path& p) {
 
 static bool is_chart_file(const fs::path& p) {
     return has_extension(p, {".json", ".pec", ".phbc", ".pbc"});
+}
+
+static bool should_skip_scan_dir(const fs::path& p) {
+    std::string name = lower_copy(p.filename().string());
+    if (name.empty()) return true;
+    if (name[0] == '.') return true;
+    static const std::set<std::string> ignored = {
+        "__macosx", "build", "cmake-build-debug", "cmake-build-release",
+        "node_modules", "dist", "out", "target"
+    };
+    return ignored.count(name) > 0;
+}
+
+static ChartFormat detect_chart_format_file_fast(const fs::path& path,
+                                                 const std::string& explicit_format = {}) {
+    ChartFormat explicit_fmt = chart_format_from_string(explicit_format);
+    if (explicit_fmt != ChartFormat::Unknown) return explicit_fmt;
+    if (has_extension(path, {".phbc"})) return ChartFormat::Phbc;
+    if (has_extension(path, {".pbc"})) return ChartFormat::Pbc;
+    if (has_extension(path, {".pec"})) return ChartFormat::Pec;
+
+    std::ifstream f(path, std::ios::binary);
+    if (!f) return ChartFormat::Unknown;
+    std::string head(65536, '\0');
+    f.read(head.data(), static_cast<std::streamsize>(head.size()));
+    head.resize(static_cast<size_t>(std::max<std::streamsize>(0, f.gcount())));
+    if (head.size() >= 4 && head[0] == 'P' && head[1] == 'H' && head[2] == 'B' && head[3] == 'C')
+        return ChartFormat::Phbc;
+    if (!is_probably_text(std::vector<uint8_t>(head.begin(), head.end())))
+        return ChartFormat::Pbc;
+    if (head.find("\"META\"") != std::string::npos || head.find("\"BPMList\"") != std::string::npos ||
+        head.find("'META'") != std::string::npos || head.find("'BPMList'") != std::string::npos)
+        return ChartFormat::Rpe;
+    if (head.find("\"judgeLineList\"") != std::string::npos ||
+        head.find("\"formatVersion\"") != std::string::npos ||
+        head.find("'judgeLineList'") != std::string::npos ||
+        head.find("'formatVersion'") != std::string::npos)
+        return ChartFormat::Official;
+    if (has_extension(path, {".json"})) return ChartFormat::Official;
+    return ChartFormat::Unknown;
+}
+
+static ChartFormat detect_chart_format_name_fast(const std::string& name,
+                                                 const std::string& explicit_format = {}) {
+    ChartFormat explicit_fmt = chart_format_from_string(explicit_format);
+    if (explicit_fmt != ChartFormat::Unknown) return explicit_fmt;
+    fs::path p(name);
+    if (has_extension(p, {".phbc"})) return ChartFormat::Phbc;
+    if (has_extension(p, {".pbc"})) return ChartFormat::Pbc;
+    if (has_extension(p, {".pec"})) return ChartFormat::Pec;
+    if (has_extension(p, {".json"})) return ChartFormat::Official;
+    return ChartFormat::Unknown;
 }
 
 bool is_zip_archive(const fs::path& p) {
@@ -466,15 +526,8 @@ std::vector<ChartEntry> load_folder_chart(const fs::path& folder_path) {
     }
 
     if (chart_files.empty()) {
-        for (const auto& entry : fs::directory_iterator(folder_path)) {
-            if (entry.is_regular_file()) {
-                auto name = lower_copy(entry.path().filename().string());
-                if (name == "info.yml" || name == "info.yaml" || name == "info.json" || name == "info.txt")
-                    continue;
-                chart_files.push_back(entry.path());
-                break;
-            }
-        }
+        PHLOG_TRACE(Chart, "ChartLoader: folder has no chart files: " << folder_path.string());
+        return entries;
     }
 
     // Find shared assets
@@ -493,11 +546,8 @@ std::vector<ChartEntry> load_folder_chart(const fs::path& folder_path) {
         entry.source_type = "folder";
         entry.metadata = package_meta;
         entry.format = chart_format_from_string(package_meta.format);
-        if (entry.format == ChartFormat::Unknown && fs::exists(chart_file)) {
-            std::ifstream f(chart_file, std::ios::binary);
-            std::vector<uint8_t> data((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-            entry.format = detect_chart_format_bytes(data, package_meta.format, chart_file.filename().string());
-        }
+        if (entry.format == ChartFormat::Unknown && fs::exists(chart_file))
+            entry.format = detect_chart_format_file_fast(chart_file, package_meta.format);
 
         // Determine difficulty from metadata or filename.
         std::string stem = chart_file.stem().string();
@@ -609,12 +659,7 @@ std::vector<ChartEntry> load_zip_chart(const fs::path& zip_path) {
             std::string resolved = find_zip_member_casefold(zip, image_file);
             e.assets.illustration_path = zip_str + ":" + (resolved.empty() ? image_file : resolved);
         }
-        e.format = chart_format_from_string(e.metadata.format);
-        if (e.format == ChartFormat::Unknown) {
-            auto [zf, member] = split_zip_path(e.chart_path);
-            auto bytes = extract_zip_file(zf, member);
-            e.format = detect_chart_format_bytes(bytes, e.metadata.format, member);
-        }
+        e.format = detect_chart_format_name_fast(resolved_chart, e.metadata.format);
         fill_entry_from_metadata(e);
         return e;
     };
@@ -712,9 +757,7 @@ ChartEntry load_json_chart(const fs::path& json_path) {
     entry.source_type = "json";
 
     if (entry.format == ChartFormat::Unknown) {
-        std::ifstream f(entry.chart_path, std::ios::binary);
-        std::vector<uint8_t> data((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-        entry.format = detect_chart_format_bytes(data, entry.metadata.format, json_path.filename().string());
+        entry.format = detect_chart_format_file_fast(entry.chart_path, entry.metadata.format);
     }
 
     PHLOG_TRACE(Chart, "ChartLoader: standalone chart path=" << entry.chart_path
@@ -765,6 +808,7 @@ std::vector<ChartEntry> scan_charts_directory(const std::string& dir_path) {
 
     for (const auto& entry : fs::directory_iterator(dir_path)) {
         if (entry.is_directory()) {
+            if (should_skip_scan_dir(entry.path())) continue;
             // Folder chart
             auto folder_entries = load_folder_chart(entry.path());
             all_entries.insert(all_entries.end(),
@@ -946,7 +990,11 @@ LoadedChart load_chart_with_entry(const std::string& path,
         virtual_name = file_in_zip;
     } else {
         std::ifstream f(entry.chart_path, std::ios::binary);
-        if (!f) throw std::runtime_error("Cannot open chart file: " + entry.chart_path);
+        if (!f) {
+            if (!fs::exists(entry.chart_path))
+                throw std::runtime_error("Chart file not found: " + entry.chart_path);
+            throw std::runtime_error("Cannot open chart file: " + entry.chart_path);
+        }
         bytes.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
         virtual_name = fs::path(entry.chart_path).filename().string();
     }

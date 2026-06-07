@@ -136,8 +136,12 @@ static void test_info_yml_format_priority() {
         "music: music.ogg\n"
         "illustration: bg.png\n";
     const unsigned char chart_bytes[] = {0, 0, 0, 0, 0};
+    const unsigned char music_bytes[] = {1, 2, 3, 4};
+    const unsigned char image_bytes[] = {5, 6, 7, 8};
     ok = ok && mz_zip_writer_add_mem(&writer, "Pack/info.yml", info, sizeof(info) - 1, MZ_BEST_SPEED);
     ok = ok && mz_zip_writer_add_mem(&writer, "Pack/chart.bin", chart_bytes, sizeof(chart_bytes), MZ_BEST_SPEED);
+    ok = ok && mz_zip_writer_add_mem(&writer, "Pack/music.ogg", music_bytes, sizeof(music_bytes), MZ_BEST_SPEED);
+    ok = ok && mz_zip_writer_add_mem(&writer, "Pack/bg.png", image_bytes, sizeof(image_bytes), MZ_BEST_SPEED);
     ok = ok && mz_zip_writer_finalize_archive(&writer);
     mz_zip_writer_end(&writer);
     CHECK(ok, "format_priority_zip_write");
@@ -149,8 +153,41 @@ static void test_info_yml_format_priority() {
         CHECK(entries[0].metadata.format == "pbc", "info_yml_metadata_format");
         CHECK(entries[0].chart_path.find("Pack/chart.bin") != std::string::npos,
               "info_yml_chart_path_resolved");
+        CHECK(entries[0].assets.music_path.find("Pack/music.ogg") != std::string::npos,
+              "info_yml_music_path_resolved");
+        CHECK(entries[0].assets.illustration_path.find("Pack/bg.png") != std::string::npos,
+              "info_yml_image_path_resolved");
     }
     fs::remove(zip_path);
+}
+
+static void test_folder_info_yml_assets() {
+    std::cout << "  folder info.yml assets\n";
+    auto root = fs::temp_directory_path() / "phigros_folder_info_assets";
+    fs::remove_all(root);
+    fs::create_directories(root / "Song");
+    {
+        std::ofstream(root / "Song" / "info.yml")
+            << "name: InfoAssets\n"
+            << "chart: IN.json\n"
+            << "song: audio.flac\n"
+            << "picture: jacket.webp\n";
+        std::ofstream(root / "Song" / "IN.json")
+            << "{\"formatVersion\":3,\"offset\":0,\"judgeLineList\":[]}";
+        std::ofstream(root / "Song" / "audio.flac", std::ios::binary) << "audio";
+        std::ofstream(root / "Song" / "jacket.webp", std::ios::binary) << "image";
+    }
+
+    auto entries = chart::scan_charts_directory(root.string());
+    CHECK(entries.size() == 1, "folder_info_yml_entry_count");
+    if (!entries.empty()) {
+        CHECK(entries[0].name == "InfoAssets", "folder_info_yml_name");
+        CHECK(entries[0].assets.music_path.find("audio.flac") != std::string::npos,
+              "folder_info_yml_song_alias");
+        CHECK(entries[0].assets.illustration_path.find("jacket.webp") != std::string::npos,
+              "folder_info_yml_picture_alias");
+    }
+    fs::remove_all(root);
 }
 
 static void append_u8(std::vector<uint8_t>& out, uint8_t v) {
@@ -231,6 +268,23 @@ static void test_minimal_pbc() {
     }
 }
 
+static void test_scan_ignores_non_chart_dirs() {
+    std::cout << "  scanner ignores non-chart directories\n";
+    auto root = fs::temp_directory_path() / "phigros_scan_ignore_non_chart";
+    fs::remove_all(root);
+    fs::create_directories(root / ".git");
+    fs::create_directories(root / ".github");
+    fs::create_directories(root / "ordinary");
+    {
+        std::ofstream(root / ".git" / "ORIG_HEAD") << "0123456789abcdef\n";
+        std::ofstream(root / ".github" / "COPILOT-INSTRUCTIONS") << "plain text\n";
+        std::ofstream(root / "ordinary" / "README.txt") << "plain text\n";
+    }
+    auto entries = chart::scan_charts_directory(root.string());
+    CHECK(entries.empty(), "scan_ignores_hidden_and_non_chart_dirs");
+    fs::remove_all(root);
+}
+
 static std::string resolve_chart_path(const char* rel) {
     fs::path p(rel);
     if (fs::exists(p)) return p.string();
@@ -247,6 +301,8 @@ int main() {
     std::cout << "=== Parser correctness tests ===\n\n";
     test_info_yml_format_priority();
     test_minimal_pbc();
+    test_folder_info_yml_assets();
+    test_scan_ignores_non_chart_dirs();
 
     // Struct: {path, expected_lines, expected_notes, expected_offset, format}
     struct ChartRef {

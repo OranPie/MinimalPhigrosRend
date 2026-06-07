@@ -19,6 +19,7 @@
 #include "phigros/render/renderer.hpp"
 #include "phigros/render/sdl_executor.hpp"
 #include "phigros/render/sprite_batch.hpp"
+#include "phigros/io/audio.hpp"
 #include "phigros/io/respack.hpp"
 
 #include <algorithm>
@@ -63,6 +64,20 @@ enum class Screen {
     Playing,
     Paused,
     Result,
+};
+
+enum class Language {
+    ZhCn,
+    EnUs,
+};
+
+enum class StatusKind {
+    None,
+    NoCharts,
+    FoundCharts,
+    Seeked,
+    LoadingChart,
+    LoadError,
 };
 
 struct PlayingChart {
@@ -136,6 +151,7 @@ struct PlayLayout {
 
 struct PauseLayout {
     Rect panel;
+    Rect language;
     Rect resume;
     Rect restart;
     Rect library;
@@ -146,6 +162,7 @@ struct PauseLayout {
 
 struct ResultLayout {
     Rect panel;
+    Rect language;
     Rect replay;
     Rect library;
     Rect detail;
@@ -159,7 +176,7 @@ public:
             return 1;
         }
 
-        window_ = phigros::app::sdl::create_window("Phigros Renderer", width_, height_, false);
+        window_ = phigros::app::sdl::create_window(window_title(), width_, height_, false);
         if (!window_) {
             std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
             return 1;
@@ -211,6 +228,7 @@ private:
     phigros::render::HitFXRenderer hitfx_renderer_;
     phigros::render::HudRenderer hud_;
     phigros::render::BackgroundRenderer bg_;
+    phigros::io::AudioSystem audio_;
     phigros::io::Respack respack_;
     RenderConfig cfg_;
     phigros::app::InputManager input_;
@@ -223,7 +241,10 @@ private:
     int sort_mode_ = 0;
     int filter_mode_ = 0;
     int settings_tab_ = 0;
-    std::string status_;
+    Language language_ = Language::ZhCn;
+    StatusKind status_kind_ = StatusKind::None;
+    size_t status_count_ = 0;
+    std::string status_detail_;
     bool autoplay_ = true;
     bool show_particles_ = true;
     bool show_hitfx_ = true;
@@ -238,6 +259,9 @@ private:
     std::string chart_dir_;
     bool chart_is_zip_ = false;
     std::string chart_zip_file_;
+    bool audio_engine_ready_ = false;
+    bool bgm_loaded_ = false;
+    bool bgm_started_ = false;
 
     static double now_sec() {
         return static_cast<double>(SDL_GetPerformanceCounter()) /
@@ -248,6 +272,7 @@ private:
         for (auto& item : line_texture_cache_) item.second.destroy();
         line_texture_cache_.clear();
         bg_.destroy();
+        audio_.destroy();
         respack_.destroy();
         hud_.destroy();
         if (renderer_) {
@@ -277,14 +302,37 @@ private:
 
     std::vector<fs::path> search_roots() const {
         std::vector<fs::path> roots;
+        auto push_unique = [&](fs::path p) {
+            if (p.empty()) return;
+            p = p.lexically_normal();
+            if (std::find(roots.begin(), roots.end(), p) == roots.end()) roots.push_back(std::move(p));
+        };
         std::error_code ec;
-        roots.push_back(fs::current_path(ec));
-        if (!base_path().empty()) roots.emplace_back(base_path());
-        if (!roots.empty()) roots.push_back(roots.front() / "charts");
-        if (!roots.empty()) roots.push_back(roots.front() / ".." / "charts");
+        push_unique(fs::current_path(ec));
+        if (!base_path().empty()) push_unique(base_path());
 #if defined(PHIGROS_ANDROID)
-        roots.emplace_back("/sdcard/phigros");
-        roots.emplace_back("/sdcard/Phigros");
+        push_unique("/sdcard/phigros");
+        push_unique("/sdcard/Phigros");
+#endif
+        return roots;
+    }
+
+    std::vector<fs::path> chart_search_roots() const {
+        std::vector<fs::path> roots;
+        auto push_unique_existing = [&](fs::path p) {
+            if (p.empty()) return;
+            p = p.lexically_normal();
+            std::error_code ec;
+            if (!fs::is_directory(p, ec)) return;
+            if (std::find(roots.begin(), roots.end(), p) == roots.end()) roots.push_back(std::move(p));
+        };
+        for (const auto& root : search_roots()) {
+            push_unique_existing(root / "charts");
+            push_unique_existing(root / ".." / "charts");
+        }
+#if defined(PHIGROS_ANDROID)
+        push_unique_existing("/sdcard/phigros");
+        push_unique_existing("/sdcard/Phigros");
 #endif
         return roots;
     }
@@ -336,9 +384,11 @@ private:
 
     void scan_library() {
         library_.clear();
-        status_.clear();
+        status_kind_ = StatusKind::None;
+        status_detail_.clear();
+        status_count_ = 0;
         std::vector<std::string> seen;
-        for (const auto& root : search_roots()) {
+        for (const auto& root : chart_search_roots()) {
             std::error_code ec;
             if (!fs::is_directory(root, ec)) continue;
             auto entries = phigros::chart::scan_charts_directory(root.string());
@@ -351,11 +401,10 @@ private:
         }
         rebuild_visible_library();
         if (library_.empty()) {
-            status_ = "No charts found. Put chart folders or zips under charts/.";
+            status_kind_ = StatusKind::NoCharts;
         } else {
-            char buf[96];
-            std::snprintf(buf, sizeof(buf), "%zu chart entries found.", library_.size());
-            status_ = buf;
+            status_kind_ = StatusKind::FoundCharts;
+            status_count_ = library_.size();
         }
     }
 
@@ -428,6 +477,8 @@ private:
                     back();
                 } else if (sc == SDL_SCANCODE_SPACE && (screen_ == Screen::Playing || screen_ == Screen::Paused)) {
                     toggle_pause();
+                } else if (sc == SDL_SCANCODE_L && screen_ != Screen::Playing) {
+                    toggle_language();
                 } else if (sc == SDL_SCANCODE_R && playing_) {
                     start_playing(selected_);
                 } else if (sc == SDL_SCANCODE_LEFT && playing_) {
@@ -480,7 +531,19 @@ private:
         double dt = std::clamp(now - p.last_wall, 0.0, 0.1);
         p.last_wall = now;
         p.prev_t = p.t;
-        p.t += dt * cfg_.chart_speed;
+        if (bgm_loaded_) {
+            if (!bgm_started_ && p.t >= 0.0) {
+                audio_.play();
+                bgm_started_ = true;
+            }
+            if (bgm_started_) {
+                p.t = audio_.get_playback_time() + cfg_.audio_offset_ms / 1000.0;
+            } else {
+                p.t += dt * cfg_.chart_speed;
+            }
+        } else {
+            p.t += dt * cfg_.chart_speed;
+        }
 
         static thread_local std::vector<phigros::engine::SimHitEvent> hit_events;
         hit_events.clear();
@@ -507,6 +570,7 @@ private:
 
         if (!p.finished && p.t >= p.chart_end) {
             p.finished = true;
+            stop_audio_playback();
             last_score_ = phigros::engine::compute_score(
                 p.judge.acc_sum, p.judge.max_combo, p.chart.playable_count);
             screen_ = Screen::Result;
@@ -575,7 +639,9 @@ private:
         p.prev_t = p.t;
         p.last_wall = now_sec();
         p.finished = false;
-        status_ = "Seek reset.";
+        sync_audio_to_chart_time(p.t, screen_ == Screen::Playing);
+        status_kind_ = StatusKind::Seeked;
+        status_detail_.clear();
     }
 
     void seek_relative(double delta) {
@@ -604,6 +670,51 @@ private:
         SDL_RenderPresent(renderer_);
     }
 
+    const char* tr(const char* zh, const char* en) const {
+        return language_ == Language::ZhCn ? zh : en;
+    }
+
+    const char* window_title() const {
+        return tr("Phigros 渲染器", "Phigros Renderer");
+    }
+
+    const char* language_button_label() const {
+        return language_ == Language::ZhCn ? "EN" : "中文";
+    }
+
+    void toggle_language() {
+        language_ = language_ == Language::ZhCn ? Language::EnUs : Language::ZhCn;
+        if (window_) {
+            SDL_SetWindowTitle(window_, window_title());
+        }
+    }
+
+    std::string status_text() const {
+        char buf[256];
+        switch (status_kind_) {
+            case StatusKind::None:
+                return {};
+            case StatusKind::NoCharts:
+                return tr("未找到谱面，请将文件夹或 zip 放入 charts/。",
+                          "No charts found. Put folders or zip packs in charts/.");
+            case StatusKind::FoundCharts:
+                if (language_ == Language::ZhCn) {
+                    std::snprintf(buf, sizeof(buf), "找到 %zu 个谱面。", status_count_);
+                } else {
+                    std::snprintf(buf, sizeof(buf), "Found %zu chart%s.",
+                                  status_count_, status_count_ == 1 ? "" : "s");
+                }
+                return buf;
+            case StatusKind::Seeked:
+                return tr("已跳转。", "Seeked.");
+            case StatusKind::LoadingChart:
+                return tr("正在加载谱面...", "Loading chart...");
+            case StatusKind::LoadError:
+                return std::string(tr("谱面加载失败：", "Chart load failed: ")) + status_detail_;
+        }
+        return {};
+    }
+
     void draw_text(const std::string& text, double x, double y,
                    uint8_t r = 235, uint8_t g = 240, uint8_t b = 245, uint8_t a = 235,
                    bool large = false) const {
@@ -618,9 +729,55 @@ private:
         static const std::string tail = "...";
         std::string out = text;
         while (!out.empty() && hud_.text_width(font, out + tail) > max_w) {
-            out.pop_back();
+            pop_utf8_tail(out);
         }
         return out.empty() ? tail : out + tail;
+    }
+
+    static void pop_utf8_tail(std::string& text) {
+        if (text.empty()) return;
+        size_t pos = text.size() - 1;
+        while (pos > 0 && (static_cast<unsigned char>(text[pos]) & 0xc0) == 0x80) {
+            --pos;
+        }
+        text.erase(pos);
+    }
+
+    const char* mode_label(bool short_label = false) const {
+        if (short_label) {
+            return autoplay_
+                ? tr("自动", "Auto")
+                : tr("手动", "Manual");
+        }
+        return autoplay_
+            ? tr("自动播放", "Autoplay")
+            : tr("手动模式", "Manual");
+    }
+
+    std::string field_line(const char* zh, const char* en, const std::string& value) const {
+        return std::string(tr(zh, en)) + "  " + value;
+    }
+
+    std::string chart_count_line() const {
+        char buf[128];
+        if (language_ == Language::ZhCn) {
+            std::snprintf(buf, sizeof(buf), "%zu / %zu 个条目",
+                          visible_library_.size(), library_.size());
+        } else {
+            std::snprintf(buf, sizeof(buf), "%zu / %zu entries",
+                          visible_library_.size(), library_.size());
+        }
+        return buf;
+    }
+
+    std::string page_line(int page, int total) const {
+        char buf[64];
+        if (language_ == Language::ZhCn) {
+            std::snprintf(buf, sizeof(buf), "第 %d / %d 页", page, total);
+        } else {
+            std::snprintf(buf, sizeof(buf), "Page %d / %d", page, total);
+        }
+        return buf;
     }
 
     void draw_text_fit(const std::string& text, double x, double y, double max_w,
@@ -671,14 +828,31 @@ private:
         }
     }
 
+    Rect top_language_rect() const {
+        const double w = width_ < 520 ? 66.0 : 78.0;
+        return {static_cast<double>(width_) - w - 20.0, 12.0, w, 40.0};
+    }
+
+    bool has_top_language_button() const {
+        return screen_ == Screen::Library || screen_ == Screen::Detail ||
+               screen_ == Screen::Settings ||
+               (screen_ == Screen::Playing && (!playing_ || !playing_->loaded));
+    }
+
     void draw_top_bar(const std::string& title) {
+        const Rect lang = top_language_rect();
         batch_.draw_rect(0, 0, width_, 64, 15, 17, 22, 245);
-        draw_text_fit(title, 24, 18, std::max(80, width_ - 190), 245, 248, 252, 245, true);
+        draw_text_fit(title, 24, 18, std::max(80.0, lang.x - 48.0),
+                      245, 248, 252, 245, true);
+        draw_button(lang, language_button_label());
         char fps_buf[48];
         std::snprintf(fps_buf, sizeof(fps_buf), "%.0f FPS", fps_);
         if (hud_.has_font) {
             const double tw = hud_.text_width(hud_.font_small, fps_buf);
-            draw_text(fps_buf, width_ - tw - 24, 22, 150, 170, 190, 220);
+            const double fps_x = lang.x - tw - 14.0;
+            if (fps_x > 24.0) {
+                draw_text(fps_buf, fps_x, 22, 150, 170, 190, 220);
+            }
         }
     }
 
@@ -840,6 +1014,7 @@ private:
         const double x = l.panel.x + 24.0;
         const double y = l.panel.y + panel_h - 70.0;
         const double bw = (panel_w - 58.0) / 3.0;
+        l.language = {l.panel.x + l.panel.w - 92.0, l.panel.y + 20.0, 70.0, 38.0};
         l.resume = {x, y, bw, 44.0};
         l.restart = {x + bw + 5.0, y, bw, 44.0};
         l.library = {x + (bw + 5.0) * 2.0, y, bw, 44.0};
@@ -857,6 +1032,7 @@ private:
         const double x = l.panel.x + 26.0;
         const double y = l.panel.y + panel_h - 66.0;
         const double bw = (panel_w - 62.0) / 3.0;
+        l.language = {l.panel.x + l.panel.w - 92.0, l.panel.y + 20.0, 70.0, 38.0};
         l.replay = {x, y, bw, 44.0};
         l.detail = {x + bw + 5.0, y, bw, 44.0};
         l.library = {x + (bw + 5.0) * 2.0, y, bw, 44.0};
@@ -925,19 +1101,27 @@ private:
     }
 
     void draw_library() {
-        draw_top_bar("Phigros Renderer");
+        draw_top_bar(window_title());
         const LibraryLayout l = library_layout();
-        const std::array<const char*, 3> sort_labels{"Sort Name", "Sort Diff", "Sort Type"};
-        const std::array<const char*, 4> filter_labels{"All", "Official", "RPE", "Other"};
+        const std::array<const char*, 3> sort_labels{
+            tr("按曲名", "By Title"),
+            tr("按难度", "By Level"),
+            tr("按格式", "By Format"),
+        };
+        const std::array<const char*, 4> filter_labels{
+            tr("全部", "All"),
+            tr("官方", "Official"),
+            "RPE",
+            tr("其他", "Other"),
+        };
         draw_button(l.sort, sort_labels[std::clamp(sort_mode_, 0, 2)]);
         draw_button(l.filter, filter_labels[std::clamp(filter_mode_, 0, 3)]);
-        draw_button(l.settings, "Settings");
-        draw_button(l.rescan, "Rescan");
+        draw_button(l.settings, tr("设置", "Settings"));
+        draw_button(l.rescan, tr("重扫", "Rescan"));
 
-        char status_buf[128];
-        std::snprintf(status_buf, sizeof(status_buf), "%zu / %zu entries",
-                      visible_library_.size(), library_.size());
-        draw_text_fit(status_.empty() ? status_buf : status_ + "  " + status_buf,
+        const std::string count = chart_count_line();
+        const std::string status = status_text();
+        draw_text_fit(status.empty() ? count : status + "  " + count,
                       l.list.x, l.list.y - 28.0, l.list.w, 156, 176, 196, 225);
 
         const int max_page = max_library_page();
@@ -962,15 +1146,14 @@ private:
         }
 
         if (l.wide) draw_library_preview(l);
-        draw_button(l.prev, "Prev", library_page_ > 0);
-        draw_button(l.next, "Next", library_page_ < max_page);
-        draw_button(l.mode, autoplay_ ? "Autoplay" : "Manual", selected_ >= 0);
-        draw_button(l.details, "Details", selected_ >= 0);
-        draw_button(l.play, "Play", selected_ >= 0);
-        char page_buf[64];
-        std::snprintf(page_buf, sizeof(page_buf), "Page %d / %d", library_page_ + 1, max_page + 1);
+        draw_button(l.prev, tr("上一页", "Prev"), library_page_ > 0);
+        draw_button(l.next, tr("下一页", "Next"), library_page_ < max_page);
+        draw_button(l.mode, mode_label(), selected_ >= 0);
+        draw_button(l.details, tr("详情", "Details"), selected_ >= 0);
+        draw_button(l.play, tr("开始", "Play"), selected_ >= 0);
+        const std::string page = page_line(library_page_ + 1, max_page + 1);
         const double page_x = l.next.x + l.next.w + 12.0;
-        draw_text_fit(page_buf, page_x, l.prev.y + 11.0,
+        draw_text_fit(page, page_x, l.prev.y + 11.0,
                       std::max(50.0, width_ - page_x - 24.0), 160, 178, 196, 220);
     }
 
@@ -978,7 +1161,8 @@ private:
         draw_panel(l.preview, 17, 21, 28, 232);
         const ChartEntry* entry = selected_entry();
         if (!entry) {
-            draw_text("No selection", l.preview.x + 22.0, l.preview.y + 22.0,
+            draw_text(tr("未选择谱面", "No chart selected"),
+                      l.preview.x + 22.0, l.preview.y + 22.0,
                       180, 194, 210, 225, true);
             return;
         }
@@ -987,48 +1171,59 @@ private:
         draw_text_fit(entry_title(*entry), x, y, l.preview.w - 44.0,
                       248, 250, 255, 245, true);
         y += 54.0;
-        draw_text_fit("Level  " + entry_level(*entry), x, y, l.preview.w - 44.0); y += 32.0;
-        draw_text_fit("Format  " + phigros::chart::chart_format_name(entry->format), x, y, l.preview.w - 44.0); y += 32.0;
-        draw_text_fit("Source  " + (entry->source_type.empty() ? std::string("-") : entry->source_type),
+        draw_text_fit(field_line("难度", "Level", entry_level(*entry)),
+                      x, y, l.preview.w - 44.0); y += 32.0;
+        draw_text_fit(field_line("格式", "Format", phigros::chart::chart_format_name(entry->format)),
+                      x, y, l.preview.w - 44.0); y += 32.0;
+        draw_text_fit(field_line("来源", "Source",
+                                 entry->source_type.empty() ? std::string("-") : entry->source_type),
                       x, y, l.preview.w - 44.0); y += 44.0;
-        draw_text_fit("Chart", x, y, l.preview.w - 44.0, 116, 210, 238, 230); y += 26.0;
+        draw_text_fit(tr("谱面文件", "Chart File"),
+                      x, y, l.preview.w - 44.0, 116, 210, 238, 230); y += 26.0;
         draw_text_fit(compact_path(entry->chart_path), x, y, l.preview.w - 44.0,
                       160, 178, 196, 220); y += 34.0;
-        draw_text_fit("Music  " + (entry->assets.music_path.empty() ? std::string("-") : compact_path(entry->assets.music_path)),
+        draw_text_fit(field_line("音乐", "Music",
+                                 entry->assets.music_path.empty() ? std::string("-") : compact_path(entry->assets.music_path)),
                       x, y, l.preview.w - 44.0, 160, 178, 196, 220); y += 30.0;
-        draw_text_fit("Image  " + (entry->assets.illustration_path.empty() ? std::string("-") : compact_path(entry->assets.illustration_path)),
+        draw_text_fit(field_line("曲绘", "Illustration",
+                                 entry->assets.illustration_path.empty() ? std::string("-") : compact_path(entry->assets.illustration_path)),
                       x, y, l.preview.w - 44.0, 160, 178, 196, 220);
     }
 
     void draw_detail() {
-        draw_top_bar("Chart Detail");
+        draw_top_bar(tr("谱面详情", "Chart Details"));
         const DetailLayout l = detail_layout();
         if (selected_ < 0 || selected_ >= static_cast<int>(library_.size())) {
-            draw_text("No chart selected.", 32, 100);
+            draw_text(tr("未选择谱面。", "No chart selected."), 32, 100);
             return;
         }
         const auto& e = library_[selected_];
-        draw_button(l.back, "Back");
-        draw_button(l.mode, autoplay_ ? "Autoplay" : "Manual");
-        draw_button(l.play, "Play");
-        draw_button(l.settings, "Settings");
+        draw_button(l.back, tr("返回", "Back"));
+        draw_button(l.mode, mode_label());
+        draw_button(l.play, tr("开始", "Play"));
+        draw_button(l.settings, tr("设置", "Settings"));
 
         draw_panel(l.left, 17, 21, 28, 232);
         const double x = l.left.x + 22.0;
         double y = l.left.y + 22.0;
         draw_text_fit(entry_title(e), x, y, l.left.w - 44.0, 248, 250, 255, 245, true);
         y += 56.0;
-        draw_text_fit("Level  " + entry_level(e), x, y, l.left.w - 44.0); y += 32.0;
-        draw_text_fit("Format  " + phigros::chart::chart_format_name(e.format), x, y, l.left.w - 44.0); y += 32.0;
-        draw_text_fit("Source  " + (e.source_type.empty() ? std::string("-") : e.source_type), x, y, l.left.w - 44.0); y += 32.0;
+        draw_text_fit(field_line("难度", "Level", entry_level(e)), x, y, l.left.w - 44.0); y += 32.0;
+        draw_text_fit(field_line("格式", "Format", phigros::chart::chart_format_name(e.format)),
+                      x, y, l.left.w - 44.0); y += 32.0;
+        draw_text_fit(field_line("来源", "Source", e.source_type.empty() ? std::string("-") : e.source_type),
+                      x, y, l.left.w - 44.0); y += 32.0;
         if (!e.metadata.composer.empty()) {
-            draw_text_fit("Composer  " + e.metadata.composer, x, y, l.left.w - 44.0); y += 32.0;
+            draw_text_fit(field_line("曲师", "Composer", e.metadata.composer),
+                          x, y, l.left.w - 44.0); y += 32.0;
         }
         if (!e.metadata.charter.empty()) {
-            draw_text_fit("Charter  " + e.metadata.charter, x, y, l.left.w - 44.0); y += 32.0;
+            draw_text_fit(field_line("谱师", "Charter", e.metadata.charter),
+                          x, y, l.left.w - 44.0); y += 32.0;
         }
         if (!e.metadata.illustrator.empty()) {
-            draw_text_fit("Illustrator  " + e.metadata.illustrator, x, y, l.left.w - 44.0); y += 32.0;
+            draw_text_fit(field_line("画师", "Illustrator", e.metadata.illustrator),
+                          x, y, l.left.w - 44.0); y += 32.0;
         }
 
         const Rect info = l.wide ? l.right : Rect{l.left.x, y + 18.0, l.left.w,
@@ -1036,48 +1231,60 @@ private:
         draw_panel(info, 14, 18, 25, 220);
         double iy = info.y + 20.0;
         const double ix = info.x + 20.0;
-        draw_text("Assets", ix, iy, 116, 210, 238, 235); iy += 34.0;
-        draw_text_fit("Chart  " + compact_path(e.chart_path), ix, iy, info.w - 40.0,
+        draw_text(tr("资源", "Resources"), ix, iy, 116, 210, 238, 235); iy += 34.0;
+        draw_text_fit(field_line("谱面", "Chart", compact_path(e.chart_path)), ix, iy, info.w - 40.0,
                       185, 198, 214, 225); iy += 32.0;
-        draw_text_fit("Music  " + (e.assets.music_path.empty() ? std::string("-") : compact_path(e.assets.music_path)),
+        draw_text_fit(field_line("音乐", "Music",
+                                 e.assets.music_path.empty() ? std::string("-") : compact_path(e.assets.music_path)),
                       ix, iy, info.w - 40.0, 185, 198, 214, 225); iy += 32.0;
-        draw_text_fit("Image  " + (e.assets.illustration_path.empty() ? std::string("-") : compact_path(e.assets.illustration_path)),
+        draw_text_fit(field_line("曲绘", "Illustration",
+                                 e.assets.illustration_path.empty() ? std::string("-") : compact_path(e.assets.illustration_path)),
                       ix, iy, info.w - 40.0, 185, 198, 214, 225); iy += 42.0;
         char meta[128];
-        std::snprintf(meta, sizeof(meta), "Preview %.1fs  Dim %d  Blur %d",
-                      e.metadata.preview_start, cfg_.bg_dim, cfg_.bg_blur);
+        if (language_ == Language::ZhCn) {
+            std::snprintf(meta, sizeof(meta), "预览 %.1fs  背景暗化 %d  模糊 %d",
+                          e.metadata.preview_start, cfg_.bg_dim, cfg_.bg_blur);
+        } else {
+            std::snprintf(meta, sizeof(meta), "Preview %.1fs  Dim %d  Blur %d",
+                          e.metadata.preview_start, cfg_.bg_dim, cfg_.bg_blur);
+        }
         draw_text_fit(meta, ix, iy, info.w - 40.0, 150, 170, 190, 220);
     }
 
     void draw_settings() {
-        draw_top_bar("Settings");
+        draw_top_bar(tr("设置", "Settings"));
         const SettingsLayout l = settings_layout();
-        draw_button(l.back, "Back");
-        draw_choice_button(l.tab_render, "Render", settings_tab_ == 0);
-        draw_choice_button(l.tab_gameplay, "Gameplay", settings_tab_ == 1);
-        draw_choice_button(l.tab_fx, "FX", settings_tab_ == 2);
+        draw_button(l.back, tr("返回", "Back"));
+        draw_choice_button(l.tab_render, tr("渲染", "Render"), settings_tab_ == 0);
+        draw_choice_button(l.tab_gameplay, tr("游玩", "Gameplay"), settings_tab_ == 1);
+        draw_choice_button(l.tab_fx, tr("特效", "FX"), settings_tab_ == 2);
         draw_panel(l.content, 15, 19, 26, 230);
 
         double y = l.content.y + 20.0;
         if (settings_tab_ == 0) {
-            draw_slider(l, "Background dim", static_cast<double>(cfg_.bg_dim), 0.0, 220.0, y); y += l.row_h;
-            draw_slider(l, "Note alpha", cfg_.note_alpha, 0.1, 1.0, y); y += l.row_h;
-            draw_slider(l, "Approach", cfg_.approach, 0.5, 8.0, y); y += l.row_h;
-            draw_slider(l, "Expand", cfg_.expand_factor, 0.8, 1.4, y); y += l.row_h;
-            draw_setting_toggle(l, "Note outline", cfg_.note_outline, y);
+            draw_setting_button(l, tr("语言", "Language"),
+                                language_ == Language::ZhCn ? "中文" : "English", y); y += l.row_h;
+            draw_slider(l, tr("背景暗化", "Background Dim"),
+                        static_cast<double>(cfg_.bg_dim), 0.0, 220.0, y); y += l.row_h;
+            draw_slider(l, tr("音符透明度", "Note Alpha"), cfg_.note_alpha, 0.1, 1.0, y); y += l.row_h;
+            draw_slider(l, tr("提前显示", "Approach"), cfg_.approach, 0.5, 8.0, y); y += l.row_h;
+            draw_slider(l, tr("画面扩展", "Canvas Expand"), cfg_.expand_factor, 0.8, 1.4, y); y += l.row_h;
+            draw_setting_toggle(l, tr("音符描边", "Note Outline"), cfg_.note_outline, y);
         } else if (settings_tab_ == 1) {
-            draw_setting_toggle(l, "Autoplay", autoplay_, y); y += l.row_h;
-            draw_setting_toggle(l, "Overlay", show_gameplay_overlay_, y); y += l.row_h;
-            draw_slider(l, "Chart speed", cfg_.chart_speed, 0.5, 3.0, y); y += l.row_h;
-            draw_slider(l, "Hold FX ms", static_cast<double>(cfg_.hold_fx_interval_ms), 80.0, 400.0, y); y += l.row_h;
-            draw_slider(l, "Tail tolerance", cfg_.hold_tail_tol, 0.2, 1.2, y);
+            draw_setting_toggle(l, tr("自动播放", "Autoplay"), autoplay_, y); y += l.row_h;
+            draw_setting_toggle(l, tr("界面显示", "HUD"), show_gameplay_overlay_, y); y += l.row_h;
+            draw_slider(l, tr("谱面速度", "Chart Speed"), cfg_.chart_speed, 0.5, 3.0, y); y += l.row_h;
+            draw_slider(l, tr("长条特效间隔", "Hold FX Gap"),
+                        static_cast<double>(cfg_.hold_fx_interval_ms), 80.0, 400.0, y); y += l.row_h;
+            draw_slider(l, tr("长条尾判容差", "Hold Tail Tolerance"), cfg_.hold_tail_tol, 0.2, 1.2, y);
         } else {
-            draw_setting_toggle(l, "Hit FX", show_hitfx_, y); y += l.row_h;
-            draw_setting_toggle(l, "Particles", show_particles_, y); y += l.row_h;
-            draw_slider(l, "FX intensity", cfg_.hitfx_intensity, 0.0, 2.0, y); y += l.row_h;
-            draw_slider(l, "Particle count", static_cast<double>(cfg_.particle_count), 0.0, 32.0, y); y += l.row_h;
-            draw_slider(l, "Scale X", cfg_.note_scale_x, 1.0, 4.0, y); y += l.row_h;
-            draw_slider(l, "Scale Y", cfg_.note_scale_y, 0.5, 2.0, y);
+            draw_setting_toggle(l, tr("打击特效", "Hit FX"), show_hitfx_, y); y += l.row_h;
+            draw_setting_toggle(l, tr("粒子", "Particles"), show_particles_, y); y += l.row_h;
+            draw_slider(l, tr("特效强度", "FX Intensity"), cfg_.hitfx_intensity, 0.0, 2.0, y); y += l.row_h;
+            draw_slider(l, tr("粒子数量", "Particle Count"),
+                        static_cast<double>(cfg_.particle_count), 0.0, 32.0, y); y += l.row_h;
+            draw_slider(l, tr("横向缩放", "Scale X"), cfg_.note_scale_x, 1.0, 4.0, y); y += l.row_h;
+            draw_slider(l, tr("纵向缩放", "Scale Y"), cfg_.note_scale_y, 0.5, 2.0, y);
         }
     }
 
@@ -1093,8 +1300,13 @@ private:
 
     void draw_setting_toggle(const SettingsLayout& l, const std::string& label,
                              bool value, double y) {
+        draw_setting_button(l, label, value ? tr("开", "On") : tr("关", "Off"), y);
+    }
+
+    void draw_setting_button(const SettingsLayout& l, const std::string& label,
+                             const std::string& value, double y) {
         draw_text_fit(label, l.content.x + 18.0, y + 11.0, l.label_w - 28.0);
-        draw_button(settings_control_rect(l, y), value ? "On" : "Off");
+        draw_button(settings_control_rect(l, y), value);
     }
 
     void draw_slider(const SettingsLayout& l, const std::string& label,
@@ -1111,8 +1323,9 @@ private:
 
     void draw_playing(bool frozen) {
         if (!playing_ || !playing_->loaded) {
-            draw_top_bar("Loading");
-            draw_text(status_.empty() ? "No chart loaded." : status_, 32, 110);
+            draw_top_bar(tr("加载中", "Loading"));
+            const std::string status = status_text();
+            draw_text(status.empty() ? tr("未加载谱面。", "No chart loaded.") : status, 32, 110);
             return;
         }
         auto& p = *playing_;
@@ -1147,10 +1360,10 @@ private:
         batch_.draw_rect(l.strip.x, l.strip.y, l.strip.w, l.strip.h, 8, 10, 14,
                          show_gameplay_overlay_ ? 206 : 156);
         batch_.draw_line(0, l.strip.y, width_, l.strip.y, 1.0, 78, 92, 108, 180);
-        draw_button(l.pause, frozen ? "Paused" : "Pause");
-        draw_button(l.restart, "Restart");
-        draw_button(l.mode, autoplay_ ? "Auto" : "Manual");
-        draw_button(l.overlay, show_gameplay_overlay_ ? "HUD On" : "HUD Off");
+        draw_button(l.pause, frozen ? tr("已暂停", "Paused") : tr("暂停", "Pause"));
+        draw_button(l.restart, tr("重开", "Restart"));
+        draw_button(l.mode, mode_label(true));
+        draw_button(l.overlay, show_gameplay_overlay_ ? tr("界面开", "HUD On") : tr("界面关", "HUD Off"));
         draw_button(l.speed_down, "-");
         draw_button(l.speed_up, "+");
 
@@ -1179,25 +1392,31 @@ private:
         draw_panel(l.panel, 18, 22, 29, 248);
         const double x = l.panel.x + 24.0;
         double y = l.panel.y + 24.0;
-        draw_text("Paused", x, y, 245, 248, 252, 245, true);
+        draw_text(tr("暂停", "Paused"), x, y, 245, 248, 252, 245, true);
+        draw_button(l.language, language_button_label());
         y += 58.0;
         if (playing_) {
             draw_text_fit(entry_title(playing_->entry), x, y, l.panel.w - 48.0,
                           220, 230, 240, 235); y += 30.0;
             char stats[128];
-            std::snprintf(stats, sizeof(stats), "Combo %d  Max %d  Acc %.2f%%",
-                          playing_->judge.combo, playing_->judge.max_combo,
-                          phigros::engine::compute_score(
-                              playing_->judge.acc_sum, playing_->judge.max_combo,
-                              playing_->chart.playable_count).acc_ratio * 100.0);
+            const double acc = phigros::engine::compute_score(
+                playing_->judge.acc_sum, playing_->judge.max_combo,
+                playing_->chart.playable_count).acc_ratio * 100.0;
+            if (language_ == Language::ZhCn) {
+                std::snprintf(stats, sizeof(stats), "连击 %d  最大 %d  准确率 %.2f%%",
+                              playing_->judge.combo, playing_->judge.max_combo, acc);
+            } else {
+                std::snprintf(stats, sizeof(stats), "Combo %d  Max %d  Accuracy %.2f%%",
+                              playing_->judge.combo, playing_->judge.max_combo, acc);
+            }
             draw_text_fit(stats, x, y, l.panel.w - 48.0, 160, 178, 196, 220);
         }
-        draw_button(l.mode, autoplay_ ? "Autoplay" : "Manual");
+        draw_button(l.mode, mode_label());
         draw_button(l.seek_back, "-10s");
         draw_button(l.seek_forward, "+10s");
-        draw_button(l.resume, "Resume");
-        draw_button(l.restart, "Restart");
-        draw_button(l.library, "Library");
+        draw_button(l.resume, tr("继续", "Resume"));
+        draw_button(l.restart, tr("重开", "Restart"));
+        draw_button(l.library, tr("曲库", "Library"));
     }
 
     void draw_result() {
@@ -1206,28 +1425,40 @@ private:
         draw_panel(l.panel, 18, 22, 29, 248);
         const double x = l.panel.x + 26.0;
         const double y = l.panel.y + 24.0;
-        draw_text("Result", x, y, 245, 248, 252, 245, true);
+        draw_text(tr("结算", "Result"), x, y, 245, 248, 252, 245, true);
+        draw_button(l.language, language_button_label());
         char score[96];
-        std::snprintf(score, sizeof(score), "Score  %d", last_score_.score);
         char acc[96];
-        std::snprintf(acc, sizeof(acc), "Accuracy  %.2f%%", last_score_.acc_ratio * 100.0);
         char combo[96];
-        std::snprintf(combo, sizeof(combo), "Max combo  %d", playing_ ? playing_->judge.max_combo : 0);
+        if (language_ == Language::ZhCn) {
+            std::snprintf(score, sizeof(score), "分数  %d", last_score_.score);
+            std::snprintf(acc, sizeof(acc), "准确率  %.2f%%", last_score_.acc_ratio * 100.0);
+            std::snprintf(combo, sizeof(combo), "最大连击  %d", playing_ ? playing_->judge.max_combo : 0);
+        } else {
+            std::snprintf(score, sizeof(score), "Score  %d", last_score_.score);
+            std::snprintf(acc, sizeof(acc), "Accuracy  %.2f%%", last_score_.acc_ratio * 100.0);
+            std::snprintf(combo, sizeof(combo), "Max Combo  %d", playing_ ? playing_->judge.max_combo : 0);
+        }
         draw_text(score, x + 6.0, y + 72.0);
         draw_text(acc, x + 6.0, y + 106.0);
         draw_text(combo, x + 6.0, y + 140.0);
         const GradeCounts counts = count_grades();
         char grades[128];
-        std::snprintf(grades, sizeof(grades), "P %d  G %d  B %d  M %d",
-                      counts.perfect, counts.good, counts.bad, counts.miss);
+        if (language_ == Language::ZhCn) {
+            std::snprintf(grades, sizeof(grades), "完美 %d  良好 %d  过早/过晚 %d  漏击 %d",
+                          counts.perfect, counts.good, counts.bad, counts.miss);
+        } else {
+            std::snprintf(grades, sizeof(grades), "Perfect %d  Good %d  Bad %d  Miss %d",
+                          counts.perfect, counts.good, counts.bad, counts.miss);
+        }
         draw_text(grades, x + 6.0, y + 180.0, 160, 178, 196, 225);
         if (playing_) {
             draw_text_fit(entry_title(playing_->entry), x + 6.0, y + 218.0,
                           l.panel.w - 64.0, 150, 170, 190, 220);
         }
-        draw_button(l.replay, "Replay");
-        draw_button(l.detail, "Details");
-        draw_button(l.library, "Library");
+        draw_button(l.replay, tr("重试", "Retry"));
+        draw_button(l.detail, tr("详情", "Details"));
+        draw_button(l.library, tr("曲库", "Library"));
     }
 
     static std::string compact_path(const std::string& path) {
@@ -1236,6 +1467,10 @@ private:
     }
 
     void handle_tap(double x, double y) {
+        if (has_top_language_button() && top_language_rect().contains(x, y)) {
+            toggle_language();
+            return;
+        }
         switch (screen_) {
             case Screen::Library: handle_library_tap(x, y); break;
             case Screen::Detail: handle_detail_tap(x, y); break;
@@ -1332,6 +1567,11 @@ private:
         double row_y = l.content.y + 20.0;
         bool changed_visual = false;
         if (settings_tab_ == 0) {
+            if (settings_control_rect(l, row_y).contains(x, y)) {
+                toggle_language();
+                return;
+            }
+            row_y += l.row_h;
             double bg_dim = static_cast<double>(cfg_.bg_dim);
             if (adjust_slider(x, y, l, row_y, bg_dim, 0.0, 220.0)) {
                 cfg_.bg_dim = static_cast<int>(std::round(bg_dim)); return;
@@ -1352,7 +1592,10 @@ private:
             row_y += l.row_h;
             if (settings_control_rect(l, row_y).contains(x, y)) { show_gameplay_overlay_ = !show_gameplay_overlay_; return; }
             row_y += l.row_h;
-            if (adjust_slider(x, y, l, row_y, cfg_.chart_speed, 0.5, 3.0)) return;
+            if (adjust_slider(x, y, l, row_y, cfg_.chart_speed, 0.5, 3.0)) {
+                apply_audio_speed();
+                return;
+            }
             row_y += l.row_h;
             double hold_fx = static_cast<double>(cfg_.hold_fx_interval_ms);
             if (adjust_slider(x, y, l, row_y, hold_fx, 80.0, 400.0)) {
@@ -1402,8 +1645,10 @@ private:
             show_gameplay_overlay_ = !show_gameplay_overlay_;
         } else if (l.speed_down.contains(x, y)) {
             cfg_.chart_speed = std::max(0.5, cfg_.chart_speed - 0.1);
+            apply_audio_speed();
         } else if (l.speed_up.contains(x, y)) {
             cfg_.chart_speed = std::min(3.0, cfg_.chart_speed + 0.1);
+            apply_audio_speed();
         } else if (l.seek.contains(x, y)) {
             seek_ratio((x - l.seek.x) / std::max(1.0, l.seek.w));
         }
@@ -1411,11 +1656,14 @@ private:
 
     void handle_pause_tap(double x, double y) {
         const PauseLayout l = pause_layout();
-        if (l.resume.contains(x, y)) {
+        if (l.language.contains(x, y)) {
+            toggle_language();
+        } else if (l.resume.contains(x, y)) {
             toggle_pause();
         } else if (l.restart.contains(x, y)) {
             start_playing(selected_);
         } else if (l.library.contains(x, y)) {
+            unload_chart_audio();
             playing_.reset();
             screen_ = Screen::Library;
         } else if (l.mode.contains(x, y)) {
@@ -1429,12 +1677,16 @@ private:
 
     void handle_result_tap(double x, double y) {
         const ResultLayout l = result_layout();
-        if (l.replay.contains(x, y)) {
+        if (l.language.contains(x, y)) {
+            toggle_language();
+        } else if (l.replay.contains(x, y)) {
             start_playing(selected_);
         } else if (l.detail.contains(x, y)) {
+            unload_chart_audio();
             playing_.reset();
             screen_ = Screen::Detail;
         } else if (l.library.contains(x, y)) {
+            unload_chart_audio();
             playing_.reset();
             screen_ = Screen::Library;
         }
@@ -1448,7 +1700,9 @@ private:
         } else if (screen_ == Screen::Paused) {
             screen_ = before_pause_;
             if (playing_) playing_->last_wall = now_sec();
+            sync_audio_to_chart_time(playing_ ? playing_->t : 0.0, screen_ == Screen::Playing);
         } else if (screen_ == Screen::Result) {
+            unload_chart_audio();
             playing_.reset();
             screen_ = Screen::Library;
         } else {
@@ -1460,9 +1714,11 @@ private:
         if (screen_ == Screen::Playing) {
             before_pause_ = Screen::Playing;
             screen_ = Screen::Paused;
+            stop_audio_playback();
         } else if (screen_ == Screen::Paused) {
             screen_ = before_pause_;
             if (playing_) playing_->last_wall = now_sec();
+            sync_audio_to_chart_time(playing_ ? playing_->t : 0.0, screen_ == Screen::Playing);
         }
     }
 
@@ -1483,10 +1739,78 @@ private:
         if (playing_) playing_->effects.particle_count = cfg_.particle_count;
     }
 
+    void apply_audio_speed() {
+        if (bgm_loaded_) audio_.set_playback_speed(cfg_.chart_speed);
+    }
+
+    void stop_audio_playback() {
+        if (bgm_loaded_) audio_.stop();
+        bgm_started_ = false;
+    }
+
+    void unload_chart_audio() {
+        stop_audio_playback();
+        audio_.unload_bgm();
+        bgm_loaded_ = false;
+    }
+
+    void sync_audio_to_chart_time(double chart_t, bool play_now) {
+        if (!bgm_loaded_) return;
+        const double seek_t = std::max(0.0, chart_t - cfg_.audio_offset_ms / 1000.0);
+        audio_.seek(seek_t);
+        if (play_now && chart_t >= 0.0) {
+            audio_.play();
+            bgm_started_ = true;
+        } else {
+            audio_.stop();
+            bgm_started_ = false;
+        }
+    }
+
+    std::string resolve_chart_audio_path(const ChartEntry& entry, const ChartData& chart) const {
+        if (!entry.assets.music_path.empty()) return entry.assets.music_path;
+        if (chart.metadata.song_path.empty()) return {};
+        if (phigros::chart::is_zip_path(entry.chart_path)) {
+            auto [zip_file, member] = phigros::chart::split_zip_path(entry.chart_path);
+            (void)member;
+            return zip_file + ":" + chart.metadata.song_path;
+        }
+        fs::path chart_dir = fs::path(entry.chart_path).parent_path();
+        return (chart_dir / chart.metadata.song_path).string();
+    }
+
+    bool load_chart_audio(const ChartEntry& entry, const ChartData& chart) {
+        unload_chart_audio();
+        const std::string audio_path = resolve_chart_audio_path(entry, chart);
+        if (audio_path.empty()) return false;
+        if (!audio_engine_ready_) {
+            audio_engine_ready_ = audio_.init();
+            if (!audio_engine_ready_) return false;
+        }
+        bool ok = false;
+        if (phigros::chart::is_zip_path(audio_path)) {
+            auto [zip_file, member] = phigros::chart::split_zip_path(audio_path);
+            auto data = phigros::chart::extract_zip_file(zip_file, member);
+            ok = audio_.load_bgm_memory(audio_path, data, chart.offset);
+        } else {
+            ok = audio_.load_bgm(audio_path, chart.offset);
+        }
+        bgm_loaded_ = ok;
+        if (bgm_loaded_) {
+            apply_audio_speed();
+            PHLOG_INFO(Audio, "SDL app BGM loaded: " << audio_path);
+        } else {
+            PHLOG_WARN(Audio, "SDL app failed to load BGM: " << audio_path);
+        }
+        return bgm_loaded_;
+    }
+
     void start_playing(int index) {
         if (index < 0 || index >= static_cast<int>(library_.size())) return;
         selected_ = index;
-        status_ = "Loading chart...";
+        status_kind_ = StatusKind::LoadingChart;
+        status_detail_.clear();
+        unload_chart_audio();
         playing_ = std::make_unique<PlayingChart>();
         try {
             cfg_.window_w = width_;
@@ -1516,10 +1840,15 @@ private:
             playing_->last_wall = now_sec();
             playing_->loaded = true;
             prepare_chart_render_base(playing_->entry);
+            load_chart_audio(playing_->entry, playing_->chart);
+            sync_audio_to_chart_time(playing_->t, true);
             screen_ = Screen::Playing;
-            status_.clear();
+            status_kind_ = StatusKind::None;
+            status_detail_.clear();
         } catch (const std::exception& e) {
-            status_ = std::string("Chart load failed: ") + e.what();
+            unload_chart_audio();
+            status_kind_ = StatusKind::LoadError;
+            status_detail_ = e.what();
             playing_.reset();
             screen_ = Screen::Detail;
         }

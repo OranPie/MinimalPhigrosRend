@@ -14,6 +14,7 @@ struct PointerSlot {
     float x = 0, y = 0;       // current screen pixel position
     float vx = 0, vy = 0;     // estimated velocity (pixels / second), EMA-smoothed
     float peak_speed = 0.0f;  // peak instantaneous speed seen during this gesture
+    float last_speed = 0.0f;   // speed in the latest processed frame
     bool down = false;
     bool press_edge = false;   // true only on the frame the pointer went down
     bool release_edge = false; // true only on the frame the pointer went up
@@ -82,7 +83,9 @@ struct InputManager {
             s.vy = alpha * raw_vy + (1.0f - alpha) * s.vy;
             // Track peak speed during the gesture for flick detection
             float spd = std::sqrt(s.vx * s.vx + s.vy * s.vy);
+            s.last_speed = spd;
             if (spd > s.peak_speed) s.peak_speed = spd;
+            if (spd > flick_vel_threshold) s.flick = true;
             PHLOG_TRACE(Input, "PointerState id=" << s.id
                 << " pos=(" << s.x << "," << s.y << ")"
                 << " vel=(" << s.vx << "," << s.vy << ")"
@@ -101,6 +104,7 @@ struct InputManager {
                 s->press_edge = true;
                 s->vx = s->vy = 0;
                 s->peak_speed = 0.0f;
+                s->last_speed = 0.0f;
                 PHLOG_TRACE(Input, "MouseDown (" << s->x << "," << s->y << ")");
             }
         } else if (e.type == PHIGROS_SDL_MOUSE_UP) {
@@ -108,8 +112,12 @@ struct InputManager {
             if (s) {
                 s->x = PHIGROS_MOUSE_X(e);
                 s->y = PHIGROS_MOUSE_Y(e);
+                float dx = s->x - s->_px;
+                float dy = s->y - s->_py;
+                bool instant_flick =
+                    dx * dx + dy * dy > flick_vel_threshold * flick_vel_threshold * 0.0004f;
                 // Use peak speed seen during the gesture for reliable flick detection
-                s->flick = s->peak_speed > flick_vel_threshold;
+                s->flick = s->flick || s->peak_speed > flick_vel_threshold || instant_flick;
                 s->down = false;
                 s->release_edge = true;
                 PHLOG_TRACE(Input, "MouseUp (" << s->x << "," << s->y
@@ -121,6 +129,12 @@ struct InputManager {
             if (s && s->down) {
                 s->x = PHIGROS_MOTION_X(e);
                 s->y = PHIGROS_MOTION_Y(e);
+                float dx = s->x - s->_px;
+                float dy = s->y - s->_py;
+                if (dx * dx + dy * dy > flick_vel_threshold * flick_vel_threshold * 0.0004f) {
+                    s->peak_speed = std::max(s->peak_speed, flick_vel_threshold + 1.0f);
+                    s->flick = true;
+                }
             }
         } else if (e.type == PHIGROS_SDL_FINGER_DOWN) {
             int64_t fid = PHIGROS_FINGER_ID(e) + 1; // offset by 1 (0 = mouse)
@@ -132,6 +146,7 @@ struct InputManager {
                 s->press_edge = true;
                 s->vx = s->vy = 0;
                 s->peak_speed = 0.0f;
+                s->last_speed = 0.0f;
                 PHLOG_TRACE(Input, "FingerDown id=" << fid
                     << " (" << s->x << "," << s->y << ")");
             }
@@ -141,8 +156,16 @@ struct InputManager {
             if (s) {
                 s->x = e.tfinger.x * static_cast<float>(W);
                 s->y = e.tfinger.y * static_cast<float>(H);
+                float dx = s->x - s->_px;
+                float dy = s->y - s->_py;
+                bool instant_flick =
+                    dx * dx + dy * dy > flick_vel_threshold * flick_vel_threshold * 0.0004f;
+                if (instant_flick) {
+                    s->peak_speed = std::max(s->peak_speed, flick_vel_threshold + 1.0f);
+                    s->flick = true;
+                }
                 // Use peak speed seen during the gesture for reliable flick detection
-                s->flick = s->peak_speed > flick_vel_threshold;
+                s->flick = s->flick || s->peak_speed > flick_vel_threshold || instant_flick;
                 s->down = false;
                 s->release_edge = true;
                 PHLOG_TRACE(Input, "FingerUp id=" << fid

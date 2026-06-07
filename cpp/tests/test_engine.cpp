@@ -16,6 +16,7 @@
 #include "phigros/engine/visibility.hpp"
 #include "phigros/engine/note_manager.hpp"
 #include "phigros/engine/hold_logic.hpp"
+#include "phigros/engine/manual_judge.hpp"
 #include "phigros/engine/simulateplay.hpp"
 #include "phigros/engine/scriptplay.hpp"
 #include "phigros/engine/effects.hpp"
@@ -352,6 +353,248 @@ static void test_judge_boundaries() {
         // Actually: combo_r = max_combo/total = 1/1 = 1.0
         // score = round(900000 * 0.6 + 100000 * 1.0) = 640000
         CHECK(sr.score == 640000, "Score formula: 1 GOOD = 640000");
+    }
+}
+
+static render::FrameSnapshot one_note_frame(int kind, double t_hit, double wx, double wy) {
+    render::FrameSnapshot frame;
+    frame.t = t_hit;
+    render::NoteSnapshot ns{};
+    ns.nid = 0;
+    ns.kind = kind;
+    ns.wx = wx;
+    ns.wy = wy;
+    ns.wx_tail = wx;
+    ns.wy_tail = wy + 120.0;
+    ns.alpha = 1.0;
+    ns.size_px = 1.0;
+    ns.color = {255, 255, 255};
+    ns.is_hold = kind == 3;
+    frame.notes.push_back(ns);
+    return frame;
+}
+
+static Note make_manual_note(int kind, double t_hit, int nid = 0) {
+    Note note{};
+    note.nid = nid;
+    note.line_id = 0;
+    note.kind = kind;
+    note.t_hit = t_hit;
+    note.t_end = kind == 3 ? t_hit + 1.0 : t_hit;
+    note.judge_area = 1.0;
+    note.alpha01 = 1.0;
+    return note;
+}
+
+static void test_manual_judge() {
+    std::cout << "\n=== ManualJudge tests ===\n";
+    using namespace phigros;
+
+    {
+        std::vector<Note> notes{make_manual_note(1, 1.0)};
+        std::vector<NoteState> states(1);
+        states[0].note = &notes[0];
+        engine::Judge judge;
+        engine::EffectManager effects;
+        engine::ManualJudge manual;
+        auto frame = one_note_frame(1, 1.0, 400.0, 300.0);
+        engine::JudgeInputFrame input;
+        input.add({7, true, 400.0f, 300.0f, true, false, true, false});
+        manual.process_frame(input, frame, notes, states, judge, effects, 1.0, 800, 600);
+        CHECK(states[0].judged && states[0].judge_grade == "PERFECT",
+              "ManualJudge: touch press can catch tap");
+        CHECK(judge.max_combo == 1, "ManualJudge: touch tap increments combo");
+    }
+
+    {
+        std::vector<Note> notes{make_manual_note(1, 1.0)};
+        std::vector<NoteState> states(1);
+        states[0].note = &notes[0];
+        engine::Judge judge;
+        engine::EffectManager effects;
+        engine::ManualJudge manual;
+        auto frame = one_note_frame(1, 1.0, 400.0, 300.0);
+        engine::JudgeInputFrame input;
+        input.add({7, true, 400.0f, 300.0f, false, false, true, false});
+        manual.process_frame(input, frame, notes, states, judge, effects, 1.0, 800, 600);
+        CHECK(!states[0].judged, "ManualJudge: held touch is not continuous tap");
+    }
+
+    {
+        std::vector<Note> notes{make_manual_note(3, 1.0)};
+        std::vector<NoteState> states(1);
+        states[0].note = &notes[0];
+        engine::Judge judge;
+        engine::EffectManager effects;
+        engine::ManualJudge manual;
+        auto frame = one_note_frame(3, 1.0, 400.0, 300.0);
+        engine::JudgeInputFrame input;
+        input.add({8, true, 400.0f, 300.0f, true, false, true, false});
+        manual.process_frame(input, frame, notes, states, judge, effects, 1.0, 800, 600);
+        CHECK(states[0].hit && states[0].holding, "ManualJudge: touch press can start hold");
+        CHECK(manual.holding_map.count(8) == 1, "ManualJudge: hold pointer tracked");
+    }
+
+    {
+        std::vector<Note> notes{make_manual_note(3, 1.0)};
+        std::vector<NoteState> states(1);
+        states[0].note = &notes[0];
+        engine::Judge judge;
+        engine::EffectManager effects;
+        engine::ManualJudge manual;
+        auto frame = one_note_frame(3, 1.0, 400.0, 300.0);
+        engine::JudgeInputFrame input;
+        input.add({-1, false, 0.0f, 0.0f, true, false, true, false});
+        manual.process_frame(input, frame, notes, states, judge, effects, 1.0, 800, 600);
+        engine::hold_maintenance(states, 0, 2.0, 0.5, judge);
+        engine::hold_finalize(states, 0, 2.0, 0.5, engine::Judge::BAD, judge);
+        CHECK(states[0].hold_finalized && states[0].judge_grade == "PERFECT",
+              "ManualJudge: held keyboard hold finalizes perfect at tail");
+        CHECK(!states[0].miss && judge.max_combo == 1,
+              "ManualJudge: completed hold contributes combo");
+    }
+
+    {
+        std::vector<Note> notes{make_manual_note(3, 1.0)};
+        std::vector<NoteState> states(1);
+        states[0].note = &notes[0];
+        engine::Judge judge;
+        engine::EffectManager effects;
+        engine::ManualJudge manual;
+        auto frame = one_note_frame(3, 1.0, 400.0, 300.0);
+        engine::JudgeInputFrame press;
+        press.add({-1, false, 0.0f, 0.0f, true, false, true, false});
+        manual.process_frame(press, frame, notes, states, judge, effects, 1.0, 800, 600);
+        engine::JudgeInputFrame release;
+        release.add({-1, false, 0.0f, 0.0f, false, true, false, false});
+        manual.process_frame(release, frame, notes, states, judge, effects, 1.2, 800, 600);
+        engine::hold_finalize(states, 0, 1.2, 0.5, engine::Judge::BAD, judge);
+        CHECK(states[0].hold_finalized && states[0].miss,
+              "ManualJudge: early hold release finalizes miss");
+        CHECK(manual.holding_map.empty(), "ManualJudge: released hold input untracked");
+    }
+
+    {
+        std::vector<Note> notes{make_manual_note(4, 1.0)};
+        std::vector<NoteState> states(1);
+        states[0].note = &notes[0];
+        engine::Judge judge;
+        engine::EffectManager effects;
+        engine::ManualJudge manual;
+        auto frame = one_note_frame(4, 1.0, 400.0, 300.0);
+        engine::JudgeInputFrame input;
+        input.add({9, true, 400.0f, 300.0f, false, true, false, true});
+        manual.process_frame(input, frame, notes, states, judge, effects, 1.0, 800, 600);
+        CHECK(states[0].judged && states[0].judge_grade == "PERFECT",
+              "ManualJudge: release flick can hit flick note");
+    }
+
+    {
+        std::vector<Note> notes{make_manual_note(4, 1.0)};
+        std::vector<NoteState> states(1);
+        states[0].note = &notes[0];
+        engine::Judge judge;
+        engine::EffectManager effects;
+        engine::ManualJudge manual;
+        auto frame = one_note_frame(4, 1.0, 400.0, 300.0);
+        engine::JudgeInputFrame input;
+        input.add({-1, false, 0.0f, 0.0f, true, false, true, false});
+        manual.process_frame(input, frame, notes, states, judge, effects, 1.0, 800, 600);
+        CHECK(states[0].judged && states[0].judge_grade == "PERFECT",
+              "ManualJudge: keyboard treats flick as tap");
+    }
+
+    {
+        std::vector<Note> notes{make_manual_note(1, 1.0)};
+        std::vector<NoteState> states(1);
+        states[0].note = &notes[0];
+        engine::Judge judge;
+        engine::EffectManager effects;
+        engine::ManualJudge manual;
+        auto frame = one_note_frame(1, 1.0, 400.0, 300.0);
+        engine::JudgeInputFrame input;
+        input.add({-1, false, 0.0f, 0.0f, false, false, true, false});
+        manual.process_frame(input, frame, notes, states, judge, effects, 1.0, 800, 600);
+        CHECK(!states[0].judged, "ManualJudge: held keyboard key is not continuous tap");
+    }
+
+    {
+        std::vector<Note> notes{
+            make_manual_note(2, 1.0, 0),
+            make_manual_note(2, 1.0, 1),
+        };
+        notes[1].line_id = 1;
+        std::vector<NoteState> states(2);
+        states[0].note = &notes[0];
+        states[1].note = &notes[1];
+        engine::Judge judge;
+        engine::EffectManager effects;
+        engine::ManualJudge manual;
+        render::FrameSnapshot frame;
+        frame.t = 1.0;
+        auto first = one_note_frame(2, 1.0, 400.0, 300.0).notes[0];
+        auto second = one_note_frame(2, 1.0, 500.0, 300.0).notes[0];
+        second.nid = 1;
+        frame.notes.push_back(first);
+        frame.notes.push_back(second);
+        engine::JudgeInputFrame input;
+        input.add({-1, false, 0.0f, 0.0f, false, false, true, false});
+        manual.process_frame(input, frame, notes, states, judge, effects, 1.0, 800, 600);
+        CHECK(states[0].judged != states[1].judged,
+              "ManualJudge: one held key catches only one drag in a chord");
+    }
+
+    {
+        std::vector<Note> notes{
+            make_manual_note(2, 1.0, 0),
+            make_manual_note(2, 1.0, 1),
+        };
+        notes[1].line_id = 1;
+        std::vector<NoteState> states(2);
+        states[0].note = &notes[0];
+        states[1].note = &notes[1];
+        engine::Judge judge;
+        engine::EffectManager effects;
+        engine::ManualJudge manual;
+        render::FrameSnapshot frame;
+        frame.t = 1.0;
+        auto first = one_note_frame(2, 1.0, 400.0, 300.0).notes[0];
+        auto second = one_note_frame(2, 1.0, 500.0, 300.0).notes[0];
+        second.nid = 1;
+        frame.notes.push_back(first);
+        frame.notes.push_back(second);
+        engine::JudgeInputFrame input;
+        input.add({-1, false, 0.0f, 0.0f, false, false, true, false});
+        input.add({-2, false, 0.0f, 0.0f, false, false, true, false});
+        manual.process_frame(input, frame, notes, states, judge, effects, 1.0, 800, 600);
+        CHECK(states[0].judged && states[1].judged,
+              "ManualJudge: drag chord needs multiple held keys");
+    }
+
+    {
+        std::vector<Note> notes{
+            make_manual_note(2, 1.0, 0),
+            make_manual_note(2, 1.0, 1),
+        };
+        std::vector<NoteState> states(2);
+        states[0].note = &notes[0];
+        states[1].note = &notes[1];
+        engine::Judge judge;
+        engine::EffectManager effects;
+        engine::ManualJudge manual;
+        render::FrameSnapshot frame;
+        frame.t = 1.0;
+        auto first = one_note_frame(2, 1.0, 400.0, 300.0).notes[0];
+        auto second = one_note_frame(2, 1.0, 500.0, 300.0).notes[0];
+        second.nid = 1;
+        frame.notes.push_back(first);
+        frame.notes.push_back(second);
+        engine::JudgeInputFrame input;
+        input.add({10, true, 390.0f, 300.0f, false, false, true, false});
+        input.add({11, true, 510.0f, 300.0f, false, false, true, false});
+        manual.process_frame(input, frame, notes, states, judge, effects, 1.0, 800, 600);
+        CHECK(states[0].judged && states[1].judged,
+              "ManualJudge: same-line drag chord can use multiple down pointers");
     }
 }
 
@@ -1365,6 +1608,7 @@ int main(int argc, char* argv[]) {
     test_scriptplay();
     test_hold_bad_breaks_combo();
     test_judge_boundaries();
+    test_manual_judge();
     test_replay_roundtrip();
     test_edge_cases();
     test_config_and_culling();

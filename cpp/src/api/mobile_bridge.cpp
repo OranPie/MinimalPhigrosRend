@@ -50,6 +50,7 @@ struct PendingTouch {
     phigros_mobile_touch_phase phase;
     float x, y;
     int64_t timestamp_ms;
+    bool flick = false;
 };
 
 struct PointerState {
@@ -185,30 +186,37 @@ public:
                  float x, float y,
                  int64_t timestamp_ms) {
         std::lock_guard<std::mutex> lock(mu_);
-        /* Update per-pointer velocity tracking on MOVED events */
-        if (phase == PHIGROS_MOBILE_TOUCH_MOVED) {
-            auto it = pointer_down_.find(pointer_id);
-            if (it != pointer_down_.end()) {
-                PointerState& ps = it->second;
-                int64_t dt_ms = timestamp_ms - ps.ts_ms;
-                if (dt_ms > 0) {
-                    float dt_s = static_cast<float>(dt_ms) / 1000.0f;
-                    ps.vx = (x - ps.x) / dt_s;
-                    ps.vy = (y - ps.y) / dt_s;
-                    float speed2 = ps.vx * ps.vx + ps.vy * ps.vy;
-                    ps.flick_pending = (speed2 >= PointerState::FLICK_SPEED_THRESHOLD *
-                                                   PointerState::FLICK_SPEED_THRESHOLD);
+        bool flick = false;
+        auto it = pointer_down_.find(pointer_id);
+        const bool is_begin = (phase == PHIGROS_MOBILE_TOUCH_BEGAN);
+        const bool is_end = (phase == PHIGROS_MOBILE_TOUCH_ENDED ||
+                             phase == PHIGROS_MOBILE_TOUCH_CANCELLED);
+        if (it != pointer_down_.end()) {
+            PointerState& ps = it->second;
+            int64_t dt_ms = timestamp_ms - ps.ts_ms;
+            if (dt_ms > 0) {
+                float dt_s = static_cast<float>(dt_ms) / 1000.0f;
+                ps.vx = (x - ps.x) / dt_s;
+                ps.vy = (y - ps.y) / dt_s;
+                float speed2 = ps.vx * ps.vx + ps.vy * ps.vy;
+                if (speed2 >= PointerState::FLICK_SPEED_THRESHOLD *
+                              PointerState::FLICK_SPEED_THRESHOLD) {
+                    ps.flick_pending = true;
                 }
-                ps.x = x; ps.y = y; ps.ts_ms = timestamp_ms;
             }
+            flick = ps.flick_pending && (phase == PHIGROS_MOBILE_TOUCH_MOVED || is_end);
+            ps.x = x; ps.y = y; ps.ts_ms = timestamp_ms;
+            if (is_end) ps.flick_pending = false;
+        } else if (is_begin) {
+            PointerState ps;
+            ps.x = x; ps.y = y; ps.ts_ms = timestamp_ms;
+            pointer_down_[pointer_id] = ps;
         }
         /* Maintain immediate active-pointer set for get_state() */
-        bool is_end = (phase == PHIGROS_MOBILE_TOUCH_ENDED ||
-                       phase == PHIGROS_MOBILE_TOUCH_CANCELLED);
         if (is_end) active_pointers_.erase(pointer_id);
         else        active_pointers_.insert(pointer_id);
 
-        pending_touches_.push_back({pointer_id, phase, x, y, timestamp_ms});
+        pending_touches_.push_back({pointer_id, phase, x, y, timestamp_ms, flick});
         last_error_.clear();
         return 0;
     }
@@ -395,22 +403,17 @@ private:
                 a.id = static_cast<int64_t>(pt.pointer_id);
                 a.has_position = true;
                 a.x = pt.x; a.y = pt.y;
-                a.press   = (!was_down && !is_end);
+                a.press   = (pt.phase == PHIGROS_MOBILE_TOUCH_BEGAN) || (!was_down && !is_end);
                 a.release = is_end;
                 a.down    = !is_end;
-                /* Flick: set when the pointer arrived with high velocity */
-                if (a.press) {
-                    if (was_down && it->second.flick_pending) {
-                        a.flick = true;
-                    }
-                }
+                a.flick   = pt.flick;
                 input.add(a);
                 if (is_end) {
                     pointer_down_.erase(pt.pointer_id);
                 } else {
                     PointerState& ps = pointer_down_[pt.pointer_id];
                     ps.x = pt.x; ps.y = pt.y; ps.ts_ms = pt.timestamp_ms;
-                    if (a.press) { ps.vx = 0; ps.vy = 0; ps.flick_pending = false; }
+                    if (a.press) { ps.vx = 0; ps.vy = 0; }
                 }
             }
             pending_touches_.clear();

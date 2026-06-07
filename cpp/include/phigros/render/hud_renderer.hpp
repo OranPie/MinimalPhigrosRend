@@ -4,10 +4,12 @@
 #include "phigros/hud/hud.hpp"
 #include "phigros/app/sdl_compat.hpp"
 #include <string>
+#include <string_view>
 #include <vector>
 #include <cmath>
 #include <cstring>
 #include <cstdio>
+#include <unordered_map>
 
 // Forward-declare stb_truetype
 extern "C" {
@@ -19,15 +21,32 @@ namespace phigros::render {
 
 struct FontAtlas {
     Texture atlas_tex;
-    stbtt_bakedchar cdata[128]; // ASCII only
+    stbtt_bakedchar cdata[128]; // Fast baked path for ASCII.
+    struct GlyphTexture {
+        Texture tex;
+        int w = 0;
+        int h = 0;
+        float xoff = 0.0f;
+        float yoff = 0.0f;
+        float advance = 0.0f;
+    };
     int atlas_w = 512, atlas_h = 512;
     float font_size = 32.0f;
     float top_align_offset = 0.0f;
+    float line_height = 32.0f;
     float aligned_digit_advance = 0.0f;
     bool valid = false;
+    SDL_Renderer* renderer = nullptr;
+    std::vector<uint8_t> font_data;
+    stbtt_fontinfo font_info{};
+    float font_scale = 1.0f;
+    mutable std::unordered_map<uint32_t, GlyphTexture> glyph_cache;
 
     bool load(SDL_Renderer* ren, const std::string& font_path, float size) {
         font_size = size;
+        line_height = size;
+        renderer = ren;
+        glyph_cache.clear();
 
         // Read font file
         FILE* f = fopen(font_path.c_str(), "rb");
@@ -35,9 +54,18 @@ struct FontAtlas {
         fseek(f, 0, SEEK_END);
         long fsize = ftell(f);
         fseek(f, 0, SEEK_SET);
-        std::vector<uint8_t> font_data(fsize);
+        font_data.resize(static_cast<size_t>(std::max<long>(0, fsize)));
         fread(font_data.data(), 1, fsize, f);
         fclose(f);
+        if (font_data.empty()) return false;
+
+        const int offset = stbtt_GetFontOffsetForIndex(font_data.data(), 0);
+        if (offset < 0 || !stbtt_InitFont(&font_info, font_data.data(), offset)) return false;
+        font_scale = stbtt_ScaleForPixelHeight(&font_info, size);
+        int ascent = 0, descent = 0, gap = 0;
+        stbtt_GetFontVMetrics(&font_info, &ascent, &descent, &gap);
+        top_align_offset = std::max(0.0f, ascent * font_scale);
+        line_height = std::max(size, (ascent - descent + gap) * font_scale);
 
         // Choose atlas size based on font size
         atlas_w = atlas_h = (size > 48.0f) ? 1024 : 512;
@@ -55,6 +83,7 @@ struct FontAtlas {
             }
         }
         top_align_offset = std::max(0.0f, -min_yoff);
+        top_align_offset = std::max(top_align_offset, ascent * font_scale);
         for (char ch = '0'; ch <= '9'; ++ch) {
             aligned_digit_advance = std::max(aligned_digit_advance, cdata[ch - 32].xadvance);
         }
@@ -72,7 +101,59 @@ struct FontAtlas {
         return valid;
     }
 
-    void destroy() { atlas_tex.destroy(); valid = false; }
+    float glyph_advance(uint32_t cp, bool align_digits) const {
+        if (cp >= 32 && cp < 128) {
+            const float advance = cdata[cp - 32].xadvance;
+            if (align_digits && cp >= '0' && cp <= '9' && aligned_digit_advance > 0.0f)
+                return aligned_digit_advance;
+            return advance;
+        }
+        int advance = 0;
+        int lsb = 0;
+        stbtt_GetCodepointHMetrics(&font_info, static_cast<int>(cp), &advance, &lsb);
+        return std::max(1.0f, advance * font_scale);
+    }
+
+    const GlyphTexture* glyph(uint32_t cp) const {
+        auto it = glyph_cache.find(cp);
+        if (it != glyph_cache.end()) return &it->second;
+        auto inserted = glyph_cache.emplace(cp, GlyphTexture{});
+        GlyphTexture& g = inserted.first->second;
+        g.advance = glyph_advance(cp, false);
+        if (!renderer || font_data.empty()) return &g;
+
+        int w = 0, h = 0, xoff = 0, yoff = 0;
+        unsigned char* bitmap = stbtt_GetCodepointBitmap(
+            &font_info, 0.0f, font_scale, static_cast<int>(cp), &w, &h, &xoff, &yoff);
+        if (!bitmap || w <= 0 || h <= 0) {
+            if (bitmap) stbtt_FreeBitmap(bitmap, nullptr);
+            return &g;
+        }
+
+        std::vector<uint8_t> rgba(static_cast<size_t>(w) * h * 4);
+        for (int i = 0; i < w * h; ++i) {
+            rgba[i * 4 + 0] = 255;
+            rgba[i * 4 + 1] = 255;
+            rgba[i * 4 + 2] = 255;
+            rgba[i * 4 + 3] = bitmap[i];
+        }
+        g.tex = Texture::from_rgba(renderer, rgba.data(), w, h);
+        g.w = w;
+        g.h = h;
+        g.xoff = static_cast<float>(xoff);
+        g.yoff = static_cast<float>(yoff);
+        stbtt_FreeBitmap(bitmap, nullptr);
+        return &g;
+    }
+
+    void destroy() {
+        atlas_tex.destroy();
+        for (auto& item : glyph_cache) item.second.tex.destroy();
+        glyph_cache.clear();
+        font_data.clear();
+        renderer = nullptr;
+        valid = false;
+    }
 };
 
 struct HudRenderer {
@@ -99,14 +180,35 @@ struct HudRenderer {
         return true;
     }
 
-    float glyph_advance(const FontAtlas& font, char ch) const {
-        const unsigned char uch = static_cast<unsigned char>(ch);
-        if (uch < 32 || uch >= 128) return 0.0f;
-        const float advance = font.cdata[uch - 32].xadvance;
-        if (font_align && ch >= '0' && ch <= '9' && font.aligned_digit_advance > 0.0f) {
-            return font.aligned_digit_advance;
+    static uint32_t next_codepoint(std::string_view text, size_t& pos) {
+        if (pos >= text.size()) return 0;
+        const unsigned char c0 = static_cast<unsigned char>(text[pos++]);
+        if (c0 < 0x80) return c0;
+        auto continuation = [&](uint32_t& out) -> bool {
+            if (pos >= text.size()) return false;
+            const unsigned char c = static_cast<unsigned char>(text[pos]);
+            if ((c & 0xc0) != 0x80) return false;
+            out = (out << 6) | (c & 0x3f);
+            ++pos;
+            return true;
+        };
+        if ((c0 & 0xe0) == 0xc0) {
+            uint32_t cp = c0 & 0x1f;
+            return continuation(cp) ? cp : '?';
         }
-        return advance;
+        if ((c0 & 0xf0) == 0xe0) {
+            uint32_t cp = c0 & 0x0f;
+            return continuation(cp) && continuation(cp) ? cp : '?';
+        }
+        if ((c0 & 0xf8) == 0xf0) {
+            uint32_t cp = c0 & 0x07;
+            return continuation(cp) && continuation(cp) && continuation(cp) ? cp : '?';
+        }
+        return '?';
+    }
+
+    float glyph_advance(const FontAtlas& font, uint32_t cp) const {
+        return font.glyph_advance(cp, font_align);
     }
 
     void draw_text(const SpriteBatch& batch, const FontAtlas& font,
@@ -119,38 +221,45 @@ struct HudRenderer {
         float xpos = origin_x;
         float ypos = static_cast<float>(y);
 
-        for (char ch : text) {
-            if (ch == '\n') {
+        size_t pos = 0;
+        while (pos < text.size()) {
+            const uint32_t cp = next_codepoint(text, pos);
+            if (cp == '\n') {
                 xpos = origin_x;
-                ypos += font.font_size;
+                ypos += font.line_height;
                 continue;
             }
-            const unsigned char uch = static_cast<unsigned char>(ch);
-            if (uch < 32 || uch >= 128) continue;
-            stbtt_bakedchar bc = font.cdata[uch - 32];
+            if (cp < 32) continue;
+            if (cp < 128) {
+                const stbtt_bakedchar& bc = font.cdata[cp - 32];
+                SDL_Rect src;
+                src.x = static_cast<int>(bc.x0);
+                src.y = static_cast<int>(bc.y0);
+                src.w = bc.x1 - bc.x0;
+                src.h = bc.y1 - bc.y0;
 
-            SDL_Rect src;
-            src.x = static_cast<int>(bc.x0);
-            src.y = static_cast<int>(bc.y0);
-            src.w = bc.x1 - bc.x0;
-            src.h = bc.y1 - bc.y0;
+                SDL_FRect dst;
+                dst.x = xpos + bc.xoff;
+                dst.y = ypos + font.top_align_offset + bc.yoff;
+                dst.w = static_cast<float>(src.w);
+                dst.h = static_cast<float>(src.h);
 
-            double dx = xpos + bc.xoff;
-            double dy = ypos + font.top_align_offset + bc.yoff;
-            double dw = src.w;
-            double dh = src.h;
-
-            font.atlas_tex.set_color_mod(r, g, b);
-            font.atlas_tex.set_alpha_mod(a);
-
-            SDL_FRect dst;
-            dst.x = static_cast<float>(dx);
-            dst.y = static_cast<float>(dy);
-            dst.w = static_cast<float>(dw);
-            dst.h = static_cast<float>(dh);
-
-            app::sdl::render_copy(batch.ren, font.atlas_tex.tex, &src, &dst);
-            xpos += glyph_advance(font, ch);
+                font.atlas_tex.set_color_mod(r, g, b);
+                font.atlas_tex.set_alpha_mod(a);
+                app::sdl::render_copy(batch.ren, font.atlas_tex.tex, &src, &dst);
+            } else if (const auto* glyph = font.glyph(cp)) {
+                if (glyph->tex.valid() && glyph->w > 0 && glyph->h > 0) {
+                    glyph->tex.set_color_mod(r, g, b);
+                    glyph->tex.set_alpha_mod(a);
+                    SDL_FRect dst;
+                    dst.x = xpos + glyph->xoff;
+                    dst.y = ypos + font.top_align_offset + glyph->yoff;
+                    dst.w = static_cast<float>(glyph->w);
+                    dst.h = static_cast<float>(glyph->h);
+                    app::sdl::render_copy(batch.ren, glyph->tex.tex, nullptr, &dst);
+                }
+            }
+            xpos += glyph_advance(font, cp);
         }
     }
 
@@ -158,18 +267,19 @@ struct HudRenderer {
         if (!font.valid) return 0;
         float w = 0;
         float max_w = 0;
-        for (char ch : text) {
-            if (ch == '\n') { max_w = std::max(max_w, w); w = 0; continue; }
-            const unsigned char uch = static_cast<unsigned char>(ch);
-            if (uch < 32 || uch >= 128) continue;
-            w += glyph_advance(font, ch);
+        size_t pos = 0;
+        while (pos < text.size()) {
+            const uint32_t cp = next_codepoint(text, pos);
+            if (cp == '\n') { max_w = std::max(max_w, w); w = 0; continue; }
+            if (cp < 32) continue;
+            w += glyph_advance(font, cp);
         }
         return std::max(max_w, w);
     }
 
     /// Return the line height of the font (same spacing used by draw_text for \n).
     double text_line_height(const FontAtlas& font) const {
-        return font.valid ? static_cast<double>(font.font_size) : 0.0;
+        return font.valid ? static_cast<double>(font.line_height) : 0.0;
     }
 
     // Draw text centered at (cx, cy), rotated by rot_rad, scaled by sx/sy.
@@ -209,35 +319,43 @@ struct HudRenderer {
 
             // Total advance width for centering this line
             float total_adv = 0;
-            for (char ch : line) {
-                const unsigned char uch = static_cast<unsigned char>(ch);
-                if (uch < 32 || uch >= 128) continue;
-                total_adv += glyph_advance(font, ch);
+            size_t width_pos = 0;
+            while (width_pos < line.size()) {
+                const uint32_t cp = next_codepoint(line, width_pos);
+                if (cp < 32) continue;
+                total_adv += glyph_advance(font, cp);
             }
             total_adv *= sx;
 
             float cursor = -total_adv * 0.5f;
-            for (char ch : line) {
-                const unsigned char uch = static_cast<unsigned char>(ch);
-                if (uch < 32 || uch >= 128) continue;
-                const stbtt_bakedchar& bc = font.cdata[uch - 32];
-
-                float gw = static_cast<float>(bc.x1 - bc.x0) * sx;
-                float gh = static_cast<float>(bc.y1 - bc.y0) * sy;
-
-                // Glyph center in local (unrotated) space
-                float lx = cursor + bc.xoff * sx + gw * 0.5f;
-                float ly = bc.yoff * sy + gh * 0.5f;
-
-                // Rotate into world space and apply line offset
-                double wx = cx + lx_off + cos_r * lx - sin_r * ly;
-                double wy = cy + ly_off + sin_r * lx + cos_r * ly;
-
-                SDL_Rect src{ bc.x0, bc.y0, bc.x1 - bc.x0, bc.y1 - bc.y0 };
-                batch.draw_texture(font.atlas_tex, wx, wy, gw, gh,
-                                   rot_rad, r, g, b, a, &src);
-
-                cursor += glyph_advance(font, ch) * sx;
+            size_t glyph_pos = 0;
+            while (glyph_pos < line.size()) {
+                const uint32_t cp = next_codepoint(line, glyph_pos);
+                if (cp < 32) continue;
+                if (cp < 128) {
+                    const stbtt_bakedchar& bc = font.cdata[cp - 32];
+                    float gw = static_cast<float>(bc.x1 - bc.x0) * sx;
+                    float gh = static_cast<float>(bc.y1 - bc.y0) * sy;
+                    float lx = cursor + bc.xoff * sx + gw * 0.5f;
+                    float ly = bc.yoff * sy + gh * 0.5f;
+                    double wx = cx + lx_off + cos_r * lx - sin_r * ly;
+                    double wy = cy + ly_off + sin_r * lx + cos_r * ly;
+                    SDL_Rect src{ bc.x0, bc.y0, bc.x1 - bc.x0, bc.y1 - bc.y0 };
+                    batch.draw_texture(font.atlas_tex, wx, wy, gw, gh,
+                                       rot_rad, r, g, b, a, &src);
+                } else if (const auto* glyph = font.glyph(cp)) {
+                    if (glyph->tex.valid() && glyph->w > 0 && glyph->h > 0) {
+                        float gw = static_cast<float>(glyph->w) * sx;
+                        float gh = static_cast<float>(glyph->h) * sy;
+                        float lx = cursor + glyph->xoff * sx + gw * 0.5f;
+                        float ly = glyph->yoff * sy + gh * 0.5f;
+                        double wx = cx + lx_off + cos_r * lx - sin_r * ly;
+                        double wy = cy + ly_off + sin_r * lx + cos_r * ly;
+                        batch.draw_texture(glyph->tex, wx, wy, gw, gh,
+                                           rot_rad, r, g, b, a, nullptr);
+                    }
+                }
+                cursor += glyph_advance(font, cp) * sx;
             }
         }
     }
