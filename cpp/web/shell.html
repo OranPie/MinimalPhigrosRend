@@ -619,7 +619,7 @@ details.cfg-panel[open] summary::after { transform: rotate(90deg); }
   <div id="header-meta">
     <span class="meta-pill">WASM Runtime</span>
     <span class="meta-pill">Touch Ready</span>
-    <span id="ver-badge">v1.0.0-dev</span>
+    <span id="ver-badge">v1.0.0</span>
   </div>
 </div>
 
@@ -856,7 +856,7 @@ var Module = {
   onRuntimeInitialized: function() {
     try { FS.mkdir('/data'); } catch(e) {}
     engineReady = true;
-    var v = typeof PHIGROS_VERSION !== 'undefined' ? PHIGROS_VERSION : '1.0.0-dev';
+    var v = typeof PHIGROS_VERSION !== 'undefined' ? PHIGROS_VERSION : '1.0.0';
     document.getElementById('ver-badge').textContent = 'v' + v;
     setStatus('Engine ready — load a chart to begin', 'ok');
     updateButtons();

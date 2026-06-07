@@ -6,7 +6,9 @@
 #include <cstdlib>
 #include <cstdio>
 
-#define PHIGROS_VERSION "1.0.0-dev"
+#ifndef PHIGROS_VERSION
+#define PHIGROS_VERSION "1.0.0"
+#endif
 
 namespace phigros::app {
 
